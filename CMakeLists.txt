@@ -32,6 +32,6 @@ target_include_directories(viewer
     ${VSNRAY_DIR}/src
 )
 
-target_link_libraries(viewer PUBLIC GLEW::GLEW volkit visionaray_common)
+target_link_libraries(viewer PUBLIC GLEW::GLEW volkit visionaray_common anari::anari)
 
 
