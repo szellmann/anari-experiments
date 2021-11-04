@@ -10,6 +10,8 @@ set(VOLKIT_DIR ${PROJECT_SOURCE_DIR}/volkit)
 set(VSNRAY_DIR ${VOLKIT_DIR}/src/3rdparty/visionaray)
 # Just reuse the imgui version that comes with the submodules
 set(IMGUI_DIR ${VSNRAY_DIR}/src/3rdparty/imgui)
+# Cmdline, too
+set(CMD_LINE_DIR ${VSNRAY_DIR}/src/3rdparty/CmdLine)
 
 add_subdirectory(${VOLKIT_DIR})
 
@@ -30,6 +32,7 @@ target_include_directories(viewer
     ${VOLKIT_DIR}/include/shared
     ${CMAKE_CURRENT_BINARY_DIR}/volkit/config
     ${VSNRAY_DIR}/src
+    ${CMD_LINE_DIR}/include
 )
 
 target_link_libraries(viewer PUBLIC GLEW::GLEW volkit visionaray_common anari::anari)

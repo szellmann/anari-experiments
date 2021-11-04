@@ -9,7 +9,13 @@
 #include <common/manip/arcball_manipulator.h>
 #include <common/manip/pan_manipulator.h>
 #include <common/manip/zoom_manipulator.h>
+#include <Support/CmdLine.h>
+#include <Support/CmdLineUtil.h>
+#include <vkt/InputStream.hpp>
 #include <vkt/LookupTable.hpp>
+#include <vkt/Resample.hpp>
+#include <vkt/StructuredVolume.hpp>
+#include <vkt/VolumeFile.hpp>
 #include "volkit/src/vkt/TransfuncEditor.hpp"
 #include <anari/anari_cpp.hpp>
 
@@ -34,15 +40,17 @@ void statusFunc(void *userData,
         fprintf(stderr, "[INFO] %s\n", message);
 }
 
-struct MarschnerLobb
+struct Scene
 {
-    MarschnerLobb() = default;
+    Scene() = default;
 
-    MarschnerLobb(ANARIDevice dev, ANARIWorld wrld)
+    Scene(ANARIDevice dev, ANARIWorld wrld)
         : device(dev)
         , world(wrld)
     {
     }
+
+    virtual ~Scene() {}
 
     void release()
     {
@@ -50,38 +58,18 @@ struct MarschnerLobb
         anariRelease(device, volumes);
     }
 
-    void commit()
+    virtual void commit() = 0;
+
+    virtual visionaray::aabb getBounds() = 0;
+
+    void commitImpl(float* volData, int* volDims)
     {
         if (volume != nullptr)
             anariRelease(device, volume);
 
         volume = anariNewVolume(device, "scivis");
 
-        // TODO: make persistent, don't recompute all the time...
-        int volDims[] = { 63, 63, 63 };
-        std::vector<float> volData(volDims[0]*volDims[1]*volDims[2]);
-        
-        float fM = 6.f, a = .25f;
-        auto rho = [=](float r) {
-            return cosf(2.f*M_PI*fM*cosf(M_PI*r/2.f));
-        };
-        for (int z=0; z<volDims[2]; ++z) {
-            for (int y=0; y<volDims[1]; ++y) {
-                for (int x=0; x<volDims[0]; ++x) {
-
-                    float xx = (float)x/volDims[0]*2.f-1.f;
-                    float yy = (float)y/volDims[1]*2.f-1.f;
-                    float zz = (float)z/volDims[2]*2.f-1.f;
-                    unsigned linearIndex = volDims[0]*volDims[1]*z
-                                                + volDims[0]*y
-                                                + x;
-
-                    volData[linearIndex] = (1.f-sinf(M_PI*zz/2.f) + a * (1+rho(sqrtf(xx*xx+yy*yy))))
-                                                / (2.f*(1.f+a));
-                }
-            }
-        }
-        ANARIArray3D scalar = anariNewArray3D(device, volData.data(), 0, 0, ANARI_FLOAT32,
+        ANARIArray3D scalar = anariNewArray3D(device, volData, 0, 0, ANARI_FLOAT32,
                                               volDims[0],volDims[1],volDims[2],0,0,0);
         anariCommit(device, scalar);
         ANARISpatialField field = anariNewSpatialField(device, "structuredRegular");
@@ -91,7 +79,7 @@ struct MarschnerLobb
         anariCommit(device, field);
 
         float valueRange[2] = {0.f,1.f};
-        //anariSetParameter(anari.device, anari.scene.volume, "valueRange", ANARI_FLOAT32_BOX1, &valueRange);
+        //anariSetParameter(anari.device, anari.scene->volume, "valueRange", ANARI_FLOAT32_BOX1, &valueRange);
 
         anariSetParameter(device, volume, "field", ANARI_SPATIAL_FIELD, &field);
 
@@ -114,15 +102,139 @@ struct MarschnerLobb
     ANARIArray1D volumes = nullptr;
 };
 
+struct MarschnerLobb : Scene
+{
+    MarschnerLobb() = default;
+
+    MarschnerLobb(ANARIDevice dev, ANARIWorld wrld)
+        : Scene(dev, wrld)
+    {
+        volDims[0] = volDims[1] = volDims[2] = 63;
+        volData.resize(volDims[0]*volDims[1]*volDims[2]);
+        
+        float fM = 6.f, a = .25f;
+        auto rho = [=](float r) {
+            return cosf(2.f*M_PI*fM*cosf(M_PI*r/2.f));
+        };
+        for (int z=0; z<volDims[2]; ++z) {
+            for (int y=0; y<volDims[1]; ++y) {
+                for (int x=0; x<volDims[0]; ++x) {
+
+                    float xx = (float)x/volDims[0]*2.f-1.f;
+                    float yy = (float)y/volDims[1]*2.f-1.f;
+                    float zz = (float)z/volDims[2]*2.f-1.f;
+                    unsigned linearIndex = volDims[0]*volDims[1]*z
+                                                + volDims[0]*y
+                                                + x;
+
+                    volData[linearIndex] = (1.f-sinf(M_PI*zz/2.f) + a * (1+rho(sqrtf(xx*xx+yy*yy))))
+                                                / (2.f*(1.f+a));
+                }
+            }
+        }
+    }
+
+    void commit()
+    {
+        commitImpl(volData.data(),volDims);
+    }
+
+    visionaray::aabb getBounds()
+    {
+        return {{0,0,0},{(float)volDims[0],(float)volDims[1],(float)volDims[2]}};
+    }
+
+    std::vector<float> volData;
+    int volDims[3];
+};
+
+struct VolumeFile : Scene
+{
+    VolumeFile() = default;
+
+    VolumeFile(const char* fileName, ANARIDevice dev, ANARIWorld wrld)
+        : Scene(dev,wrld)
+    {
+        vkt::VolumeFile file(fileName, vkt::OpenMode::Read);
+
+        vkt::VolumeFileHeader hdr = file.getHeader();
+
+        if (!hdr.isStructured)
+        {
+            std::cerr << "No valid volume file\n";
+            return;
+        }
+
+        vkt::Vec3i dims = hdr.dims;
+        if (dims.x * dims.y * dims.z < 1)
+        {
+            std::cerr << "Cannot parse dimensions from file name\n";
+            return;
+        }
+
+        vkt::DataFormat dataFormat = hdr.dataFormat;
+        if (dataFormat == vkt::DataFormat::Unspecified)
+        {
+            std::cerr << "Cannot parse data format from file name, guessing uint8...\n";
+            dataFormat = vkt::DataFormat::UInt8;
+        }
+
+        volkitVolume = new vkt::StructuredVolume(dims.x, dims.y, dims.z, dataFormat);
+        vkt::InputStream is(file);
+        is.read(*volkitVolume);
+    }
+
+   ~VolumeFile()
+    {
+        delete volkitVolume;
+    }
+
+    void commit()
+    {
+        int volDims[] = { volkitVolume->getDims().x,
+                          volkitVolume->getDims().y,
+                          volkitVolume->getDims().z };
+
+        vkt::StructuredVolume resampled(volDims[0],volDims[1],volDims[2],
+                                        vkt::DataFormat::Float32,1.f,1.f,1.f,0.f,1.f);
+        vkt::Resample(resampled,*volkitVolume,vkt::FilterMode::Nearest);
+        commitImpl((float*)resampled.getData(),volDims);
+    }
+
+    visionaray::aabb getBounds()
+    {
+        int volDims[] = { volkitVolume->getDims().x,
+                          volkitVolume->getDims().y,
+                          volkitVolume->getDims().z };
+
+        return {{0,0,0},{(float)volDims[0],(float)volDims[1],(float)volDims[2]}};
+    }
+
+    vkt::StructuredVolume *volkitVolume = nullptr;
+};
+
 struct Viewer : visionaray::viewer_glut
 {
-    visionaray::aabb bbox{{0,0,0},{63,63,63}};
     visionaray::pinhole_camera cam;
 
     vkt::TransfuncEditor tfe;
     vkt::ResourceHandle originalTF;
 
-    Viewer() : viewer_glut(512,512,"ANARI experiments") {}
+    std::string fileName;
+
+    Viewer() : viewer_glut(512,512,"ANARI experiments") {
+
+        using namespace support;
+
+        add_cmdline_option(cl::makeOption<std::string&>(
+            cl::Parser<>(),
+            "filenames",
+            cl::Desc("Input files in wavefront obj format"),
+            cl::Positional,
+            cl::Optional,
+            cl::init(fileName)
+            ));
+    }
 
     void on_display() {
         // Setup camera for this frame
@@ -140,8 +252,8 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, camera, "up", ANARI_FLOAT32_VEC3, &up);
         anariCommit(anari.device, camera);
 
-        if (anari.scene.volume == nullptr)
-            anari.scene.commit();
+        if (anari.scene->volume == nullptr)
+            anari.scene->commit();
 
         // Apply transfer function
         vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
@@ -163,9 +275,9 @@ struct Viewer : visionaray::viewer_glut
         ANARIArray1D opacity = anariNewArray1D(anari.device, alphaVals, 0, 0, ANARI_FLOAT32, dims.x, 0);
         anariCommit(anari.device, opacity);
 
-        anariSetParameter(anari.device, anari.scene.volume, "color", ANARI_ARRAY1D, &color);
-        anariSetParameter(anari.device, anari.scene.volume, "opacity", ANARI_ARRAY1D, &opacity);
-        anariCommit(anari.device, anari.scene.volume);
+        anariSetParameter(anari.device, anari.scene->volume, "color", ANARI_ARRAY1D, &color);
+        anariSetParameter(anari.device, anari.scene->volume, "opacity", ANARI_ARRAY1D, &opacity);
+        anariCommit(anari.device, anari.scene->volume);
         anariRelease(anari.device, color);
         anariRelease(anari.device, opacity);
 
@@ -224,11 +336,11 @@ struct Viewer : visionaray::viewer_glut
         ANARILibrary library = nullptr;
         ANARIDevice device = nullptr;
         ANARIWorld world = nullptr;
-        MarschnerLobb scene;
+        Scene* scene = nullptr;
 
 
 
-        void init() {
+        void init(std::string fileName) {
             library = anariLoadLibrary(libType.c_str(), statusFunc);
             if (library == nullptr)
                 throw std::runtime_error("Error loading ANARI library");
@@ -238,11 +350,15 @@ struct Viewer : visionaray::viewer_glut
             anariCommit(dev,dev);
             device = dev;
             world = anariNewWorld(device);
-            scene = MarschnerLobb(device,world);
+            if (fileName.empty())
+                scene = new MarschnerLobb(device,world);
+            else
+                scene = new VolumeFile(fileName.c_str(),device,world);
         }
 
         void release() {
-            scene.release();
+            scene->release();
+            delete scene;
             anariRelease(device, world);
             anariRelease(device,device);
             anariUnloadLibrary(library);
@@ -263,6 +379,9 @@ int main(int argc, char** argv)
         return -1;
     }
 
+    // Setup ANARI library and device
+    viewer.anari.init(viewer.fileName);
+
     // Set up the TFE through volkit
     float rgba[] = {
             1.f, 1.f, 1.f, .005f,
@@ -279,16 +398,13 @@ int main(int argc, char** argv)
     // More boilerplate to set up camera manipulators
     float aspect = viewer.width()/(float)viewer.height();
     viewer.cam.perspective(45.f * constants::degrees_to_radians<float>(), aspect, .001f, 1000.f);
-    viewer.cam.view_all(viewer.bbox);
+    viewer.cam.view_all(viewer.anari.scene->getBounds());
 
     viewer.add_manipulator(std::make_shared<arcball_manipulator>(viewer.cam, mouse::Left));
     viewer.add_manipulator(std::make_shared<pan_manipulator>(viewer.cam, mouse::Middle));
     // Additional "Alt + LMB" pan manipulator for setups w/o middle mouse button
     viewer.add_manipulator(std::make_shared<pan_manipulator>(viewer.cam, mouse::Left, keyboard::Alt));
     viewer.add_manipulator(std::make_shared<zoom_manipulator>(viewer.cam, mouse::Right));
-
-    // Setup ANARI library and device
-    viewer.anari.init();
 
     // Repeatedly render the scene
     viewer.event_loop();
