@@ -34,6 +34,86 @@ void statusFunc(void *userData,
         fprintf(stderr, "[INFO] %s\n", message);
 }
 
+struct MarschnerLobb
+{
+    MarschnerLobb() = default;
+
+    MarschnerLobb(ANARIDevice dev, ANARIWorld wrld)
+        : device(dev)
+        , world(wrld)
+    {
+    }
+
+    void release()
+    {
+        anariRelease(device, volume);
+        anariRelease(device, volumes);
+    }
+
+    void commit()
+    {
+        if (volume != nullptr)
+            anariRelease(device, volume);
+
+        volume = anariNewVolume(device, "scivis");
+
+        // TODO: make persistent, don't recompute all the time...
+        int volDims[] = { 63, 63, 63 };
+        std::vector<float> volData(volDims[0]*volDims[1]*volDims[2]);
+        
+        float fM = 6.f, a = .25f;
+        auto rho = [=](float r) {
+            return cosf(2.f*M_PI*fM*cosf(M_PI*r/2.f));
+        };
+        for (int z=0; z<volDims[2]; ++z) {
+            for (int y=0; y<volDims[1]; ++y) {
+                for (int x=0; x<volDims[0]; ++x) {
+
+                    float xx = (float)x/volDims[0]*2.f-1.f;
+                    float yy = (float)y/volDims[1]*2.f-1.f;
+                    float zz = (float)z/volDims[2]*2.f-1.f;
+                    unsigned linearIndex = volDims[0]*volDims[1]*z
+                                                + volDims[0]*y
+                                                + x;
+
+                    volData[linearIndex] = (1.f-sinf(M_PI*zz/2.f) + a * (1+rho(sqrtf(xx*xx+yy*yy))))
+                                                / (2.f*(1.f+a));
+                }
+            }
+        }
+        ANARIArray3D scalar = anariNewArray3D(device, volData.data(), 0, 0, ANARI_FLOAT32,
+                                              volDims[0],volDims[1],volDims[2],0,0,0);
+        anariCommit(device, scalar);
+        ANARISpatialField field = anariNewSpatialField(device, "structuredRegular");
+        anariSetParameter(device, field, "data", ANARI_ARRAY3D, &scalar);
+        const char* filter = "nearest";
+        anariSetParameter(device, field, "filter", ANARI_STRING, filter);
+        anariCommit(device, field);
+
+        float valueRange[2] = {0.f,1.f};
+        //anariSetParameter(anari.device, anari.scene.volume, "valueRange", ANARI_FLOAT32_BOX1, &valueRange);
+
+        anariSetParameter(device, volume, "field", ANARI_SPATIAL_FIELD, &field);
+
+        if (volumes != nullptr)
+            anariRelease(device, volumes);
+
+        volumes = anariNewArray1D(device, &volume, 0, 0, ANARI_VOLUME, 1, 0);
+
+        anariSetParameter(device, world, "volume", ANARI_ARRAY1D, &volumes);
+
+        anariCommit(device, world);
+
+        anariRelease(device, scalar);
+        anariRelease(device, field);
+    }
+
+    ANARIDevice device = nullptr;
+    ANARIWorld world = nullptr;
+    ANARIVolume volume = nullptr;
+    ANARIArray1D volumes = nullptr;
+};
+
 struct Viewer : visionaray::viewer_glut
 {
     visionaray::aabb bbox{{0,0,0},{63,63,63}};
@@ -60,44 +140,10 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, camera, "up", ANARI_FLOAT32_VEC3, &up);
         anariCommit(anari.device, camera);
 
-        // Setup volumetric world
-        ANARIWorld world = anariNewWorld(anari.device);
+        if (anari.scene.volume == nullptr)
+            anari.scene.commit();
 
-        ANARIVolume volume = anariNewVolume(anari.device, "scivis");
-
-        // TODO: make persistent, don't recompute all the time...
-        int volDims[] = { 63, 63, 63 };
-        std::vector<float> volData(volDims[0]*volDims[1]*volDims[2]);
-        
-        float fM = 6.f, a = .25f;
-        auto rho = [=](float r) {
-            return cosf(2.f*M_PI*fM*cosf(M_PI*r/2.f));
-        };
-        for (int z=0; z<volDims[2]; ++z) {
-            for (int y=0; y<volDims[1]; ++y) {
-                for (int x=0; x<volDims[0]; ++x) {
-
-                    float xx = (float)x/volDims[0]*2.f-1.f;
-                    float yy = (float)y/volDims[1]*2.f-1.f;
-                    float zz = (float)z/volDims[2]*2.f-1.f;
-                    unsigned linearIndex = volDims[0]*volDims[1]*z
-                                                + volDims[0]*y
-                                                + x;
-
-                    volData[linearIndex] = (1.f-sinf(M_PI*zz/2.f) + a * (1+rho(sqrtf(xx*xx+yy*yy))))
-                                                / (2.f*(1.f+a));
-                }
-            }
-        }
-        ANARIArray3D scalar = anariNewArray3D(anari.device, volData.data(), 0, 0, ANARI_FLOAT32,
-                                              volDims[0],volDims[1],volDims[2],0,0,0);
-        anariCommit(anari.device, scalar);
-        ANARISpatialField field = anariNewSpatialField(anari.device, "structuredRegular");
-        anariSetParameter(anari.device, field, "data", ANARI_ARRAY3D, &scalar);
-        const char* filter = "nearest";
-        anariSetParameter(anari.device, field, "filter", ANARI_STRING, filter);
-        anariCommit(anari.device, field);
-
+        // Apply transfer function
         vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
         if (lut == nullptr)
             lut = (vkt::LookupTable*)vkt::GetManagedResource(originalTF); // not yet updated
@@ -117,24 +163,11 @@ struct Viewer : visionaray::viewer_glut
         ANARIArray1D opacity = anariNewArray1D(anari.device, alphaVals, 0, 0, ANARI_FLOAT32, dims.x, 0);
         anariCommit(anari.device, opacity);
 
-        float valueRange[2] = {0.f,1.f};
-
-        anariSetParameter(anari.device, volume, "field", ANARI_SPATIAL_FIELD, &field);
-        anariSetParameter(anari.device, volume, "color", ANARI_ARRAY1D, &color);
-        anariSetParameter(anari.device, volume, "opacity", ANARI_ARRAY1D, &opacity);
-        //anariSetParameter(anari.device, volume, "valueRange", ANARI_FLOAT32_BOX1, &valueRange);
-        anariCommit(anari.device, volume);
-
-        ANARIArray1D volumes = anariNewArray1D(anari.device, &volume, 0, 0, ANARI_VOLUME, 1, 0);
-
-        anariSetParameter(anari.device, world, "volume", ANARI_ARRAY1D, &volumes);
-        anariRelease(anari.device, volumes);
-        anariRelease(anari.device, volume);
-        anariRelease(anari.device, field);
+        anariSetParameter(anari.device, anari.scene.volume, "color", ANARI_ARRAY1D, &color);
+        anariSetParameter(anari.device, anari.scene.volume, "opacity", ANARI_ARRAY1D, &opacity);
+        anariCommit(anari.device, anari.scene.volume);
         anariRelease(anari.device, color);
         anariRelease(anari.device, opacity);
-
-        anariCommit(anari.device, world);
 
         // Setup renderer
         ANARIRenderer renderer = anariNewRenderer(anari.device, "default");
@@ -153,7 +186,7 @@ struct Viewer : visionaray::viewer_glut
 
         anariSetParameter(anari.device, frame, "renderer", ANARI_RENDERER, &renderer);
         anariSetParameter(anari.device, frame, "camera", ANARI_CAMERA, &camera);
-        anariSetParameter(anari.device, frame, "world", ANARI_WORLD, &world);
+        anariSetParameter(anari.device, frame, "world", ANARI_WORLD, &anari.world);
         anariCommit(anari.device, frame);
 
         int spp=1;
@@ -173,7 +206,6 @@ struct Viewer : visionaray::viewer_glut
         anariRelease(anari.device, renderer);
         anariRelease(anari.device, camera);
         anariRelease(anari.device, frame);
-        anariRelease(anari.device, world);
 
         tfe.show();
     }
@@ -191,6 +223,10 @@ struct Viewer : visionaray::viewer_glut
         std::string devType = "default";
         ANARILibrary library = nullptr;
         ANARIDevice device = nullptr;
+        ANARIWorld world = nullptr;
+        MarschnerLobb scene;
+
+
 
         void init() {
             library = anariLoadLibrary(libType.c_str(), statusFunc);
@@ -201,9 +237,13 @@ struct Viewer : visionaray::viewer_glut
                 throw std::runtime_error("Error creating new ANARY device");
             anariCommit(dev,dev);
             device = dev;
+            world = anariNewWorld(device);
+            scene = MarschnerLobb(device,world);
         }
 
         void release() {
+            scene.release();
+            anariRelease(device, world);
             anariRelease(device,device);
             anariUnloadLibrary(library);
         }
