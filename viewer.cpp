@@ -139,7 +139,7 @@ struct Viewer : visionaray::viewer_glut
         // Setup renderer
         ANARIRenderer renderer = anariNewRenderer(anari.device, "default");
 
-        float bgColor[4] = {.3f, .3f, .3f, 0.f};
+        float bgColor[4] = {.3f, .3f, .3f, 1.f};
         anariSetParameter(anari.device, renderer, "backgroundColor", ANARI_FLOAT32_VEC4, bgColor);
         anariCommit(anari.device, renderer);
 
@@ -147,6 +147,7 @@ struct Viewer : visionaray::viewer_glut
         ANARIFrame frame = anariNewFrame(anari.device);
         unsigned imgSize[2] = { (unsigned)width(), (unsigned)height() };
         anariSetParameter(anari.device, frame, "size", ANARI_UINT32_VEC2, imgSize);
+        //ANARIDataType fbFormat = ANARI_UFIXED8_VEC4;
         ANARIDataType fbFormat = ANARI_UFIXED8_RGBA_SRGB;
         anariSetParameter(anari.device, frame, "color", ANARI_DATA_TYPE, &fbFormat);
 
@@ -162,6 +163,10 @@ struct Viewer : visionaray::viewer_glut
         }
 
         const uint32_t *fbPointer = (uint32_t *)anariMapFrame(anari.device, frame, "color");
+        glClearColor(bgColor[0],bgColor[1],bgColor[2],bgColor[3]);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDrawPixels(width(),height(),GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
 
         // TODO: keep persistent where appropriate!
