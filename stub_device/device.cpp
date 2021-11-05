@@ -269,8 +269,6 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
 ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
     stub, libdata, deviceSubtype, objectSubtype, objectType)
 {
-  //if (objectType == ANARI_RENDERER)
-  //  return anari::example_device::Renderer::g_parameters;
   return nullptr;
 }
 ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(stub,
@@ -283,29 +281,6 @@ ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(stub,
     propertyName,
     propertyType)
 {
-  //if (objectType == ANARI_RENDERER) {
-  //  int i = 0;
-  //  while (anari::example_device::Renderer::g_parameters[i].name != nullptr) {
-  //    if (std::string(anari::example_device::Renderer::g_parameters[i].name)
-  //            == std::string(parameterName)
-  //        && (anari::example_device::Renderer::g_parameters[i].type
-  //            == parameterType))
-  //      break;
-
-  //    i++;
-  //  }
-  //  if (anari::example_device::Renderer::g_parameters[i].name == nullptr)
-  //    return nullptr;
-  //  if (propertyType == ANARI_STRING
-  //      && std::string(propertyName) == std::string("description"))
-  //    return anari::example_device::Renderer::g_parameterinfos[i].desc;
-  //  if (propertyType == ANARI_BOOL
-  //      && std::string(propertyName) == std::string("required"))
-  //    return &anari::example_device::Renderer::g_parameterinfos[i].req;
-  //  if (propertyType == parameterType
-  //      && std::string(propertyName) == std::string("default"))
-  //    return &anari::example_device::Renderer::g_parameterinfos[i].def;
-  //}
   return nullptr;
 }
 
