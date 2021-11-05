@@ -256,13 +256,13 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
     stub, libdata, deviceSubtype, objectType)
 {
   if (objectType == ANARI_RENDERER) {
-    static std::vector<const char *> renderers;
-    renderers.clear();
-    //anari::example_device::Renderer::init();
-    //for (auto &r : *anari::example_device::Renderer::g_renderers)
-    //  renderers.push_back(r.first.c_str());
-    //renderers.push_back(nullptr);
-    return renderers.data();
+    static const char* renderers[] = {
+        "renderer1", // 1st one is chosen by "default" 
+        "renderer2",
+        "renderer3",
+        nullptr,     // last one most be NULL
+    };
+    return renderers;
   }
   return nullptr;
 }
