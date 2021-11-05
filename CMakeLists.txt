@@ -15,8 +15,12 @@ set(CMD_LINE_DIR ${VSNRAY_DIR}/src/3rdparty/CmdLine)
 
 add_subdirectory(${VOLKIT_DIR})
 
-
 add_subdirectory(stub_device)
+# that's a _bit_ hacky, but the easiest way to set the
+# rpath so that dlopen will search for libanari_library_XXX
+# in the device lib's binary dir
+SET(CMAKE_EXE_LINKER_FLAGS
+    "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,${CMAKE_CURRENT_BINARY_DIR}/stub_device")
 
 add_executable(viewer
     ${IMGUI_DIR}/imgui.cpp
