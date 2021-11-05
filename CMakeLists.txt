@@ -15,6 +15,9 @@ set(CMD_LINE_DIR ${VSNRAY_DIR}/src/3rdparty/CmdLine)
 
 add_subdirectory(${VOLKIT_DIR})
 
+
+add_subdirectory(stub_device)
+
 add_executable(viewer
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
