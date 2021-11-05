@@ -18,6 +18,7 @@
 #include <vkt/VolumeFile.hpp>
 #include "volkit/src/vkt/TransfuncEditor.hpp"
 #include <anari/anari_cpp.hpp>
+#include <imgui.h>
 
 void statusFunc(void *userData,
     ANARIDevice device,
@@ -281,12 +282,9 @@ struct Viewer : visionaray::viewer_glut
         anariRelease(anari.device, color);
         anariRelease(anari.device, opacity);
 
-        // Setup renderer
-        ANARIRenderer renderer = anariNewRenderer(anari.device, "default");
-
         float bgColor[4] = {.3f, .3f, .3f, 1.f};
-        anariSetParameter(anari.device, renderer, "backgroundColor", ANARI_FLOAT32_VEC4, bgColor);
-        anariCommit(anari.device, renderer);
+        anariSetParameter(anari.device, anari.renderer, "backgroundColor", ANARI_FLOAT32_VEC4, bgColor);
+        anariCommit(anari.device, anari.renderer);
 
         // Prepare frame for rendering
         ANARIFrame frame = anariNewFrame(anari.device);
@@ -296,7 +294,7 @@ struct Viewer : visionaray::viewer_glut
         ANARIDataType fbFormat = ANARI_UFIXED8_RGBA_SRGB;
         anariSetParameter(anari.device, frame, "color", ANARI_DATA_TYPE, &fbFormat);
 
-        anariSetParameter(anari.device, frame, "renderer", ANARI_RENDERER, &renderer);
+        anariSetParameter(anari.device, frame, "renderer", ANARI_RENDERER, &anari.renderer);
         anariSetParameter(anari.device, frame, "camera", ANARI_CAMERA, &camera);
         anariSetParameter(anari.device, frame, "world", ANARI_WORLD, &anari.world);
         anariCommit(anari.device, frame);
@@ -313,13 +311,15 @@ struct Viewer : visionaray::viewer_glut
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDrawPixels(width(),height(),GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
+        anariUnmapFrame(anari.device, frame, "color");
 
         // TODO: keep persistent where appropriate!
-        anariRelease(anari.device, renderer);
         anariRelease(anari.device, camera);
         anariRelease(anari.device, frame);
 
-        tfe.show();
+        ImGui::Begin("Volume");
+        tfe.drawImmediate();
+        ImGui::End();
     }
 
     void on_resize(int w, int h) {
@@ -335,6 +335,7 @@ struct Viewer : visionaray::viewer_glut
         std::string devType = "default";
         ANARILibrary library = nullptr;
         ANARIDevice device = nullptr;
+        ANARIRenderer renderer = nullptr;
         ANARIWorld world = nullptr;
         Scene* scene = nullptr;
 
@@ -354,11 +355,23 @@ struct Viewer : visionaray::viewer_glut
                 scene = new MarschnerLobb(device,world);
             else
                 scene = new VolumeFile(fileName.c_str(),device,world);
+
+            // Setup renderer
+            const char** deviceSubtypes = anariGetDeviceSubtypes(library);
+            while (const char* dstype = *deviceSubtypes++) {
+                const char** rendererTypes = anariGetObjectSubtypes(library, dstype, ANARI_RENDERER);
+                while (const char* rendererType = *rendererTypes++) {
+                    std::cout << rendererType << '\n';
+                }
+            }
+            renderer = anariNewRenderer(device, "default");
+
         }
 
         void release() {
             scene->release();
             delete scene;
+            anariRelease(device, renderer);
             anariRelease(device, world);
             anariRelease(device,device);
             anariUnloadLibrary(library);
@@ -379,7 +392,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    // Setup ANARI library and device
+    // Setup ANARI library, device, and renderer
     viewer.anari.init(viewer.fileName);
 
     // Set up the TFE through volkit
