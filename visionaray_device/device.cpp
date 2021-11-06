@@ -1,8 +1,9 @@
 #include <anari/detail/Library.h>
 
 #include "device.hpp"
+#include "frame.hpp"
 
-namespace stub {
+namespace visionaray {
 
     //--- Device API --------------------------------------
 
@@ -185,13 +186,14 @@ namespace stub {
 
     ANARIFrame Device::newFrame()
     {
-        return nullptr;
+        return (ANARIFrame)RegisterResource(std::make_unique<Frame>());
     }
 
     const void* Device::frameBufferMap(ANARIFrame fb,
                                        const char* channel)
     {
-        return nullptr;
+        Frame* frame = (Frame*)GetResource(fb);
+        return frame->map(channel);
     }
 
     void Device::frameBufferUnmap(ANARIFrame fb,
@@ -236,30 +238,28 @@ namespace stub {
     {
 
     }
-} // stub
+} // visionaray
 
 
-static char deviceName[] = "stub";
+static char deviceName[] = "visionaray";
 
-ANARI_DEFINE_LIBRARY_INIT(stub)
+ANARI_DEFINE_LIBRARY_INIT(visionaray)
 {
-  printf("...loaded stub library!\n");
-  anari::Device::registerType<stub::Device>(deviceName);
+  printf("...loaded visionaray library!\n");
+  anari::Device::registerType<visionaray::Device>(deviceName);
 }
 
-ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(stub, libdata)
+ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(visionaray, libdata)
 {
   static const char *devices[] = {deviceName, nullptr};
   return devices;
 }
 ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
-    stub, libdata, deviceSubtype, objectType)
+    visionaray, libdata, deviceSubtype, objectType)
 {
   if (objectType == ANARI_RENDERER) {
     static const char* renderers[] = {
-        "renderer1", // 1st one is chosen by "default" 
-        "renderer2",
-        "renderer3",
+        "pathtracer", // 1st one is chosen by "default" 
         nullptr,     // last one most be NULL
     };
     return renderers;
@@ -267,11 +267,11 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
   return nullptr;
 }
 ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
-    stub, libdata, deviceSubtype, objectSubtype, objectType)
+    visionaray, libdata, deviceSubtype, objectSubtype, objectType)
 {
   return nullptr;
 }
-ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(stub,
+ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(visionaray,
     libdata,
     deviceSubtype,
     objectSubtype,
@@ -286,5 +286,5 @@ ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(stub,
 
 extern "C" ANARIDevice anariNewExampleDevice()
 {
-    return (ANARIDevice) new stub::Device;
+    return (ANARIDevice) new visionaray::Device;
 }
