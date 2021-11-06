@@ -12,7 +12,12 @@ add_library(${PROJECT_NAME}
     SHARED # Plugin, so make sure to build shared object!
     device.cpp
     frame.cpp
+    logging.cpp
+    pathtracer.cpp
+    renderer.cpp
     resource.cpp
+    spatialfield.cpp
+    structuredregular.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC anari::anari)

@@ -2,6 +2,7 @@
 
 #include "device.hpp"
 #include "frame.hpp"
+#include "renderer.hpp"
 
 namespace visionaray {
 
@@ -205,7 +206,7 @@ namespace visionaray {
 
     ANARIRenderer Device::newRenderer(const char* type)
     {
-        return nullptr;
+        return (ANARIRenderer)RegisterResource(createRenderer("type"));
     }
 
     void Device::renderFrame(ANARIFrame)
