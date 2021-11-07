@@ -23,6 +23,17 @@ namespace visionaray {
     {
         return resourceHandle;
     }
+
+    void Frame::commit()
+    {
+    }
+
+    void Frame::setParameter(const char* name,
+                             ANARIDataType type,
+                             const void* mem)
+    {
+    }
+
 } // visionaray
 
 

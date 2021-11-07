@@ -5,10 +5,13 @@
 
 namespace visionaray {
 
-    struct Object
+    struct Object : Resource
     {
         virtual ~Object() {}
-        virtual ResourceHandle getResourceHandle() = 0;
+
+        virtual void setParameter(const char* name,
+                                  ANARIDataType type,
+                                  const void* mem) = 0;
     };
 } // visionaray
 

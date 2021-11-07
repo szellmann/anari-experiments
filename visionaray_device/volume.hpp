@@ -1,18 +1,15 @@
 #pragma once
 
-#include <cstdint>
 #include "object.hpp"
 #include "resource.hpp"
 
 namespace visionaray {
 
-    class Frame : public Object
+    class Volume : public Object
     {
     public:
-        Frame();
-       ~Frame();
-
-        const uint8_t* map(const char* channel);
+        Volume();
+       ~Volume();
 
         ResourceHandle getResourceHandle();
 
@@ -23,8 +20,10 @@ namespace visionaray {
                           const void* mem);
 
     private:
-        ANARIFrame resourceHandle = nullptr;
+        ANARIVolume resourceHandle;
     };
+
+    std::unique_ptr<Volume> createVolume(const char* subtype);
 
 } // visionaray
 

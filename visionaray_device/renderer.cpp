@@ -20,6 +20,12 @@ namespace visionaray {
         return resourceHandle;
     }
 
+    void Renderer::setParameter(const char* name,
+                                ANARIDataType type,
+                                const void* mem)
+    {
+    }
+
     std::unique_ptr<Renderer> createRenderer(const char* subtype)
     {
         if (strncmp(subtype,"pathtracer",10)==0)

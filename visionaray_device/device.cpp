@@ -1,8 +1,13 @@
 #include <anari/detail/Library.h>
 
+#include "array.hpp"
+#include "camera.hpp"
 #include "device.hpp"
 #include "frame.hpp"
+#include "logging.hpp"
 #include "renderer.hpp"
+#include "spatialfield.hpp"
+#include "volume.hpp"
 
 namespace visionaray {
 
@@ -40,29 +45,32 @@ namespace visionaray {
     ANARIArray1D Device::newArray1D(void* appMemory,
                                     ANARIMemoryDeleter deleter,
                                     void* userdata,
-                                    ANARIDataType,
+                                    ANARIDataType elementType,
                                     uint64_t numItems1,
                                     uint64_t byteStride1)
     {
-        return nullptr;
+        return (ANARIArray1D)RegisterResource(std::make_unique<Array1D>(
+            (uint8_t*)appMemory,deleter,userdata,elementType,numItems1,byteStride1));
     }
 
     ANARIArray2D Device::newArray2D(void* appMemory,
                                     ANARIMemoryDeleter deleter,
                                     void* userdata,
-                                    ANARIDataType,
+                                    ANARIDataType elementType,
                                     uint64_t numItems1,
                                     uint64_t numItems2,
                                     uint64_t byteStride1,
                                     uint64_t byteStride2)
     {
-        return nullptr;
+        return (ANARIArray2D)RegisterResource(std::make_unique<Array2D>(
+            (uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2,
+            byteStride1,byteStride2));
     }
 
     ANARIArray3D Device::newArray3D(void* appMemory,
                                     ANARIMemoryDeleter deleter,
                                     void* userdata,
-                                    ANARIDataType,
+                                    ANARIDataType elementType,
                                     uint64_t numItems1,
                                     uint64_t numItems2,
                                     uint64_t numItems3,
@@ -70,7 +78,9 @@ namespace visionaray {
                                     uint64_t byteStride2,
                                     uint64_t byteStride3)
     {
-        return nullptr;
+        return (ANARIArray3D)RegisterResource(std::make_unique<Array3D>(
+            (uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2,
+            numItems3,byteStride1,byteStride2,byteStride3));
     }
 
     void* Device::mapArray(ANARIArray)
@@ -91,7 +101,7 @@ namespace visionaray {
 
     ANARICamera Device::newCamera(const char* type)
     {
-        return nullptr;
+        return (ANARICamera)RegisterResource(createCamera(type));
     }
 
     ANARIGeometry Device::newGeometry(const char* type)
@@ -101,7 +111,7 @@ namespace visionaray {
 
     ANARISpatialField Device::newSpatialField(const char* type)
     {
-        return nullptr;
+        return (ANARISpatialField)RegisterResource(createSpatialField(type));
     }
 
     ANARISurface Device::newSurface()
@@ -111,7 +121,7 @@ namespace visionaray {
 
     ANARIVolume Device::newVolume(const char* type)
     {
-        return nullptr;
+        return (ANARIVolume)RegisterResource(createVolume(type));
     }
 
     //--- Surface Meta-Data -------------------------------
@@ -152,6 +162,11 @@ namespace visionaray {
                               ANARIDataType type,
                               const void* mem)
     {
+        Object* obj = (Object*)GetResource(object);
+        if (obj == nullptr)
+            LOG(logging::Level::Error) << "ANARIDevice error: setting parameter on object: " << name;
+        else
+            obj->setParameter(name,type,mem);
     }
 
     void Device::unsetParameter(ANARIObject object,
@@ -161,6 +176,11 @@ namespace visionaray {
 
     void Device::commit(ANARIObject object)
     {
+        Object* obj = (Object*)GetResource(object);
+        if (obj == nullptr)
+            LOG(logging::Level::Error) << "ANARIDevice error: commit called on uninitialized object";
+        else
+            obj->commit();
     }
 
     void Device::release(ANARIObject _obj) 
@@ -206,7 +226,7 @@ namespace visionaray {
 
     ANARIRenderer Device::newRenderer(const char* type)
     {
-        return (ANARIRenderer)RegisterResource(createRenderer("type"));
+        return (ANARIRenderer)RegisterResource(createRenderer(type));
     }
 
     void Device::renderFrame(ANARIFrame)

@@ -14,6 +14,16 @@ namespace visionaray {
 
         ResourceHandle getResourceHandle();
 
+        // virtual, _if_ this is called it means something went wrong
+        // (e.g., the user specified a wrong subtype)
+        virtual void commit();
+
+        // virtual, _if_ this is called it means something went wrong
+        // (e.g., the user specified a wrong subtype)
+        virtual void setParameter(const char* name,
+                                  ANARIDataType type,
+                                  const void* mem);
+
     private:
         ANARISpatialField resourceHandle;
     };

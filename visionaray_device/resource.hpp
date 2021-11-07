@@ -4,11 +4,17 @@
 
 namespace visionaray {
 
-    struct Object;
-
     typedef void *ResourceHandle;
-    ResourceHandle RegisterResource(std::unique_ptr<Object> res);
-    const Object* GetResource(ResourceHandle handle);
+
+    struct Resource {
+        virtual ~Resource() {}
+        virtual ResourceHandle getResourceHandle() = 0;
+
+        virtual void commit() = 0;
+    };
+
+    ResourceHandle RegisterResource(std::unique_ptr<Resource> res);
+    Resource* GetResource(ResourceHandle handle);
 
 } // visionaray
 
