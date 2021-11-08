@@ -3,15 +3,19 @@
 #include "renderer.hpp"
 #include "resource.hpp"
 
-namespace visionaray {
+namespace generic {
 
     class Pathtracer : public Renderer
     {
     public:
         Pathtracer();
        ~Pathtracer();
+
+        void renderFrame(Frame* frame);
+
+        void commit();
     };
 
-} // visionaray
+} // generic
 
 

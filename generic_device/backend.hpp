@@ -1,0 +1,29 @@
+#pragma once
+
+#include "frame.hpp"
+#include "object.hpp"
+#include "pathtracer.hpp"
+#include "structuredregular.hpp"
+#include "world.hpp"
+
+namespace generic {
+    namespace backend {
+
+        // Default implementation, generates an error message
+        void commit(Object& obj);
+
+        void commit(World& world);
+
+        void commit(Frame& frame);
+
+        void commit(StructuredRegular& sr);
+
+        void commit(Pathtracer& pt);
+
+        void* map(Frame& frame);
+        void renderFrame(Frame& frame);
+
+    } // backend
+} // generic
+
+

@@ -4,7 +4,7 @@
 #include <utility>
 #include "resource.hpp"
 
-namespace visionaray {
+namespace generic {
 
     static std::unordered_map<ResourceHandle,std::unique_ptr<Resource>> resources;
 
@@ -23,6 +23,6 @@ namespace visionaray {
 
         return it->second.get();
     }
-} // visionaray
+} // generic
 
 

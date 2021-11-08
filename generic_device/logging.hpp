@@ -3,7 +3,7 @@
 #include <ostream>
 #include <sstream>
 
-namespace visionaray {
+namespace generic {
     namespace logging
     {
         enum class Level
@@ -31,7 +31,7 @@ namespace visionaray {
 
         };
     } // logging
-} // visionaray
+} // generic
 
 
-#define LOG(LEVEL) ::visionaray::logging::Stream(LEVEL).stream()
+#define LOG(LEVEL) ::generic::logging::Stream(LEVEL).stream()

@@ -3,7 +3,7 @@
 #include <math.h>
 #include "camera.hpp"
 
-namespace visionaray {
+namespace generic {
 
     class PerspectiveCamera : public Camera
     {
@@ -21,6 +21,6 @@ namespace visionaray {
         float aspect = 1.f;
     };
 
-} // visionaray
+} // generic
 
 

@@ -5,7 +5,7 @@
 #include "logging.hpp"
 #include "perspectivecamera.hpp"
 
-namespace visionaray {
+namespace generic {
 
     Camera::Camera()
         : resourceHandle(new std::remove_pointer_t<ANARICamera>)
@@ -62,6 +62,6 @@ namespace visionaray {
             return std::make_unique<Camera>();
         }
     }
-} // visionaray
+} // generic
 
 

@@ -1,10 +1,9 @@
 #pragma once
 
-#include <cstdint>
 #include "object.hpp"
 #include "resource.hpp"
 
-namespace visionaray {
+namespace generic {
 
     class Frame : public Object
     {
@@ -12,7 +11,7 @@ namespace visionaray {
         Frame();
        ~Frame();
 
-        const uint8_t* map(const char* channel);
+        const void* map(const char* channel);
 
         ResourceHandle getResourceHandle();
 
@@ -22,10 +21,17 @@ namespace visionaray {
                           ANARIDataType type,
                           const void* mem);
 
+        ANARIWorld world = nullptr;
+        ANARICamera camera = nullptr;
+        ANARIRenderer renderer = nullptr;
+        unsigned size[2] = {0,0};
+        ANARIDataType color;
+        ANARIDataType depth;
+
     private:
         ANARIFrame resourceHandle = nullptr;
     };
 
-} // visionaray
+} // generic
 
 

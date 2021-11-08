@@ -3,7 +3,7 @@
 #include "object.hpp"
 #include "resource.hpp"
 
-namespace visionaray {
+namespace generic {
 
     class Camera : public Object
     {
@@ -37,6 +37,6 @@ namespace visionaray {
 
     std::unique_ptr<Camera> createCamera(const char* subtype);
 
-} // visionaray
+} // generic
 
 

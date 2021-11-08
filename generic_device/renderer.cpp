@@ -4,7 +4,7 @@
 #include "renderer.hpp"
 #include "pathtracer.hpp"
 
-namespace visionaray {
+namespace generic {
 
     Renderer::Renderer()
         : resourceHandle(new std::remove_pointer_t<ANARIRenderer>)
@@ -13,6 +13,11 @@ namespace visionaray {
 
     Renderer::~Renderer()
     {
+    }
+
+    void Renderer::renderFrame(Frame*)
+    {
+        LOG(logging::Level::Warning) << "Renderer: renderFrame() called on base class";
     }
 
     ResourceHandle Renderer::getResourceHandle()
@@ -36,6 +41,6 @@ namespace visionaray {
             return std::make_unique<Pathtracer>();
         }
     }
-} // visionaray
+} // generic
 
 

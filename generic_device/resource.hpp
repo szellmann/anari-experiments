@@ -2,7 +2,7 @@
 
 #include <memory>
 
-namespace visionaray {
+namespace generic {
 
     typedef void *ResourceHandle;
 
@@ -16,6 +16,6 @@ namespace visionaray {
     ResourceHandle RegisterResource(std::unique_ptr<Resource> res);
     Resource* GetResource(ResourceHandle handle);
 
-} // visionaray
+} // generic
 
 

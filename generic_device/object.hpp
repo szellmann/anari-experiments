@@ -3,7 +3,7 @@
 #include <anari/anari.h>
 #include "resource.hpp"
 
-namespace visionaray {
+namespace generic {
 
     struct Object : Resource
     {
@@ -13,6 +13,6 @@ namespace visionaray {
                                   ANARIDataType type,
                                   const void* mem) = 0;
     };
-} // visionaray
+} // generic
 
 

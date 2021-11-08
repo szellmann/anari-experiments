@@ -4,7 +4,7 @@
 #include "object.hpp"
 #include "resource.hpp"
 
-namespace visionaray {
+namespace generic {
 
     class SpatialField : public Object
     {
@@ -30,6 +30,6 @@ namespace visionaray {
 
     std::unique_ptr<SpatialField> createSpatialField(const char* subtype);
 
-} // visionaray
+} // generic
 
 

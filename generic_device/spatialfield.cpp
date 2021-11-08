@@ -5,7 +5,7 @@
 #include "spatialfield.hpp"
 #include "structuredregular.hpp"
 
-namespace visionaray {
+namespace generic {
 
     SpatialField::SpatialField()
         : resourceHandle(new std::remove_pointer_t<ANARISpatialField>)
@@ -43,6 +43,6 @@ namespace visionaray {
             return std::make_unique<SpatialField>();
         }
     }
-} // visionaray
+} // generic
 
 

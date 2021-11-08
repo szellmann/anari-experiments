@@ -4,7 +4,7 @@
 #include <anari/detail/Device.h>
 #include <anari/detail/ParameterizedObject.h>
 
-namespace visionaray {
+namespace generic {
 
     struct Device : anari::Device
                   , anari::ParameterizedObject
@@ -146,6 +146,6 @@ namespace visionaray {
        ~Device();
     };
 
-} // test
+} // generic
 
 

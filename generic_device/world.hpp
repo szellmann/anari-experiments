@@ -2,14 +2,15 @@
 
 #include "object.hpp"
 #include "resource.hpp"
+#include "volume.hpp"
 
-namespace visionaray {
+namespace generic {
 
-    class Volume : public Object
+    class World : public Object
     {
     public:
-        Volume();
-       ~Volume();
+        World();
+       ~World();
 
         ResourceHandle getResourceHandle();
 
@@ -19,12 +20,12 @@ namespace visionaray {
                           ANARIDataType type,
                           const void* mem);
 
+        ANARIVolume* volume = nullptr;
+
     private:
-        ANARIVolume resourceHandle;
+        ANARIWorld resourceHandle;
     };
 
-    std::unique_ptr<Volume> createVolume(const char* subtype);
-
-} // visionaray
+} // generic
 
 

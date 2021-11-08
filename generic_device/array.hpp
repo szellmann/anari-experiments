@@ -5,7 +5,7 @@
 #include "object.hpp"
 #include "resource.hpp"
 
-namespace visionaray {
+namespace generic {
 
     class ArrayStorage : public Resource
     {
@@ -93,6 +93,6 @@ namespace visionaray {
 
         ANARIArray3D resourceHandle = nullptr;
     };
-} // visionaray
+} // generic
 
 

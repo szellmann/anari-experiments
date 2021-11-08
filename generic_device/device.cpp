@@ -8,8 +8,9 @@
 #include "renderer.hpp"
 #include "spatialfield.hpp"
 #include "volume.hpp"
+#include "world.hpp"
 
-namespace visionaray {
+namespace generic {
 
     //--- Device API --------------------------------------
 
@@ -152,7 +153,7 @@ namespace visionaray {
 
     ANARIWorld Device::newWorld()
     {
-        return nullptr;
+        return (ANARIWorld)RegisterResource(std::make_unique<World>());
     }
 
     //--- Object + Parameter Lifetime Management ----------
@@ -229,8 +230,13 @@ namespace visionaray {
         return (ANARIRenderer)RegisterResource(createRenderer(type));
     }
 
-    void Device::renderFrame(ANARIFrame)
+    void Device::renderFrame(ANARIFrame frame)
     {
+        Frame* f = (Frame*)GetResource(frame);
+        Renderer* rend = (Renderer*)GetResource(f->renderer);
+
+        if (rend != nullptr)
+            rend->renderFrame(f);
     }
 
     int Device::frameReady(ANARIFrame,
@@ -259,24 +265,24 @@ namespace visionaray {
     {
 
     }
-} // visionaray
+} // generic
 
 
-static char deviceName[] = "visionaray";
+static char deviceName[] = "generic";
 
-ANARI_DEFINE_LIBRARY_INIT(visionaray)
+ANARI_DEFINE_LIBRARY_INIT(generic)
 {
-  printf("...loaded visionaray library!\n");
-  anari::Device::registerType<visionaray::Device>(deviceName);
+  printf("...loaded generic library!\n");
+  anari::Device::registerType<generic::Device>(deviceName);
 }
 
-ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(visionaray, libdata)
+ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(generic, libdata)
 {
   static const char *devices[] = {deviceName, nullptr};
   return devices;
 }
 ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
-    visionaray, libdata, deviceSubtype, objectType)
+    generic, libdata, deviceSubtype, objectType)
 {
   if (objectType == ANARI_RENDERER) {
     static const char* renderers[] = {
@@ -288,11 +294,11 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
   return nullptr;
 }
 ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
-    visionaray, libdata, deviceSubtype, objectSubtype, objectType)
+    generic, libdata, deviceSubtype, objectSubtype, objectType)
 {
   return nullptr;
 }
-ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(visionaray,
+ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(generic,
     libdata,
     deviceSubtype,
     objectSubtype,
@@ -307,5 +313,5 @@ ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(visionaray,
 
 extern "C" ANARIDevice anariNewExampleDevice()
 {
-    return (ANARIDevice) new visionaray::Device;
+    return (ANARIDevice) new generic::Device;
 }

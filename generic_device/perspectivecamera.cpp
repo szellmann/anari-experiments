@@ -1,7 +1,7 @@
 #include <string.h>
 #include "perspectivecamera.hpp"
 
-namespace visionaray {
+namespace generic {
 
     PerspectiveCamera::PerspectiveCamera()
         : Camera()
@@ -29,6 +29,6 @@ namespace visionaray {
         }
     }
 
-} // visionaray
+} // generic
 
 

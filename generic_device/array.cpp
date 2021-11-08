@@ -1,7 +1,8 @@
 #include <anari/detail/Helpers.h>
 #include "array.hpp"
+#include <iostream>
 
-namespace visionaray {
+namespace generic {
 
     //--- ArrayStorage ------------------------------------
     ArrayStorage::ArrayStorage(uint8_t* userPtr, ANARIMemoryDeleter deleter,
@@ -134,6 +135,6 @@ namespace visionaray {
         return numItems[0]*numItems[1]*numItems[2]*anari::sizeOfDataType(elementType);
     }
 
-} // visionaray
+} // generic
 
 

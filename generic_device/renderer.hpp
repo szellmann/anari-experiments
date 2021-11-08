@@ -1,9 +1,10 @@
 #pragma once
 
+#include "frame.hpp"
 #include "object.hpp"
 #include "resource.hpp"
 
-namespace visionaray {
+namespace generic {
 
     class Renderer : public Object
     {
@@ -11,9 +12,10 @@ namespace visionaray {
         Renderer();
         virtual ~Renderer();
 
+        virtual void renderFrame(Frame* frame);
+
         ResourceHandle getResourceHandle();
 
-        // Usually a noop for renderers (subtypes _may_ still override)
         virtual void commit() {}
 
         virtual void setParameter(const char* name,
@@ -26,6 +28,6 @@ namespace visionaray {
 
     std::unique_ptr<Renderer> createRenderer(const char* subtype);
 
-} // visionaray
+} // generic
 
 

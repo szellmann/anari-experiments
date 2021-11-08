@@ -14,7 +14,7 @@
 #define TERMINAL_BOLD    "\033[1;1m"
 
 
-namespace visionaray {
+namespace generic {
     namespace logging
     {
         Stream::Stream(Level level)
@@ -32,6 +32,6 @@ namespace visionaray {
                 std::cout << TERMINAL_RED << stream_.str() << TERMINAL_RESET << '\n';
         }
     } // logging
-} // visionaray
+} // generic
 
 

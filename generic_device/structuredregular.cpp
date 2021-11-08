@@ -3,7 +3,7 @@
 #include "logging.hpp"
 #include "structuredregular.hpp"
 
-namespace visionaray {
+namespace generic {
 
     StructuredRegular::StructuredRegular()
         : SpatialField()
@@ -39,6 +39,6 @@ namespace visionaray {
         }
     }
 
-} // visionaray
+} // generic
 
 

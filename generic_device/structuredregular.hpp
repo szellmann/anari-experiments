@@ -3,7 +3,7 @@
 #include <cstdint>
 #include "spatialfield.hpp"
 
-namespace visionaray {
+namespace generic {
 
     class StructuredRegular : public SpatialField
     {
@@ -24,6 +24,6 @@ namespace visionaray {
 
     };
 
-} // visionaray
+} // generic
 
 
