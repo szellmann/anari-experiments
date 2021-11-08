@@ -28,9 +28,7 @@ namespace generic {
                                          const void* mem)
     {
         if (strncmp(name,"data",4)==0 && type==ANARI_ARRAY3D) {
-            ANARIArray3D* handle = (ANARIArray3D*)mem;
-            Array3D* arr = (Array3D*)GetResource(*handle);
-            data = arr->data;
+            data = *(ANARIArray3D*)mem;
         } else if (strncmp(name,"filter",6)==0 && type==ANARI_STRING) {
             filter = (const char*)mem;
         } else {

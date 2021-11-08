@@ -17,7 +17,7 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
-        uint8_t* data = nullptr;
+        ANARIArray3D data = nullptr;
         float origin[3] = {0,0,0};
         float spacing[3] = {1,1,1};
         const char* filter = "linear";
