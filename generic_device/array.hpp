@@ -10,7 +10,7 @@ namespace generic {
     class ArrayStorage : public Resource
     {
     public:
-        ArrayStorage(uint8_t* userPtr, ANARIMemoryDeleter deleter, void* userdata,
+        ArrayStorage(void* userPtr, ANARIMemoryDeleter deleter, void* userdata,
                      ANARIDataType elementType);
        ~ArrayStorage();
 
@@ -24,7 +24,7 @@ namespace generic {
 
         void free();
 
-        uint8_t* userPtr = nullptr;
+        void* userPtr = nullptr;
         uint8_t* data = nullptr; // can be managed, or is set to user array
         ANARIMemoryDeleter deleter = nullptr;
         void* userdata = nullptr; // for deleter
@@ -34,7 +34,7 @@ namespace generic {
     class Array1D : public ArrayStorage
     {
     public:
-        Array1D(uint8_t* data, ANARIMemoryDeleter deleter, void* userdata,
+        Array1D(void* data, ANARIMemoryDeleter deleter, void* userdata,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t buyteStride1);
        ~Array1D();
 
@@ -53,14 +53,12 @@ namespace generic {
     class Array2D : public ArrayStorage
     {
     public:
-        Array2D(uint8_t* data, ANARIMemoryDeleter deleter, void* userdata,
+        Array2D(void* data, ANARIMemoryDeleter deleter, void* userdata,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
                 uint64_t byteStride1, uint64_t byteStride2);
        ~Array2D();
 
         ResourceHandle getResourceHandle();
-
-        uint8_t* getData();
 
         uint64_t numItems[2] = {1,1};
         uint64_t byteStride[2] = {0,0};
@@ -75,15 +73,13 @@ namespace generic {
     class Array3D : public ArrayStorage
     {
     public:
-        Array3D(uint8_t* data, ANARIMemoryDeleter deleter, void* userdata,
+        Array3D(void* data, ANARIMemoryDeleter deleter, void* userdata,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
                 uint64_t numItems3, uint64_t byteStride1, uint64_t byteStride2,
                 uint64_t byteStride3);
        ~Array3D();
 
         ResourceHandle getResourceHandle();
-
-        uint8_t* getData();
 
         uint64_t numItems[3] = {1,1,1};
         uint64_t byteStride[3] = {0,0,0};

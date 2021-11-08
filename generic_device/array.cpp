@@ -1,11 +1,12 @@
-#include <anari/detail/Helpers.h>
+#include <string.h>
+#include <anari/detail/helpers.h>
 #include "array.hpp"
 #include <iostream>
 
 namespace generic {
 
     //--- ArrayStorage ------------------------------------
-    ArrayStorage::ArrayStorage(uint8_t* userPtr, ANARIMemoryDeleter deleter,
+    ArrayStorage::ArrayStorage(void* userPtr, ANARIMemoryDeleter deleter,
                                void* userdata, ANARIDataType elementType)
         : userPtr(userPtr)
         , deleter(deleter)
@@ -22,9 +23,10 @@ namespace generic {
     void ArrayStorage::commit()
     {
         if (0)//deleter != nullptr)
-            data = userPtr;
-        else
-            {} // would handle managed memory here
+            data = (uint8_t*)userPtr;
+        else {
+            memcpy(data,userPtr,getSizeInBytes());
+        }
     }
 
     void ArrayStorage::alloc()
@@ -42,8 +44,8 @@ namespace generic {
         data = nullptr;
     }
 
-    //--- Array2D -----------------------------------------
-    Array1D::Array1D(uint8_t* userPtr, ANARIMemoryDeleter deleter, void* userdata,
+    //--- Array1D -----------------------------------------
+    Array1D::Array1D(void* userPtr, ANARIMemoryDeleter deleter, void* userdata,
           ANARIDataType elementType, uint64_t numItems1, uint64_t byteStride1)
         : ArrayStorage(userPtr,deleter,userdata,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray1D>)
@@ -71,7 +73,7 @@ namespace generic {
     }
 
     //--- Array2D -----------------------------------------
-    Array2D::Array2D(uint8_t* userPtr, ANARIMemoryDeleter deleter, void* userdata,
+    Array2D::Array2D(void* userPtr, ANARIMemoryDeleter deleter, void* userdata,
           ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
           uint64_t byteStride1, uint64_t byteStride2)
         : ArrayStorage(userPtr,deleter,userdata,elementType)
@@ -102,7 +104,7 @@ namespace generic {
     }
 
     //--- Array3D -----------------------------------------
-    Array3D::Array3D(uint8_t* userPtr, ANARIMemoryDeleter deleter, void* userdata,
+    Array3D::Array3D(void* userPtr, ANARIMemoryDeleter deleter, void* userdata,
           ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
           uint64_t numItems3, uint64_t byteStride1, uint64_t byteStride2,
           uint64_t byteStride3)

@@ -1,4 +1,9 @@
+#include <iostream>
+#include <visionaray/math/math.h>
+#include <visionaray/texture/texture.h>
+#include <visionaray/aligned_vector.h>
 #include <visionaray/cpu_buffer_rt.h>
+#include "array.hpp"
 #include "backend.hpp"
 #include "logging.hpp"
 
@@ -45,16 +50,70 @@ namespace generic {
             }
         };
 
+        struct StructuredVolume
+        {
+            StructuredVolume() = default;
+
+            void reset(const Volume& volume)
+            {
+                ANARISpatialField f = volume.field;
+                StructuredRegular* sr = (StructuredRegular*)GetResource(f);
+                ANARIArray3D d = sr->data;
+                if (d != handle3f) { // new volume data!
+                    Array3D* data = (Array3D*)GetResource(d);
+
+                    storage3f = texture<float, 3>((unsigned)data->numItems[0],
+                                                  (unsigned)data->numItems[1],
+                                                  (unsigned)data->numItems[2]);
+                    storage3f.reset((const float*)data->data);
+                    storage3f.set_filter_mode(Linear);
+                    storage3f.set_address_mode(Clamp);
+
+                    texture3f = texture_ref<float, 3>(storage3f);
+
+                    handle3f = d;
+                }
+
+                ANARIArray1D color = volume.color;
+                ANARIArray1D opacity = volume.opacity;
+
+                if (color != handleRGB || opacity != handleA) { // TF changed
+                    Array1D* rgb = (Array1D*)GetResource(color);
+                    Array1D* a = (Array1D*)GetResource(opacity);
+
+                    aligned_vector<vec4f> rgba(rgb->numItems[0]);
+                    for (uint64_t i = 0; i < rgb->numItems[0]; ++i) {
+                        vec4f val(((vec3f*)rgb->data)[i],((float*)a)[i]);
+                        rgba[i] = val;
+                        std::cout << val << '\n';
+                    }
+
+                    storageRGBA = texture<vec4f, 1>(rgb->numItems[0]);
+
+                    handleRGB = color;
+                    handleA = opacity;
+                }
+            }
+
+            texture<float, 3> storage3f;
+            texture_ref<float, 3> texture3f;
+            texture<vec4f, 1> storageRGBA;
+            texture_ref<vec4f, 1> textureRGBA;
+
+            ANARIArray3D handle3f = nullptr;
+            ANARIArray1D handleRGB = nullptr;
+            ANARIArray1D handleA = nullptr;
+        };
+
         struct Renderer
         {
+            Algorithm algorithm;
             RenderTarget renderTarget;
-
             vec4f backgroundColor;
+            aligned_vector<StructuredVolume> structuredVolumes;
         };
 
 
-        // State
-        Algorithm algorithm;
         Renderer renderer;
 
     } // backend
@@ -69,6 +128,18 @@ namespace generic {
 
         void commit(World& world)
         {
+            if (world.volume != nullptr) {
+                Array1D* volumes = (Array1D*)GetResource(world.volume);
+
+                // TODO: count the actual _structured_ volumes, resize after!
+                renderer.structuredVolumes.resize(volumes->numItems[0]);
+
+                for (uint64_t i = 0; i < volumes->numItems[0]; ++i) {
+                    ANARIVolume vol = ((ANARIVolume*)(volumes->data))[i];
+                    Volume* volume = (Volume*)GetResource(vol);
+                    renderer.structuredVolumes[i].reset(*volume);
+                }
+            }
         }
 
         void commit(StructuredRegular& sr)
@@ -91,7 +162,7 @@ namespace generic {
 
         void commit(Pathtracer& pt)
         {
-            algorithm = Algorithm::Pathtracing;
+            renderer.algorithm = Algorithm::Pathtracing;
         }
 
         void* map(Frame& frame)
@@ -101,7 +172,7 @@ namespace generic {
 
         void renderFrame(Frame& frame)
         {
-            if (algorithm==Algorithm::Pathtracing) {
+            if (renderer.algorithm==Algorithm::Pathtracing) {
 
             }
         }

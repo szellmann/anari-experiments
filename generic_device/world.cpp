@@ -29,10 +29,7 @@ namespace generic {
                              const void* mem)
     {
         if (strncmp(name,"volume",6)==0 && type==ANARI_ARRAY1D) {
-            ANARIArray3D* handle = (ANARIArray3D*)mem;
-            Array3D* arr = (Array3D*)GetResource(*handle);
-            volume = (ANARIVolume*)arr->data;
-            Volume* vol = (Volume*)GetResource(volume[0]); // TODO: reference count
+            volume = *(ANARIArray1D*)mem; // TODO: reference count
         } else {
             LOG(logging::Level::Warning) << "World: Unsupported parameter "
                 << "/ parameter type: " << name << " / " << type;

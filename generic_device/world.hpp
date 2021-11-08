@@ -20,7 +20,7 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
-        ANARIVolume* volume = nullptr;
+        ANARIArray1D volume = nullptr;
 
     private:
         ANARIWorld resourceHandle;

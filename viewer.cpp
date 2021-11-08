@@ -88,6 +88,7 @@ struct Scene
             anariRelease(device, volumes);
 
         volumes = anariNewArray1D(device, &volume, 0, 0, ANARI_VOLUME, 1, 0);
+        anariCommit(device, volumes);
 
         anariSetParameter(device, world, "volume", ANARI_ARRAY1D, &volumes);
 
