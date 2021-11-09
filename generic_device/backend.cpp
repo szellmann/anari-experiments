@@ -215,6 +215,87 @@ namespace generic {
             tiled_sched<ray> sched{std::thread::hardware_concurrency()};
             aligned_vector<StructuredVolume> structuredVolumes;
             unsigned accumID=0;
+
+            void renderFrame()
+            {
+                if (algorithm==Algorithm::Pathtracing) {
+
+                    static unsigned frame_num = 0;
+                    pixel_sampler::basic_jittered_blend_type<float> blend_params;
+                    blend_params.spp = 1;
+                    float alpha = 1.f / ++accumID;
+                    //float alpha = 1.f / 1.f;
+                    blend_params.sfactor = alpha;
+                    blend_params.dfactor = 1.f - alpha;
+                    auto sparams = make_sched_params(blend_params,cam,renderTarget);
+
+                    if (1) { // single volume only
+                        StructuredVolume& volume = structuredVolumes[0];
+
+                        float heightf = (float)renderTarget.height();
+
+                        sched.frame([&](ray r, random_generator<float>& gen, int x, int y) {
+                            result_record<float> result;
+                            
+                            henyey_greenstein<float> f;
+                            f.g = 0.f; // isotropic
+
+                            vec3f throughput(1.f);
+
+                            auto hit_rec = intersect(r, volume.bbox);
+
+                            unsigned bounce = 0;
+
+                            if (hit_rec.hit)
+                            {
+                                r.ori += r.dir * hit_rec.tnear;
+                                hit_rec.tfar -= hit_rec.tnear;
+
+                                while (volume.sample_interaction(r, hit_rec.tfar, gen))
+                                {
+                                    // Is the path length exceeded?
+                                    if (bounce++ >= 1024)
+                                    {
+                                        throughput = vec3(0.0f);
+                                        break;
+                                    }
+
+                                    throughput *= volume.albedo(r.ori);
+
+                                    // Russian roulette absorption
+                                    float prob = max_element(throughput);
+                                    if (prob < 0.2f)
+                                    {
+                                        if (gen.next() > prob)
+                                        {
+                                            throughput = vec3(0.0f);
+                                            break;
+                                        }
+                                        throughput /= prob;
+                                    }
+
+                                    // Sample phase function
+                                    vec3 scatter_dir;
+                                    float pdf;
+                                    f.sample(-r.dir, scatter_dir, pdf, gen);
+                                    r.dir = scatter_dir;
+
+                                    hit_rec = intersect(r, volume.bbox);
+                                }
+                            }
+
+                            // Look up the environment
+                            float t = y / heightf;
+                            vec3 Ld = (1.0f - t)*vec3f(1.0f, 1.0f, 1.0f) + t * vec3f(0.5f, 0.7f, 1.0f);
+                            vec3 L = throughput;
+
+                            result.hit = hit_rec.hit;
+                            result.color = bounce ? vec4f(L, 1.f) : backgroundColor;
+                            return result;
+                        }, sparams);
+                    }
+                }
+            }
         };
 
 
@@ -314,87 +395,7 @@ namespace generic {
 
         void renderFrame(Frame& frame)
         {
-            if (renderer.algorithm==Algorithm::Pathtracing) {
-
-                static unsigned frame_num = 0;
-                pixel_sampler::basic_jittered_blend_type<float> blend_params;
-                blend_params.spp = 1;
-                float alpha = 1.f / ++renderer.accumID;
-                //float alpha = 1.f / 1.f;
-                blend_params.sfactor = alpha;
-                blend_params.dfactor = 1.f - alpha;
-                auto sparams = make_sched_params(
-                    blend_params,
-                    renderer.cam,
-                    renderer.renderTarget
-                );
-
-                if (1) { // single volume only
-                    StructuredVolume& volume = renderer.structuredVolumes[0];
-
-                    float heightf = (float)renderer.renderTarget.height();
-
-                    renderer.sched.frame([&](ray r, random_generator<float>& gen, int x, int y) {
-                        result_record<float> result;
-                        
-                        henyey_greenstein<float> f;
-                        f.g = 0.f; // isotropic
-
-                        vec3f throughput(1.f);
-
-                        auto hit_rec = intersect(r, volume.bbox);
-
-                        unsigned bounce = 0;
-
-                        if (hit_rec.hit)
-                        {
-                            r.ori += r.dir * hit_rec.tnear;
-                            hit_rec.tfar -= hit_rec.tnear;
-
-                            while (volume.sample_interaction(r, hit_rec.tfar, gen))
-                            {
-                                // Is the path length exceeded?
-                                if (bounce++ >= 1024)
-                                {
-                                    throughput = vec3(0.0f);
-                                    break;
-                                }
-
-                                throughput *= volume.albedo(r.ori);
-
-                                // Russian roulette absorption
-                                float prob = max_element(throughput);
-                                if (prob < 0.2f)
-                                {
-                                    if (gen.next() > prob)
-                                    {
-                                        throughput = vec3(0.0f);
-                                        break;
-                                    }
-                                    throughput /= prob;
-                                }
-
-                                // Sample phase function
-                                vec3 scatter_dir;
-                                float pdf;
-                                f.sample(-r.dir, scatter_dir, pdf, gen);
-                                r.dir = scatter_dir;
-
-                                hit_rec = intersect(r, volume.bbox);
-                            }
-                        }
-
-                        // Look up the environment
-                        float t = y / heightf;
-                        vec3 Ld = (1.0f - t)*vec3f(1.0f, 1.0f, 1.0f) + t * vec3f(0.5f, 0.7f, 1.0f);
-                        vec3 L = throughput;
-
-                        result.hit = hit_rec.hit;
-                        result.color = bounce ? vec4f(L, 1.f) : renderer.backgroundColor;
-                        return result;
-                    }, sparams);
-                }
-            }
+            renderer.renderFrame();
         }
 
     } // backend
