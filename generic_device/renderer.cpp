@@ -1,5 +1,6 @@
 #include <string.h>
 #include <type_traits>
+#include "backend.hpp"
 #include "logging.hpp"
 #include "renderer.hpp"
 #include "pathtracer.hpp"
@@ -25,10 +26,21 @@ namespace generic {
         return resourceHandle;
     }
 
+    void Renderer::commit()
+    {
+        backend::commit(*this);
+    }
+
     void Renderer::setParameter(const char* name,
                                 ANARIDataType type,
                                 const void* mem)
     {
+        if (strncmp(name,"backgroundColor",15)==0 && type==ANARI_FLOAT32_VEC4) {
+            memcpy(backgroundColor,mem,sizeof(backgroundColor));
+        } else {
+            LOG(logging::Level::Warning) << "Renderer: Unsupported parameter "
+                << "/parameter type: " << name << " / " << type;
+        }
     }
 
     std::unique_ptr<Renderer> createRenderer(const char* subtype)

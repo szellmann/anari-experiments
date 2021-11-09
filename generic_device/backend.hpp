@@ -26,6 +26,8 @@ namespace generic {
 
         void commit(Volume& vol);
 
+        void commit(Renderer& rend);
+
         void commit(Pathtracer& pt);
 
         void* map(Frame& frame);

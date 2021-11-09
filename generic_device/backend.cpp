@@ -297,6 +297,11 @@ namespace generic {
             renderer.cam.perspective(cam.fovy,cam.aspect,.001f,1000.f);
         }
 
+        void commit(::generic::Renderer& rend)
+        {
+            renderer.backgroundColor = vec4f(rend.backgroundColor);
+        }
+
         void commit(Pathtracer& pt)
         {
             renderer.algorithm = Algorithm::Pathtracing;
@@ -339,12 +344,12 @@ namespace generic {
 
                         auto hit_rec = intersect(r, volume.bbox);
 
+                        unsigned bounce = 0;
+
                         if (hit_rec.hit)
                         {
                             r.ori += r.dir * hit_rec.tnear;
                             hit_rec.tfar -= hit_rec.tnear;
-
-                            unsigned bounce = 0;
 
                             while (volume.sample_interaction(r, hit_rec.tfar, gen))
                             {
@@ -382,10 +387,10 @@ namespace generic {
                         // Look up the environment
                         float t = y / heightf;
                         vec3 Ld = (1.0f - t)*vec3f(1.0f, 1.0f, 1.0f) + t * vec3f(0.5f, 0.7f, 1.0f);
-                        vec3 L = Ld * throughput;
+                        vec3 L = throughput;
 
-                        result.color = vec4(L, 1.f);
                         result.hit = hit_rec.hit;
+                        result.color = bounce ? vec4f(L, 1.f) : renderer.backgroundColor;
                         return result;
                     }, sparams);
                 }

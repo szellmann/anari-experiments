@@ -16,12 +16,13 @@ namespace generic {
 
         ResourceHandle getResourceHandle();
 
-        virtual void commit() {}
+        virtual void commit();
 
         virtual void setParameter(const char* name,
                                   ANARIDataType type,
                                   const void* mem);
 
+        float backgroundColor[4] = {0.f,0.f,0.f,0.f};
     private:
         ANARIRenderer resourceHandle;
     };

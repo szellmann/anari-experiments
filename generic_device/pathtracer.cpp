@@ -20,6 +20,8 @@ namespace generic {
     void Pathtracer::commit()
     {
         backend::commit(*this);
+
+        Renderer::commit();
     }
 } // generic
 
