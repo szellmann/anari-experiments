@@ -18,6 +18,8 @@ namespace generic {
 
         void commit(StructuredRegular& sr);
 
+        void commit(Volume& vol);
+
         void commit(Pathtracer& pt);
 
         void* map(Frame& frame);

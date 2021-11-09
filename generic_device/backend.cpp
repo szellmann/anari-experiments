@@ -54,8 +54,10 @@ namespace generic {
         {
             StructuredVolume() = default;
 
-            void reset(const Volume& volume)
+            void reset(Volume& volume)
             {
+                handle = (ANARIVolume)volume.getResourceHandle();
+
                 ANARISpatialField f = volume.field;
                 StructuredRegular* sr = (StructuredRegular*)GetResource(f);
                 ANARIArray3D d = sr->data;
@@ -85,7 +87,6 @@ namespace generic {
                     for (uint64_t i = 0; i < rgb->numItems[0]; ++i) {
                         vec4f val(((vec3f*)rgb->data)[i],((float*)a)[i]);
                         rgba[i] = val;
-                        std::cout << val << '\n';
                     }
 
                     storageRGBA = texture<vec4f, 1>(rgb->numItems[0]);
@@ -100,6 +101,7 @@ namespace generic {
             texture<vec4f, 1> storageRGBA;
             texture_ref<vec4f, 1> textureRGBA;
 
+            ANARIVolume handle = nullptr;
             ANARIArray3D handle3f = nullptr;
             ANARIArray1D handleRGB = nullptr;
             ANARIArray1D handleA = nullptr;
@@ -144,6 +146,18 @@ namespace generic {
 
         void commit(StructuredRegular& sr)
         {
+        }
+
+        void commit(Volume& vol)
+        {
+            // only effects the backend if world was already committed,
+            for (size_t i = 0; i < renderer.structuredVolumes.size(); ++i) {
+                if (renderer.structuredVolumes[i].handle != nullptr
+                    && renderer.structuredVolumes[i].handle == vol.getResourceHandle()) {
+                    renderer.structuredVolumes[i].reset(vol);
+                    break;
+                }
+            }
         }
 
         void commit(Frame& frame)

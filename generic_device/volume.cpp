@@ -1,4 +1,5 @@
 #include <string.h>
+#include "backend.hpp"
 #include "logging.hpp"
 #include "volume.hpp"
 
@@ -20,6 +21,7 @@ namespace generic {
 
     void Volume::commit()
     {
+        backend::commit(*this);
     }
 
     void Volume::setParameter(const char* name,
