@@ -45,11 +45,11 @@ namespace generic {
 
     std::unique_ptr<Renderer> createRenderer(const char* subtype)
     {
-        if (strncmp(subtype,"pathtracer",10)==0)
+        if (strncmp(subtype,"default",7)==0 || strncmp(subtype,"pathtracer",10)==0)
             return std::make_unique<Pathtracer>();
         else {
-            LOG(logging::Level::Warning) << "Renderer subtype unavailable: " << subtype
-                << ", defaulting to \"pathtracer\"";
+            LOG(logging::Level::Warning) << "Renderer subtype unavailable: \"" << subtype
+                << "\", defaulting to \"pathtracer\"";
             return std::make_unique<Pathtracer>();
         }
     }
