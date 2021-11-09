@@ -23,6 +23,7 @@ namespace generic {
 
     void Camera::commit()
     {
+        backend::commit(*this);
     }
 
     void Camera::setParameter(const char* name,

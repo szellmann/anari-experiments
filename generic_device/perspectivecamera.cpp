@@ -1,4 +1,5 @@
 #include <string.h>
+#include "backend.hpp"
 #include "perspectivecamera.hpp"
 
 namespace generic {
@@ -14,6 +15,8 @@ namespace generic {
 
     void PerspectiveCamera::commit()
     {
+        backend::commit(*this);
+        Camera::commit();
     }
 
     void PerspectiveCamera::setParameter(const char* name,

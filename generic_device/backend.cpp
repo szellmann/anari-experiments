@@ -1,8 +1,13 @@
 #include <iostream>
+#include <thread>
 #include <visionaray/math/math.h>
 #include <visionaray/texture/texture.h>
 #include <visionaray/aligned_vector.h>
 #include <visionaray/cpu_buffer_rt.h>
+#include <visionaray/phase_function.h>
+#include <visionaray/random_generator.h>
+#include <visionaray/scheduler.h>
+#include <visionaray/thin_lens_camera.h>
 #include "array.hpp"
 #include "backend.hpp"
 #include "logging.hpp"
@@ -14,12 +19,53 @@ namespace generic {
     namespace backend {
         enum class Algorithm { Pathtracing, };
 
-        struct RenderTarget
+        struct RenderTarget : render_target
         {
-            cpu_buffer_rt<PF_RGBA8,   PF_UNSPECIFIED> rgba8_unspecified;
-            cpu_buffer_rt<PF_RGBA32F, PF_UNSPECIFIED> rgba32f_unspecified;
-            cpu_buffer_rt<PF_RGBA8,   PF_DEPTH32F>    rgba8_depth32f;
-            cpu_buffer_rt<PF_RGBA32F, PF_DEPTH32F>    rgba32f_depth32f;
+            auto ref() { return accumBuffer.ref(); }
+
+            void clear_color_buffer(const vec4f& color = vec4f(0.f))
+            {
+                accumBuffer.clear_color_buffer(color);
+            }
+
+            void begin_frame()
+            {
+                accumBuffer.begin_frame();
+            }
+
+            void end_frame()
+            {
+                accumBuffer.end_frame();
+
+                parallel_for(pool,tiled_range2d<int>(0,width(),64,0,height(),64),
+                    [&](range2d<int> r) {
+                        for (int y=r.cols().begin(); y!=r.cols().end(); ++y) {
+                            for (int x=r.rows().begin(); x!=r.rows().end(); ++x) {
+                                 vec4f src = accumBuffer.color()[y*width()+x];
+
+                                 if (1) {
+                                     src.xyz() = linear_to_srgb(src.xyz());
+                                     int32_t r = clamp(int32_t(src.x*256.f),0,255);
+                                     int32_t g = clamp(int32_t(src.y*256.f),0,255);
+                                     int32_t b = clamp(int32_t(src.z*256.f),0,255);
+                                     int32_t a = clamp(int32_t(src.w*256.f),0,255);
+                                     uint32_t &dst = ((uint32_t*)colorPtr)[y*width()+x];
+
+                                     dst = (r<<0) + (g<<8) + (b<<16) + (a<<24);
+                                 }
+                            }
+                        }
+                    });
+            }
+
+            void resize(int w, int h)
+            {
+                render_target::resize(w,h);accumBuffer.resize(w,h);
+            }
+
+            thread_pool pool{std::thread::hardware_concurrency()};
+
+            cpu_buffer_rt<PF_RGBA32F, PF_DEPTH32F> accumBuffer;
 
             bool sRGB = false;
 
@@ -28,22 +74,18 @@ namespace generic {
 
             void reset(int width, int height, pixel_format color, pixel_format depth, bool srgb)
             {
-                if (color==PF_RGBA8 && depth==PF_UNSPECIFIED) {
-                    rgba8_unspecified.resize(width,height);
-                    colorPtr = rgba8_unspecified.color();
-                    depthPtr = nullptr;
+                resize(width,height);
+
+                if (color==PF_RGBA8 && depth==PF_UNSPECIFIED) { // TODO: use anari types!
+                    colorPtr = new uint32_t[width*height]; // TODO: delete!!!
                 } else if (color==PF_RGBA8 && depth==PF_DEPTH32F) {
-                    rgba8_depth32f.resize(width,height);
-                    colorPtr = rgba8_depth32f.color();
-                    depthPtr = rgba8_depth32f.depth();
+                    colorPtr = new uint32_t[width*height];
+                    depthPtr = new float[width*height];
                 } else if (color==PF_RGBA32F && depth==PF_UNSPECIFIED) {
-                    rgba32f_unspecified.resize(width,height);
-                    colorPtr = rgba32f_unspecified.color();
-                    depthPtr = nullptr;
+                    colorPtr = new vec4f[width*height];
                 } else if (color==PF_RGBA32F && depth==PF_DEPTH32F) {
-                    rgba32f_depth32f.resize(width,height);
-                    colorPtr = rgba32f_depth32f.color();
-                    depthPtr = rgba32f_depth32f.depth();
+                    colorPtr = new vec4f[width*height];
+                    depthPtr = new float[width*height];
                 }
 
                 sRGB = srgb;
@@ -73,6 +115,8 @@ namespace generic {
 
                     texture3f = texture_ref<float, 3>(storage3f);
 
+                    bbox = aabb({0.f,0.f,0.f},{(float)data->numItems[0],(float)data->numItems[1],(float)data->numItems[2]});
+
                     handle3f = d;
                 }
 
@@ -85,21 +129,76 @@ namespace generic {
 
                     aligned_vector<vec4f> rgba(rgb->numItems[0]);
                     for (uint64_t i = 0; i < rgb->numItems[0]; ++i) {
-                        vec4f val(((vec3f*)rgb->data)[i],((float*)a)[i]);
+                        vec4f val(((vec3f*)rgb->data)[i],((float*)a->data)[i]);
                         rgba[i] = val;
                     }
 
                     storageRGBA = texture<vec4f, 1>(rgb->numItems[0]);
+                    storageRGBA.reset(rgba.data());
+                    storageRGBA.set_filter_mode(Linear);
+                    storageRGBA.set_address_mode(Clamp);
+
+                    textureRGBA = texture_ref<vec4f, 1>(storageRGBA);
 
                     handleRGB = color;
                     handleA = opacity;
                 }
             }
 
+            VSNRAY_FUNC
+            vec3 albedo(vec3 const& pos)
+            {
+                float voxel = (float)tex3D(texture3f, pos / bbox.size());
+
+                // normalize to [0..1]
+                //voxel = normalize(volume, voxel);
+
+                vec4f rgba = tex1D(textureRGBA, voxel);
+                return rgba.xyz();
+            }
+
+            VSNRAY_FUNC
+            float mu(vec3 const& pos)
+            {
+                float voxel = (float)tex3D(texture3f, pos / bbox.size());
+
+                // normalize to [0..1]
+                //voxel = normalize(volume, voxel);
+
+                vec4f rgba = tex1D(textureRGBA, voxel);
+                return rgba.w;
+            }
+
+            template <typename Ray>
+            VSNRAY_FUNC
+            bool sample_interaction(Ray& r, float d, random_generator<float>& gen)
+            {
+                float t = 0.0f;
+                vec3 pos;
+
+                do
+                {
+                    t -= log(1.0f - gen.next()) / mu_;
+
+                    pos = r.ori + r.dir * t;
+                    if (t >= d)
+                    {
+                        return false;
+                    }
+                }
+                while (mu(pos) < gen.next() * mu_);
+
+                r.ori = pos;
+                return true;
+            }
+
             texture<float, 3> storage3f;
             texture_ref<float, 3> texture3f;
             texture<vec4f, 1> storageRGBA;
             texture_ref<vec4f, 1> textureRGBA;
+
+            aabb bbox;
+            float mu_ = 1.f;
 
             ANARIVolume handle = nullptr;
             ANARIArray3D handle3f = nullptr;
@@ -111,8 +210,11 @@ namespace generic {
         {
             Algorithm algorithm;
             RenderTarget renderTarget;
+            thin_lens_camera cam;
             vec4f backgroundColor;
+            tiled_sched<ray> sched{std::thread::hardware_concurrency()};
             aligned_vector<StructuredVolume> structuredVolumes;
+            unsigned accumID=0;
         };
 
 
@@ -172,6 +274,27 @@ namespace generic {
             bool sRGB = frame.color==ANARI_UFIXED8_RGBA_SRGB;
 
             renderer.renderTarget.reset(frame.size[0],frame.size[1],color,depth,sRGB);
+
+            renderer.cam.set_viewport(0,0,frame.size[0],frame.size[1]);
+        }
+
+        void commit(Camera& cam)
+        {
+            vec3f eye(cam.position);
+            vec3f dir(cam.direction);
+            vec3f center = eye+dir;
+            vec3f up(cam.up);
+            if (eye!=renderer.cam.eye() || center!=renderer.cam.center() || up!=renderer.cam.up()) {
+                renderer.cam.look_at(eye,center,up);
+                renderer.cam.set_lens_radius(cam.apertureRadius);
+                renderer.cam.set_focal_distance(cam.focusDistance);
+                renderer.accumID = 0;
+            }
+        }
+
+        void commit(PerspectiveCamera& cam)
+        {
+            renderer.cam.perspective(cam.fovy,cam.aspect,.001f,1000.f);
         }
 
         void commit(Pathtracer& pt)
@@ -188,6 +311,84 @@ namespace generic {
         {
             if (renderer.algorithm==Algorithm::Pathtracing) {
 
+                static unsigned frame_num = 0;
+                pixel_sampler::basic_jittered_blend_type<float> blend_params;
+                blend_params.spp = 1;
+                float alpha = 1.f / ++renderer.accumID;
+                //float alpha = 1.f / 1.f;
+                blend_params.sfactor = alpha;
+                blend_params.dfactor = 1.f - alpha;
+                auto sparams = make_sched_params(
+                    blend_params,
+                    renderer.cam,
+                    renderer.renderTarget
+                );
+
+                if (1) { // single volume only
+                    StructuredVolume& volume = renderer.structuredVolumes[0];
+
+                    float heightf = (float)renderer.renderTarget.height();
+
+                    renderer.sched.frame([&](ray r, random_generator<float>& gen, int x, int y) {
+                        result_record<float> result;
+                        
+                        henyey_greenstein<float> f;
+                        f.g = 0.f; // isotropic
+
+                        vec3f throughput(1.f);
+
+                        auto hit_rec = intersect(r, volume.bbox);
+
+                        if (hit_rec.hit)
+                        {
+                            r.ori += r.dir * hit_rec.tnear;
+                            hit_rec.tfar -= hit_rec.tnear;
+
+                            unsigned bounce = 0;
+
+                            while (volume.sample_interaction(r, hit_rec.tfar, gen))
+                            {
+                                // Is the path length exceeded?
+                                if (bounce++ >= 1024)
+                                {
+                                    throughput = vec3(0.0f);
+                                    break;
+                                }
+
+                                throughput *= volume.albedo(r.ori);
+
+                                // Russian roulette absorption
+                                float prob = max_element(throughput);
+                                if (prob < 0.2f)
+                                {
+                                    if (gen.next() > prob)
+                                    {
+                                        throughput = vec3(0.0f);
+                                        break;
+                                    }
+                                    throughput /= prob;
+                                }
+
+                                // Sample phase function
+                                vec3 scatter_dir;
+                                float pdf;
+                                f.sample(-r.dir, scatter_dir, pdf, gen);
+                                r.dir = scatter_dir;
+
+                                hit_rec = intersect(r, volume.bbox);
+                            }
+                        }
+
+                        // Look up the environment
+                        float t = y / heightf;
+                        vec3 Ld = (1.0f - t)*vec3f(1.0f, 1.0f, 1.0f) + t * vec3f(0.5f, 0.7f, 1.0f);
+                        vec3 L = Ld * throughput;
+
+                        result.color = vec4(L, 1.f);
+                        result.hit = hit_rec.hit;
+                        return result;
+                    }, sparams);
+                }
             }
         }
 
