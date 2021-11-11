@@ -14,6 +14,7 @@ message(${VSNRAY_DIR})
 
 add_library(${PROJECT_NAME}
     SHARED # Plugin, so make sure to build shared object!
+    ao.cpp
     array.cpp
     backend.cpp
     camera.cpp

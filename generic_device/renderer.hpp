@@ -24,8 +24,9 @@ namespace generic {
 
         float backgroundColor[4] = {0.f,0.f,0.f,0.f};
 
-        constexpr static const char* Subtypes[2] = {
+        constexpr static const char* Subtypes[3] = {
             "pathtracer", // 1st one is chosen by "default" 
+            "ao",
             nullptr,     // last one most be NULL
         };
 

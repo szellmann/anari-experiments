@@ -288,6 +288,7 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
   if (objectType == ANARI_RENDERER) {
     static const char* renderers[] = {
         "pathtracer", // 1st one is chosen by "default" 
+        "ao",
         nullptr,     // last one most be NULL
     };
     return renderers;

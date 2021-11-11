@@ -6,6 +6,7 @@
 #include <visionaray/cpu_buffer_rt.h>
 #include <visionaray/phase_function.h>
 #include <visionaray/random_generator.h>
+#include <visionaray/sampling.h>
 #include <visionaray/scheduler.h>
 #include <visionaray/thin_lens_camera.h>
 #include "array.hpp"
@@ -17,7 +18,7 @@ using namespace visionaray;
 namespace generic {
 
     namespace backend {
-        enum class Algorithm { Pathtracing, };
+        enum class Algorithm { Pathtracing, AmbientOcclusion, };
 
         struct RenderTarget : render_target
         {
@@ -192,6 +193,17 @@ namespace generic {
                 return true;
             }
 
+            VSNRAY_FUNC
+            inline vec3f gradient(vec3f texCoord, vec3f delta)
+            {
+                return vec3f(+tex3D(texture3f,vec3f(texCoord.x+delta.x,texCoord.y,texCoord.z))
+                             -tex3D(texture3f,vec3f(texCoord.x-delta.x,texCoord.y,texCoord.z)),
+                             +tex3D(texture3f,vec3f(texCoord.x,texCoord.y+delta.y,texCoord.z))
+                             -tex3D(texture3f,vec3f(texCoord.x,texCoord.y-delta.y,texCoord.z)),
+                             +tex3D(texture3f,vec3f(texCoord.x,texCoord.y,texCoord.z+delta.z))
+                             -tex3D(texture3f,vec3f(texCoord.x,texCoord.y,texCoord.z-delta.z)));
+            }
+
             texture<float, 3> storage3f;
             texture_ref<float, 3> texture3f;
             texture<vec4f, 1> storageRGBA;
@@ -218,16 +230,16 @@ namespace generic {
 
             void renderFrame()
             {
-                if (algorithm==Algorithm::Pathtracing) {
+                static unsigned frame_num = 0;
+                pixel_sampler::basic_jittered_blend_type<float> blend_params;
+                blend_params.spp = 1;
+                float alpha = 1.f / ++accumID;
+                //float alpha = 1.f / 1.f;
+                blend_params.sfactor = alpha;
+                blend_params.dfactor = 1.f - alpha;
+                auto sparams = make_sched_params(blend_params,cam,renderTarget);
 
-                    static unsigned frame_num = 0;
-                    pixel_sampler::basic_jittered_blend_type<float> blend_params;
-                    blend_params.spp = 1;
-                    float alpha = 1.f / ++accumID;
-                    //float alpha = 1.f / 1.f;
-                    blend_params.sfactor = alpha;
-                    blend_params.dfactor = 1.f - alpha;
-                    auto sparams = make_sched_params(blend_params,cam,renderTarget);
+                if (algorithm==Algorithm::Pathtracing) {
 
                     if (1) { // single volume only
                         StructuredVolume& volume = structuredVolumes[0];
@@ -291,6 +303,99 @@ namespace generic {
 
                             result.hit = hit_rec.hit;
                             result.color = bounce ? vec4f(L, 1.f) : backgroundColor;
+                            return result;
+                        }, sparams);
+                    }
+                } else if (algorithm==Algorithm::AmbientOcclusion) {
+
+                    if (1) { // single volume only
+                        StructuredVolume& volume = structuredVolumes[0];
+
+                        float dt = 2.f;
+                        vec3f gradientDelta = 1.f/volume.bbox.size();
+                        bool volumetricAO = true;
+
+                        sched.frame([&](ray r, random_generator<float>& gen, int x, int y) {
+                            result_record<float> result;
+
+                            auto hit_rec = intersect(r, volume.bbox);
+                            result.hit = hit_rec.hit;
+
+                            if (!hit_rec.hit) {
+                                result.color = backgroundColor;
+                                return result;
+                            }
+
+                            result.color = vec4f(0.f);
+
+                            float t = max(0.f,hit_rec.tnear);
+                            float tmax = hit_rec.tfar;
+                            vec3f pos = r.ori + r.dir * t;
+
+                            // TODO: vertex-centric!
+                            vec3f texCoord = pos/volume.bbox.size();
+
+                            vec3f inc = r.dir*dt/volume.bbox.size();
+
+                            while (t < tmax) {
+                                float voxel = tex3D(volume.texture3f,texCoord);
+                                vec4f color = tex1D(volume.textureRGBA,voxel);
+
+                                // shading
+                                vec3f grad = volume.gradient(texCoord,gradientDelta);
+                                if (volumetricAO && length(grad) > .15f) {
+                                    vec3f n = normalize(grad);
+                                    n = faceforward(n,-r.dir,n);
+                                    vec3f u, v, w=n;
+                                    make_orthonormal_basis(u,v,w);
+
+                                    float radius = 1.f;
+                                    int numSamples = 2;
+                                    for (int i=0; i<numSamples; ++i) {
+                                        auto sp = cosine_sample_hemisphere(gen.next(),gen.next());
+                                        vec3f dir = normalize(sp.x*u+sp.y*v+sp.z+w);
+
+                                        ray aoRay;
+                                        aoRay.ori = texCoord + dir * 1e-3f;
+                                        aoRay.dir = dir;
+                                        aoRay.tmin = 0.f;
+                                        aoRay.tmax = radius;
+                                        auto ao_rec = intersect(aoRay,volume.bbox);
+                                        aoRay.tmax = fminf(aoRay.tmax,ao_rec.tfar);
+
+                                        vec3f texCoordAO = aoRay.ori/volume.bbox.size();
+                                        vec3f incAO = aoRay.dir*dt/volume.bbox.size();
+
+                                        float tAO = 0.f;
+                                        while (tAO < aoRay.tmax) {
+                                            float voxelAO = tex3D(volume.texture3f,texCoordAO);
+                                            vec4f colorAO = tex1D(volume.textureRGBA,voxelAO);
+
+                                            color *= colorAO.w;
+
+                                            texCoordAO += incAO;
+                                            tAO += dt;
+                                        }
+                                    }
+                                }
+
+                                // opacity correction
+                                color.w = 1.f-powf(1.f-color.w,dt);
+
+                                // premultiplied alpha
+                                color.xyz() *= color.w;
+
+                                // compositing
+                                result.color += color * (1.f-result.color.w);
+
+                                // step on
+                                texCoord += inc;
+                                t += dt;
+                            }
+
+                            result.color.xyz() += (1.f-result.color.w) * backgroundColor.xyz();
+                            result.color.w += (1.f-result.color.w) * backgroundColor.w;
+
                             return result;
                         }, sparams);
                     }
@@ -386,6 +491,11 @@ namespace generic {
         void commit(Pathtracer& pt)
         {
             renderer.algorithm = Algorithm::Pathtracing;
+        }
+
+        void commit(AO& ao)
+        {
+            renderer.algorithm = Algorithm::AmbientOcclusion;
         }
 
         void* map(Frame& frame)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ao.hpp"
 #include "camera.hpp"
 #include "frame.hpp"
 #include "object.hpp"
@@ -27,6 +28,8 @@ namespace generic {
         void commit(Volume& vol);
 
         void commit(Renderer& rend);
+
+        void commit(AO& ao);
 
         void commit(Pathtracer& pt);
 

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <type_traits>
+#include "ao.hpp"
 #include "backend.hpp"
 #include "logging.hpp"
 #include "renderer.hpp"
@@ -47,7 +48,9 @@ namespace generic {
     {
         if (strncmp(subtype,"default",7)==0 || strncmp(subtype,"pathtracer",10)==0)
             return std::make_unique<Pathtracer>();
-        else {
+        else if (strncmp(subtype,"ao",2)==0) {
+            return std::make_unique<AO>();
+        } else {
             LOG(logging::Level::Warning) << "Renderer subtype unavailable: \"" << subtype
                 << "\", defaulting to \"pathtracer\"";
             return std::make_unique<Pathtracer>();
