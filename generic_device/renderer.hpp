@@ -23,6 +23,17 @@ namespace generic {
                                   const void* mem);
 
         float backgroundColor[4] = {0.f,0.f,0.f,0.f};
+
+        constexpr static const char* Subtypes[2] = {
+            "pathtracer", // 1st one is chosen by "default" 
+            nullptr,     // last one most be NULL
+        };
+
+        constexpr static ANARIParameter Parameters[2] = {
+            {"backgroundColor", ANARI_FLOAT32_VEC4},
+            {nullptr, ANARI_UNKNOWN},
+        };
+
     private:
         ANARIRenderer resourceHandle;
     };

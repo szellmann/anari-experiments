@@ -296,6 +296,9 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
 ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
     generic, libdata, deviceSubtype, objectSubtype, objectType)
 {
+  if (objectType == ANARI_RENDERER) {
+    return generic::Renderer::Parameters;
+  }
   return nullptr;
 }
 ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(generic,
