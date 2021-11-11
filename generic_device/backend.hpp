@@ -32,6 +32,7 @@ namespace generic {
 
         void* map(Frame& frame);
         void renderFrame(Frame& frame);
+        int wait(Frame& frame, ANARIWaitMask m);
 
     } // backend
 } // generic

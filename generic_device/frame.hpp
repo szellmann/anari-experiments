@@ -1,5 +1,6 @@
 #pragma once
 
+#include <future>
 #include "object.hpp"
 #include "resource.hpp"
 
@@ -12,6 +13,8 @@ namespace generic {
        ~Frame();
 
         const void* map(const char* channel);
+
+        int wait(ANARIWaitMask m);
 
         ResourceHandle getResourceHandle();
 
@@ -27,6 +30,8 @@ namespace generic {
         unsigned size[2] = {0,0};
         ANARIDataType color;
         ANARIDataType depth;
+
+        std::future<void> renderFuture;
 
     private:
         ANARIFrame resourceHandle = nullptr;

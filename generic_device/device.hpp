@@ -134,7 +134,7 @@ namespace generic {
 
         void discardFrame(ANARIFrame) override;
 
-        //--- Extension inteface --------------------------
+        //--- Extension interface -------------------------
 
         //ANARIObject newObject(const char* objectType,
         //                      const char* type);

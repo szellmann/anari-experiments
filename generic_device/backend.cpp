@@ -395,7 +395,15 @@ namespace generic {
 
         void renderFrame(Frame& frame)
         {
-            renderer.renderFrame();
+            frame.renderFuture = std::async([]() {
+                renderer.renderFrame();
+            });
+        }
+
+        int wait(Frame& frame, ANARIWaitMask)
+        {
+            frame.renderFuture.wait();
+            return 1;
         }
 
     } // backend

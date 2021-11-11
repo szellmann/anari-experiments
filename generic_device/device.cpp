@@ -239,10 +239,11 @@ namespace generic {
             rend->renderFrame(f);
     }
 
-    int Device::frameReady(ANARIFrame,
-                           ANARIWaitMask)
+    int Device::frameReady(ANARIFrame frame,
+                           ANARIWaitMask m)
     {
-        return 0;
+        Frame* f = (Frame*)GetResource(frame);
+        return f->wait(m);
     }
 
     void Device::discardFrame(ANARIFrame)

@@ -21,6 +21,11 @@ namespace generic {
         return backend::map(*this);
     }
 
+    int Frame::wait(ANARIWaitMask m)
+    {
+        return backend::wait(*this,m);
+    }
+
     ResourceHandle Frame::getResourceHandle()
     {
         return resourceHandle;
