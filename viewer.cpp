@@ -360,9 +360,18 @@ struct Viewer : visionaray::viewer_glut
             // Setup renderer
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);
             while (const char* dstype = *deviceSubtypes++) {
+                std::cout << "ANARI_RENDERER subtypes supported:\n";
                 const char** rendererTypes = anariGetObjectSubtypes(library, dstype, ANARI_RENDERER);
-                while (const char* rendererType = *rendererTypes++) {
+                while (rendererTypes && *rendererTypes) {
+                    const char* rendererType = *rendererTypes++;
                     std::cout << rendererType << '\n';
+                }
+
+                std::cout << "ANARI_VOLUME subtypes supported:\n";
+                const char** volumeTypes = anariGetObjectSubtypes(library, dstype, ANARI_VOLUME);
+                while (volumeTypes && *volumeTypes) {
+                    const char* volumeType = *volumeTypes++;
+                    std::cout << volumeType << '\n';
                 }
             }
             renderer = anariNewRenderer(device, "default");

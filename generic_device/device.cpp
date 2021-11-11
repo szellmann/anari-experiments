@@ -290,6 +290,12 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
         nullptr,     // last one most be NULL
     };
     return renderers;
+  } else if (objectType == ANARI_VOLUME) {
+    static const char* volumes[] = {
+        "scivis",
+        nullptr,
+    };
+    return volumes;
   }
   return nullptr;
 }
