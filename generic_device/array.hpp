@@ -29,7 +29,7 @@ namespace generic {
         void free();
 
         void* userPtr = nullptr;
-        uint8_t* data = nullptr; // can be managed, or is set to user array
+        uint8_t* data = nullptr; // initially set to userPtr, managed on app release
         ANARIMemoryDeleter deleter = nullptr;
         void* userdata = nullptr; // for deleter
         ANARIDataType elementType;

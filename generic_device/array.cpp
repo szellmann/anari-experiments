@@ -9,6 +9,7 @@ namespace generic {
     ArrayStorage::ArrayStorage(void* userPtr, ANARIMemoryDeleter deleter,
                                void* userdata, ANARIDataType elementType)
         : userPtr(userPtr)
+        , data((uint8_t*)userPtr)
         , deleter(deleter)
         , userdata(userdata)
         , elementType(elementType)
@@ -22,15 +23,16 @@ namespace generic {
 
     void ArrayStorage::commit()
     {
-        if (0)//deleter != nullptr)
-            data = (uint8_t*)userPtr;
-        else {
-            memcpy(data,userPtr,getSizeInBytes());
-        }
     }
 
     void ArrayStorage::release()
     {
+        // Transfer ownership after user releases the object
+        // TODO: make sure there are no user references anymore
+        data = new uint8_t[getSizeInBytes()];
+        memcpy(data,userPtr,getSizeInBytes());
+        if (deleter != nullptr)
+            deleter(userPtr,userdata);
     }
 
     void ArrayStorage::retain()
@@ -39,15 +41,13 @@ namespace generic {
 
     void ArrayStorage::alloc()
     {
-        if (deleter == nullptr)
-            this->data = new uint8_t[getSizeInBytes()];
     }
 
     void ArrayStorage::free()
     {
         if (userPtr != data)
             delete[] data;
-        else if (data != nullptr)
+        else if (data != nullptr && deleter != nullptr)
             deleter(data,userdata);
         data = nullptr;
     }
@@ -61,8 +61,6 @@ namespace generic {
         numItems[0] = numItems1;
 
         byteStride[0] = byteStride1;
-
-        ArrayStorage::alloc();
     }
 
     Array1D::~Array1D()
@@ -92,8 +90,6 @@ namespace generic {
 
         byteStride[0] = byteStride1;
         byteStride[1] = byteStride2;
-
-        ArrayStorage::alloc();
     }
 
     Array2D::~Array2D()
@@ -126,8 +122,6 @@ namespace generic {
         byteStride[0] = byteStride1;
         byteStride[1] = byteStride2;
         byteStride[2] = byteStride3;
-
-        ArrayStorage::alloc();
     }
 
     Array3D::~Array3D()
