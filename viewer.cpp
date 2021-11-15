@@ -9,6 +9,8 @@
 #include <common/manip/arcball_manipulator.h>
 #include <common/manip/pan_manipulator.h>
 #include <common/manip/zoom_manipulator.h>
+#include <common/model.h>
+#include <common/sg.h>
 #include <Support/CmdLine.h>
 #include <Support/CmdLineUtil.h>
 #include <vkt/InputStream.hpp>
@@ -19,6 +21,16 @@
 #include "volkit/src/vkt/TransfuncEditor.hpp"
 #include <anari/anari_cpp.hpp>
 #include <imgui.h>
+
+
+static std::string getExt(const std::string &fileName)
+{
+    int pos = fileName.rfind('.');
+    if (pos == fileName.npos)
+        return "";
+    return fileName.substr(pos);
+}
+
 
 void statusFunc(void *userData,
     ANARIDevice device,
@@ -55,6 +67,9 @@ struct Scene
 
     void release()
     {
+        for (auto& s : surfs) {
+            anariRelease(device, s);
+        }
         anariRelease(device, volume);
         anariRelease(device, volumes);
     }
@@ -63,7 +78,7 @@ struct Scene
 
     virtual visionaray::aabb getBounds() = 0;
 
-    void commitImpl(float* volData, int* volDims)
+    void commitVolume(float* volData, int* volDims)
     {
         if (volume != nullptr)
             anariRelease(device, volume);
@@ -100,7 +115,9 @@ struct Scene
 
     ANARIDevice device = nullptr;
     ANARIWorld world = nullptr;
+    std::vector<ANARISurface> surfs;
     ANARIVolume volume = nullptr;
+    ANARIArray1D surfaces = nullptr;
     ANARIArray1D volumes = nullptr;
 };
 
@@ -138,7 +155,8 @@ struct MarschnerLobb : Scene
 
     void commit()
     {
-        commitImpl(volData.data(),volDims);
+        if (!volData.empty())
+            commitVolume(volData.data(),volDims);
     }
 
     visionaray::aabb getBounds()
@@ -148,6 +166,136 @@ struct MarschnerLobb : Scene
 
     std::vector<float> volData;
     int volDims[3];
+};
+
+struct ModelFile : Scene
+{
+    ModelFile() = default;
+
+    ModelFile(const char* fileName, ANARIDevice dev, ANARIWorld wrld)
+        : Scene(dev,wrld)
+    {
+        mod.load(fileName);
+    }
+
+    void commit()
+    {
+        if (mod.scene_graph != nullptr) {
+            struct visitor : visionaray::sg::node_visitor
+            {
+                using node_visitor::apply;
+
+                void apply(visionaray::sg::triangle_mesh& tm) {
+                    ANARIGeometry geom = anariNewGeometry(device, "triangle");
+                    ANARIArray1D vertexPosition = anariNewArray1D(device, (float*)tm.vertices.data(), 0, 0, ANARI_FLOAT32_VEC3, tm.vertices.size(), 0);
+                    anariCommit(device, vertexPosition);
+
+                    anariSetParameter(device, geom, "vertex.position", ANARI_ARRAY1D, &vertexPosition);
+                    anariCommit(device, geom);
+                    ANARISurface surf = anariNewSurface(device);
+                    anariSetParameter(device, surf, "geometry", ANARI_GEOMETRY, &geom);
+                    anariCommit(device, surf);
+                    surfs.push_back(surf);
+
+                    anariRelease(device, geom);
+                    anariRelease(device, vertexPosition);
+
+                    node_visitor::apply(tm);
+                }
+
+                void apply(visionaray::sg::indexed_triangle_mesh& itm) {
+                    ANARIGeometry geom = anariNewGeometry(device, "triangle");
+                    ANARIArray1D vertexPosition = anariNewArray1D(device, (float*)itm.vertices->data(), 0, 0, ANARI_FLOAT32_VEC3, itm.vertices->size(), 0);
+                    anariCommit(device, vertexPosition);
+
+                    anariSetParameter(device, geom, "vertex.position", ANARI_ARRAY1D, &vertexPosition);
+
+                    std::vector<visionaray::vec3ui> primitiveIndexData;
+                    for (size_t i=0; i<itm.vertex_indices.size(); i+=3) {
+                        primitiveIndexData.push_back({itm.vertex_indices[i],
+                                                      itm.vertex_indices[i+1],
+                                                      itm.vertex_indices[i+2]});
+                        //std::cout << (*itm.vertices)[primitiveIndexData.back().x] << '\n';
+                        //std::cout << (*itm.vertices)[primitiveIndexData.back().y] << '\n';
+                        //std::cout << (*itm.vertices)[primitiveIndexData.back().z] << '\n';
+                    }
+                    ANARIArray1D primitiveIndex = anariNewArray1D(device, primitiveIndexData.data(), 0, 0, ANARI_UINT32_VEC3, primitiveIndexData.size(), 0);
+                    anariCommit(device, primitiveIndex);
+
+                    anariSetParameter(device, geom, "primitive.index", ANARI_ARRAY1D, &primitiveIndex);
+
+                    anariCommit(device, geom);
+                    ANARISurface surf = anariNewSurface(device);
+                    anariSetParameter(device, surf, "geometry", ANARI_GEOMETRY, &geom);
+                    anariCommit(device, surf);
+                    surfs.push_back(surf);
+
+                    anariRelease(device, geom);
+                    anariRelease(device, vertexPosition);
+                    anariRelease(device, primitiveIndex);
+
+                    node_visitor::apply(itm);
+                }
+
+                visitor(ANARIDevice dev, std::vector<ANARISurface>& srfs)
+                    : device(dev)
+                    , surfs(srfs)
+                {
+                }
+
+                ANARIDevice device;
+                std::vector<ANARISurface>& surfs;
+            };
+
+            visitor vis(device,surfs);
+            mod.scene_graph->accept(vis);
+        }
+
+        surfaces = anariNewArray1D(device, surfs.data(), 0, 0, ANARI_SURFACE, surfs.size(), 0);
+        anariCommit(device, surfaces);
+
+        anariSetParameter(device, world, "surface", ANARI_ARRAY1D, &surfaces);
+
+        anariCommit(device, world);
+    }
+
+    visionaray::aabb getBounds()
+    {
+        visionaray::aabb bounds;
+        bounds.invalidate();
+
+        if (mod.scene_graph != nullptr) {
+            struct visitor : visionaray::sg::node_visitor
+            {
+                using node_visitor::apply;
+
+                visitor(visionaray::aabb& b) : bounds(b) {}
+
+                void apply(visionaray::sg::triangle_mesh& tm) {
+                    for (auto v : tm.vertices) {
+                        bounds.insert(v);
+                    }
+                    node_visitor::apply(tm);
+                }
+
+                void apply(visionaray::sg::indexed_triangle_mesh& itm) {
+                    for (auto vi : itm.vertex_indices) {
+                        bounds.insert((*itm.vertices)[vi]);
+                    }
+                    node_visitor::apply(itm);
+                }
+
+                visionaray::aabb& bounds;
+            };
+
+            visitor vis(bounds);
+            mod.scene_graph->accept(vis);
+        }
+
+        return bounds;
+    }
+
+    visionaray::model mod;
 };
 
 struct VolumeFile : Scene
@@ -200,7 +348,7 @@ struct VolumeFile : Scene
         vkt::StructuredVolume resampled(volDims[0],volDims[1],volDims[2],
                                         vkt::DataFormat::Float32,1.f,1.f,1.f,0.f,1.f);
         vkt::Resample(resampled,*volkitVolume,vkt::FilterMode::Nearest);
-        commitImpl((float*)resampled.getData(),volDims);
+        commitVolume((float*)resampled.getData(),volDims);
     }
 
     visionaray::aabb getBounds()
@@ -254,34 +402,36 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, camera, "up", ANARI_FLOAT32_VEC3, &up);
         anariCommit(anari.device, camera);
 
-        if (anari.scene->volume == nullptr)
+        if (anari.scene->surfaces == nullptr && anari.scene->volume == nullptr)
             anari.scene->commit();
 
-        // Apply transfer function
-        vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
-        if (lut == nullptr)
-            lut = (vkt::LookupTable*)vkt::GetManagedResource(originalTF); // not yet updated
-        auto dims = lut->getDims();
-        auto lutData = (float*)lut->getData();
-        float* colorVals = new float[dims.x*3];
-        float* alphaVals = new float[dims.x];
-        for (int i=0; i<dims.x; ++i) {
-            colorVals[i*3] = lutData[i*4];
-            colorVals[i*3+1] = lutData[i*4+1];
-            colorVals[i*3+2] = lutData[i*4+2];
-            alphaVals[i] = lutData[i*4+3];
+        if (anari.scene->volume != nullptr) { // i.e., we're using volume rendering
+            // Apply transfer function
+            vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
+            if (lut == nullptr)
+                lut = (vkt::LookupTable*)vkt::GetManagedResource(originalTF); // not yet updated
+            auto dims = lut->getDims();
+            auto lutData = (float*)lut->getData();
+            float* colorVals = new float[dims.x*3];
+            float* alphaVals = new float[dims.x];
+            for (int i=0; i<dims.x; ++i) {
+                colorVals[i*3] = lutData[i*4];
+                colorVals[i*3+1] = lutData[i*4+1];
+                colorVals[i*3+2] = lutData[i*4+2];
+                alphaVals[i] = lutData[i*4+3];
+            }
+            ANARIArray1D color = anariNewArray1D(anari.device, colorVals, 0, 0, ANARI_FLOAT32_VEC3, dims.x, 0);
+            anariCommit(anari.device, color);
+
+            ANARIArray1D opacity = anariNewArray1D(anari.device, alphaVals, 0, 0, ANARI_FLOAT32, dims.x, 0);
+            anariCommit(anari.device, opacity);
+
+            anariSetParameter(anari.device, anari.scene->volume, "color", ANARI_ARRAY1D, &color);
+            anariSetParameter(anari.device, anari.scene->volume, "opacity", ANARI_ARRAY1D, &opacity);
+            anariCommit(anari.device, anari.scene->volume);
+            anariRelease(anari.device, color);
+            anariRelease(anari.device, opacity);
         }
-        ANARIArray1D color = anariNewArray1D(anari.device, colorVals, 0, 0, ANARI_FLOAT32_VEC3, dims.x, 0);
-        anariCommit(anari.device, color);
-
-        ANARIArray1D opacity = anariNewArray1D(anari.device, alphaVals, 0, 0, ANARI_FLOAT32, dims.x, 0);
-        anariCommit(anari.device, opacity);
-
-        anariSetParameter(anari.device, anari.scene->volume, "color", ANARI_ARRAY1D, &color);
-        anariSetParameter(anari.device, anari.scene->volume, "opacity", ANARI_ARRAY1D, &opacity);
-        anariCommit(anari.device, anari.scene->volume);
-        anariRelease(anari.device, color);
-        anariRelease(anari.device, opacity);
 
         float bgColor[4] = {.3f, .3f, .3f, 1.f};
         anariSetParameter(anari.device, anari.renderer, "backgroundColor", ANARI_FLOAT32_VEC4, bgColor);
@@ -354,8 +504,10 @@ struct Viewer : visionaray::viewer_glut
             world = anariNewWorld(device);
             if (fileName.empty())
                 scene = new MarschnerLobb(device,world);
-            else
+            else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
                 scene = new VolumeFile(fileName.c_str(),device,world);
+            else
+                scene = new ModelFile(fileName.c_str(),device,world);
 
             // Setup renderer
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);
@@ -375,6 +527,7 @@ struct Viewer : visionaray::viewer_glut
                 }
             }
             renderer = anariNewRenderer(device, "default");
+            //renderer = anariNewRenderer(device, "raycast");
             //renderer = anariNewRenderer(device, "ao");
 
         }
