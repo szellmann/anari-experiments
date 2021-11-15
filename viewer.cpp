@@ -374,8 +374,8 @@ struct Viewer : visionaray::viewer_glut
                     std::cout << volumeType << '\n';
                 }
             }
-            //renderer = anariNewRenderer(device, "default");
-            renderer = anariNewRenderer(device, "ao");
+            renderer = anariNewRenderer(device, "default");
+            //renderer = anariNewRenderer(device, "ao");
 
         }
 
