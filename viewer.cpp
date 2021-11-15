@@ -185,6 +185,19 @@ struct ModelFile : Scene
             {
                 using node_visitor::apply;
 
+                void apply(visionaray::sg::surface_properties& sp) {
+                    auto mat = sp.material();
+
+                    if (auto obj = std::dynamic_pointer_cast<visionaray::sg::obj_material>(mat)) {
+                        anariRelease(device, material);
+                        material = anariNewMaterial(device, "matte");
+                        //anariSetParameter(device, material, "color", ANARI_FLOAT32_VEC3, &obj->cd);
+                        anariSetParameter(device, material, "kd", ANARI_FLOAT32_VEC3, &obj->cd);
+                        anariCommit(device, material);
+                    }
+                    node_visitor::apply(sp);
+                }
+
                 void apply(visionaray::sg::triangle_mesh& tm) {
                     ANARIGeometry geom = anariNewGeometry(device, "triangle");
                     ANARIArray1D vertexPosition = anariNewArray1D(device, (float*)tm.vertices.data(), 0, 0, ANARI_FLOAT32_VEC3, tm.vertices.size(), 0);
@@ -194,6 +207,8 @@ struct ModelFile : Scene
                     anariCommit(device, geom);
                     ANARISurface surf = anariNewSurface(device);
                     anariSetParameter(device, surf, "geometry", ANARI_GEOMETRY, &geom);
+                    if (material != nullptr)
+                        anariSetParameter(device, surf, "material", ANARI_MATERIAL, &material);
                     anariCommit(device, surf);
                     surfs.push_back(surf);
 
@@ -215,9 +230,6 @@ struct ModelFile : Scene
                         primitiveIndexData.push_back({itm.vertex_indices[i],
                                                       itm.vertex_indices[i+1],
                                                       itm.vertex_indices[i+2]});
-                        //std::cout << (*itm.vertices)[primitiveIndexData.back().x] << '\n';
-                        //std::cout << (*itm.vertices)[primitiveIndexData.back().y] << '\n';
-                        //std::cout << (*itm.vertices)[primitiveIndexData.back().z] << '\n';
                     }
                     ANARIArray1D primitiveIndex = anariNewArray1D(device, primitiveIndexData.data(), 0, 0, ANARI_UINT32_VEC3, primitiveIndexData.size(), 0);
                     anariCommit(device, primitiveIndex);
@@ -227,6 +239,8 @@ struct ModelFile : Scene
                     anariCommit(device, geom);
                     ANARISurface surf = anariNewSurface(device);
                     anariSetParameter(device, surf, "geometry", ANARI_GEOMETRY, &geom);
+                    if (material != nullptr)
+                        anariSetParameter(device, surf, "material", ANARI_MATERIAL, &material);
                     anariCommit(device, surf);
                     surfs.push_back(surf);
 
@@ -245,10 +259,12 @@ struct ModelFile : Scene
 
                 ANARIDevice device;
                 std::vector<ANARISurface>& surfs;
+                ANARIMaterial material = nullptr;
             };
 
             visitor vis(device,surfs);
             mod.scene_graph->accept(vis);
+            anariRelease(device, vis.material);
         }
 
         surfaces = anariNewArray1D(device, surfs.data(), 0, 0, ANARI_SURFACE, surfs.size(), 0);
@@ -468,9 +484,11 @@ struct Viewer : visionaray::viewer_glut
         anariRelease(anari.device, camera);
         anariRelease(anari.device, frame);
 
-        ImGui::Begin("Volume");
-        tfe.drawImmediate();
-        ImGui::End();
+        if (anari.scene->volume != nullptr) {
+            ImGui::Begin("Volume");
+            tfe.drawImmediate();
+            ImGui::End();
+        }
     }
 
     void on_resize(int w, int h) {
