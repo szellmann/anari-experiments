@@ -16,6 +16,10 @@ namespace generic {
 
         void commit();
 
+        void release();
+
+        void retain();
+
         void setParameter(const char* name,
                           ANARIDataType type,
                           const void* mem);

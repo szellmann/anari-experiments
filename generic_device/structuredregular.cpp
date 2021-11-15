@@ -23,6 +23,14 @@ namespace generic {
             backend::commit(*this);
     }
 
+    void StructuredRegular::release()
+    {
+    }
+
+    void StructuredRegular::retain()
+    {
+    }
+
     void StructuredRegular::setParameter(const char* name,
                                          ANARIDataType type,
                                          const void* mem)

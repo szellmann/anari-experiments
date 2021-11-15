@@ -26,6 +26,14 @@ namespace generic {
         backend::commit(*this);
     }
 
+    void Camera::release()
+    {
+    }
+
+    void Camera::retain()
+    {
+    }
+
     void Camera::setParameter(const char* name,
                               ANARIDataType type,
                               const void* mem)

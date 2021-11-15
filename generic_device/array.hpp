@@ -18,6 +18,10 @@ namespace generic {
 
         void commit();
 
+        void release();
+
+        void retain();
+
         virtual size_t getSizeInBytes() const = 0;
 
         void alloc();

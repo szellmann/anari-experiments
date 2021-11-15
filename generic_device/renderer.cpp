@@ -32,6 +32,14 @@ namespace generic {
         backend::commit(*this);
     }
 
+    void Renderer::release()
+    {
+    }
+
+    void Renderer::retain()
+    {
+    }
+
     void Renderer::setParameter(const char* name,
                                 ANARIDataType type,
                                 const void* mem)

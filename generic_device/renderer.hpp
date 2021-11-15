@@ -18,6 +18,10 @@ namespace generic {
 
         virtual void commit();
 
+        virtual void release();
+
+        virtual void retain();
+
         virtual void setParameter(const char* name,
                                   ANARIDataType type,
                                   const void* mem);

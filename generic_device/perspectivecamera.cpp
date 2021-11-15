@@ -19,6 +19,16 @@ namespace generic {
         Camera::commit();
     }
 
+    void PerspectiveCamera::release()
+    {
+        Camera::release();
+    }
+
+    void PerspectiveCamera::retain()
+    {
+        Camera::retain();
+    }
+
     void PerspectiveCamera::setParameter(const char* name,
                                          ANARIDataType type,
                                          const void* mem)

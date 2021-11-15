@@ -18,6 +18,10 @@ namespace generic {
         // (e.g., the user specified a wrong subtype)
         virtual void commit();
 
+        virtual void release();
+
+        virtual void retain();
+
         // virtual, _if_ this is called it means something went wrong
         // (e.g., the user specified a wrong subtype)
         virtual void setParameter(const char* name,

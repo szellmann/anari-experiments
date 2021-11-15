@@ -26,6 +26,16 @@ namespace generic {
         LOG(logging::Level::Warning) << "Calling commit on invalid spatial field\n";
     }
 
+    void SpatialField::release()
+    {
+        LOG(logging::Level::Warning) << "Calling release on invalid spatial field\n";
+    }
+
+    void SpatialField::retain()
+    {
+        LOG(logging::Level::Warning) << "Calling retain on invalid spatial field\n";
+    }
+
     void SpatialField::setParameter(const char* name,
                                     ANARIDataType type,
                                     const void* mem)

@@ -23,6 +23,16 @@ namespace generic {
 
         Renderer::commit();
     }
+
+    void AO::release()
+    {
+        Renderer::release();
+    }
+
+    void AO::retain()
+    {
+        Renderer::retain();
+    }
 } // generic
 
 

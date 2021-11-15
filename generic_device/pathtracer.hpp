@@ -14,6 +14,10 @@ namespace generic {
         void renderFrame(Frame* frame);
 
         void commit();
+
+        void release();
+
+        void retain();
     };
 
 } // generic

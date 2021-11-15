@@ -23,6 +23,16 @@ namespace generic {
 
         Renderer::commit();
     }
+
+    void Pathtracer::release()
+    {
+        Renderer::release();
+    }
+
+    void Pathtracer::retain()
+    {
+        Renderer::retain();
+    }
 } // generic
 
 

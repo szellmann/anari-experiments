@@ -29,6 +29,14 @@ namespace generic {
         }
     }
 
+    void ArrayStorage::release()
+    {
+    }
+
+    void ArrayStorage::retain()
+    {
+    }
+
     void ArrayStorage::alloc()
     {
         if (deleter == nullptr)

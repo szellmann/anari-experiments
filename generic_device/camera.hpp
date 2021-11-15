@@ -16,6 +16,10 @@ namespace generic {
         // Commits camera params. Make sure to call from subclass!
         virtual void commit();
 
+        virtual void release();
+
+        virtual void retain();
+
         // Sets common camera params. Make sure to call this from subclass!
         virtual void setParameter(const char* name,
                                   ANARIDataType type,

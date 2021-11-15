@@ -24,6 +24,14 @@ namespace generic {
         backend::commit(*this);
     }
 
+    void Volume::release()
+    {
+    }
+
+    void Volume::retain()
+    {
+    }
+
     void Volume::setParameter(const char* name,
                               ANARIDataType type,
                               const void* mem)

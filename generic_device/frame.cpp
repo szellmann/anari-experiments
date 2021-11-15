@@ -36,6 +36,14 @@ namespace generic {
         backend::commit(*this);
     }
 
+    void Frame::release()
+    {
+    }
+
+    void Frame::retain()
+    {
+    }
+
     void Frame::setParameter(const char* name,
                              ANARIDataType type,
                              const void* mem)

@@ -184,12 +184,22 @@ namespace generic {
             obj->commit();
     }
 
-    void Device::release(ANARIObject _obj) 
+    void Device::release(ANARIObject object) 
     {
+        Object* obj = (Object*)GetResource(object);
+        if (obj == nullptr)
+            LOG(logging::Level::Error) << "ANARIDevice error: release called on uninitialized object";
+        else
+            obj->release();
     }
 
-    void Device::retain(ANARIObject _obj)
+    void Device::retain(ANARIObject object)
     {
+        Object* obj = (Object*)GetResource(object);
+        if (obj == nullptr)
+            LOG(logging::Level::Error) << "ANARIDevice error: retain called on uninitialized object";
+        else
+            obj->retain();
     }
 
     //--- Object Query Interface --------------------------

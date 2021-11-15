@@ -24,6 +24,14 @@ namespace generic {
         backend::commit(*this);
     }
 
+    void World::release()
+    {
+    }
+
+    void World::retain()
+    {
+    }
+
     void World::setParameter(const char* name,
                              ANARIDataType type,
                              const void* mem)
