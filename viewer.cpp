@@ -87,7 +87,6 @@ struct Scene
 
         ANARIArray3D scalar = anariNewArray3D(device, volData, 0, 0, ANARI_FLOAT32,
                                               volDims[0],volDims[1],volDims[2],0,0,0);
-        anariCommit(device, scalar);
         ANARISpatialField field = anariNewSpatialField(device, "structuredRegular");
         anariSetParameter(device, field, "data", ANARI_ARRAY3D, &scalar);
         const char* filter = "nearest";
@@ -201,7 +200,6 @@ struct ModelFile : Scene
                 void apply(visionaray::sg::triangle_mesh& tm) {
                     ANARIGeometry geom = anariNewGeometry(device, "triangle");
                     ANARIArray1D vertexPosition = anariNewArray1D(device, (float*)tm.vertices.data(), 0, 0, ANARI_FLOAT32_VEC3, tm.vertices.size(), 0);
-                    anariCommit(device, vertexPosition);
 
                     anariSetParameter(device, geom, "vertex.position", ANARI_ARRAY1D, &vertexPosition);
                     anariCommit(device, geom);
@@ -221,7 +219,6 @@ struct ModelFile : Scene
                 void apply(visionaray::sg::indexed_triangle_mesh& itm) {
                     ANARIGeometry geom = anariNewGeometry(device, "triangle");
                     ANARIArray1D vertexPosition = anariNewArray1D(device, (float*)itm.vertices->data(), 0, 0, ANARI_FLOAT32_VEC3, itm.vertices->size(), 0);
-                    anariCommit(device, vertexPosition);
 
                     anariSetParameter(device, geom, "vertex.position", ANARI_ARRAY1D, &vertexPosition);
 
@@ -232,7 +229,6 @@ struct ModelFile : Scene
                                                       itm.vertex_indices[i+2]});
                     }
                     ANARIArray1D primitiveIndex = anariNewArray1D(device, primitiveIndexData.data(), 0, 0, ANARI_UINT32_VEC3, primitiveIndexData.size(), 0);
-                    anariCommit(device, primitiveIndex);
 
                     anariSetParameter(device, geom, "primitive.index", ANARI_ARRAY1D, &primitiveIndex);
 
@@ -437,10 +433,8 @@ struct Viewer : visionaray::viewer_glut
                 alphaVals[i] = lutData[i*4+3];
             }
             ANARIArray1D color = anariNewArray1D(anari.device, colorVals, 0, 0, ANARI_FLOAT32_VEC3, dims.x, 0);
-            anariCommit(anari.device, color);
 
             ANARIArray1D opacity = anariNewArray1D(anari.device, alphaVals, 0, 0, ANARI_FLOAT32, dims.x, 0);
-            anariCommit(anari.device, opacity);
 
             anariSetParameter(anari.device, anari.scene->volume, "color", ANARI_ARRAY1D, &color);
             anariSetParameter(anari.device, anari.scene->volume, "opacity", ANARI_ARRAY1D, &opacity);
