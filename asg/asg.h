@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <anari/anari.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,8 +16,9 @@ typedef int ASGError_t;
 typedef int ASGType_t;
 #define ASG_TYPE_OBJECT                     0
 #define ASG_TYPE_SURFACE                    1000
-#define ASG_TYPE_STRUCTURED_VOLUME          1010
-#define ASG_TYPE_INSTANCE                   1020
+#define ASG_TYPE_LOOKUP_TABLE1D             1010
+#define ASG_TYPE_STRUCTURED_VOLUME          1020
+#define ASG_TYPE_INSTANCE                   1030
 
 typedef int ASGDataType_t;
 #define ASG_DATA_TYPE_UINT8                 0
@@ -46,21 +48,8 @@ typedef _ASGVisitor *ASGVisitor;
 typedef void _ASGImpl;
 typedef _ASGImpl *ASGImpl;
 
-struct _ASGObject {
-    // Node interface
-    ASGType_t type;
-    unsigned numChildren;
-    struct _ASGObject** children;
-    unsigned numParents;
-    struct _ASGObject** parents;
-
-    // Visitable interface
-    void (*accept)(struct _ASGObject*, ASGVisitor, ASGVisitorTraversalType_t);
-
-    // Private implementation
-    ASGImpl impl;
-};
-typedef struct _ASGObject *ASGObject, *ASGSurface, *ASGStructuredVolume, *ASGInstance;
+typedef struct _ASGObject *ASGObject, *ASGSurface, *ASGLookupTable1D,
+    *ASGStructuredVolume, *ASGInstance;
 
 
 /* ========================================================
@@ -69,10 +58,21 @@ typedef struct _ASGObject *ASGObject, *ASGSurface, *ASGStructuredVolume, *ASGIns
 
 // Objects
 ASGAPI ASGObject asgNewObject();
-ASGAPI ASGError_t asgDestroyObject(ASGObject obj);
+ASGAPI ASGError_t asgRelease(ASGObject obj);
+ASGAPI ASGError_t asgGetType(ASGObject obj, ASGType_t* type);
 ASGAPI ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child);
 
+// Visitor
+ASGAPI ASGVisitor asgNewVisitor(void (*visitFunc)(ASGObject, void*), void* userData);
+ASGAPI ASGError_t asgApplyVisitor(ASGObject obj, ASGVisitor visitor,
+                                  ASGVisitorTraversalType_t traversalType);
+
+// Surface
 ASGAPI ASGSurface asgNewSurface(/*TODO*/);
+
+// RGBA luts
+ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
+                                            ASGFreeFunc freeFunc);
 
 // Volumes
 ASGAPI ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width,
@@ -84,14 +84,27 @@ ASGAPI ASGError_t asgStructuredVolumeGetDims(ASGStructuredVolume vol, int32_t* w
                                              int32_t* height, int32_t* depth);
 ASGAPI ASGError_t asgStructuredVolumeGetDatatype(ASGStructuredVolume vol,
                                                  ASGDataType_t* type);
-
-// Visitor
-ASGAPI ASGVisitor asgNewVisitor(void (*visitFunc)(ASGObject, void*), void* userData);
-ASGAPI ASGError_t asgApplyVisitor(ASGObject obj, ASGVisitor visitor,
-                                  ASGVisitorTraversalType_t traversalType);
+ASGAPI ASGError_t asgStructuredVolumeSetRange(ASGStructuredVolume vol, float rangeMin,
+                                              float rangeMax);
+ASGAPI ASGError_t asgStructuredVolumeGetRange(ASGStructuredVolume vol, float* rangeMin,
+                                              float* rangeMax);
+ASGAPI ASGError_t asgStructuredVolumeSetDist(ASGStructuredVolume, float distX,
+                                             float distY, float distZ);
+ASGAPI ASGError_t asgStructuredVolumeGetDist(ASGStructuredVolume, float* distX,
+                                             float* distY, float* distZ);
+ASGAPI ASGError_t asgStructuredVolumeSetLookupTable1D(ASGStructuredVolume vol,
+                                                      ASGLookupTable1D lut);
+ASGAPI ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
+                                                      ASGLookupTable1D* lut);
 
 // I/O
+
+// Procedural volumes, builtin RGBA LUTs, etc.
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);
+
+// Builtin visitors
+ASGAPI ASGError_t asgMakeANARIWorldVisitor(ASGVisitor visitor, ANARIDevice devivce,
+                                           ANARIWorld world);
 
 #ifdef __cplusplus
 }

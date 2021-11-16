@@ -3,7 +3,9 @@
 #include "asg.h"
 
 void printObjectType(ASGObject n, void* userData) {
-    switch (n->type)
+    ASGType_t t;
+    asgGetType(n,&t);
+    switch (t)
     {
     case ASG_TYPE_OBJECT: printf("%s\n","ASG_TYPE_OBJECT"); break;
     case ASG_TYPE_SURFACE: printf("%s\n","ASG_TYPE_SURFACE"); break;
@@ -14,9 +16,11 @@ void printObjectType(ASGObject n, void* userData) {
 
 int main() {
     ASGObject root = asgNewObject();
-    float volData[2*2*2];
-    ASGStructuredVolume c0 = asgNewStructuredVolume(volData,2,2,2,ASG_DATA_TYPE_FLOAT32,NULL);
+    float volData[63*63*63];
+    ASGStructuredVolume c0 = asgNewStructuredVolume(volData,63,63,63,ASG_DATA_TYPE_FLOAT32,NULL);
     asgObjectAddChild(root,c0);
+
+    asgMakeMarschnerLobb(c0);
 
     ASGVisitor visitor = asgNewVisitor(printObjectType,NULL);
     asgApplyVisitor(root,visitor,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);

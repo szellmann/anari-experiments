@@ -15,6 +15,9 @@ set(CMD_LINE_DIR ${VSNRAY_DIR}/src/3rdparty/CmdLine)
 
 add_subdirectory(${VOLKIT_DIR})
 
+# ANARI scene graph
+add_subdirectory(asg)
+
 add_subdirectory(stub_device)
 # that's a _bit_ hacky, but the easiest way to set the
 # rpath so that dlopen will search for libanari_library_XXX
@@ -47,6 +50,6 @@ target_include_directories(viewer
     ${CMD_LINE_DIR}/include
 )
 
-target_link_libraries(viewer PUBLIC GLEW::GLEW volkit visionaray_common anari::anari)
+target_link_libraries(viewer PUBLIC GLEW::GLEW volkit visionaray_common asg anari::anari)
 
 

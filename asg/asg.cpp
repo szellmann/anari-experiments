@@ -1,6 +1,27 @@
 #include <assert.h>
 #include "asg.h"
 
+// ========================================================
+// Ref-counted objects
+// ========================================================
+
+struct _ASGObject {
+    // Node interface
+    ASGType_t type;
+    unsigned numChildren;
+    struct _ASGObject** children;
+    unsigned numParents;
+    struct _ASGObject** parents;
+
+    // Ref count (TODO!)
+
+    // Visitable interface
+    void (*accept)(struct _ASGObject*, ASGVisitor, ASGVisitorTraversalType_t);
+
+    // Private implementation
+    ASGImpl impl;
+};
+
 void _asgAccept(struct _ASGObject* _obj, ASGVisitor _visitor,
                 ASGVisitorTraversalType_t traversalType)
 {
@@ -34,6 +55,23 @@ ASGObject asgNewObject()
     return obj;
 }
 
+ASGError_t asgGetType(ASGObject obj, ASGType_t* type)
+{
+    *type = obj->type;
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgRelease(ASGObject obj)
+{
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgRetain(ASGObject obj)
+{
+    return ASG_ERROR_NO_ERROR;
+}
+
 ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child)
 {
     obj->numChildren++;
@@ -48,37 +86,9 @@ ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child)
     return ASG_ERROR_NO_ERROR;
 }
 
-struct StructuredVolumeImpl {
-    void* data;
-    int32_t width, height, depth;
-    ASGDataType_t type;
-    float rangeMin, rangeMax;
-    float distX, distY, distZ;
-    void* userPtr;
-    ASGFreeFunc freeFunc;
-} _ASGStructuredVolumeImpl;
-
-ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t height,
-                                          int32_t depth, ASGDataType_t type,
-                                          ASGFreeFunc freeFunc)
-{
-    ASGStructuredVolume vol = (ASGStructuredVolume)asgNewObject();
-    vol->type = ASG_TYPE_STRUCTURED_VOLUME;
-    vol->impl = (StructuredVolumeImpl*)calloc(1,sizeof(StructuredVolumeImpl));
-    ((StructuredVolumeImpl*)vol->impl)->data = data;
-    ((StructuredVolumeImpl*)vol->impl)->width = width;
-    ((StructuredVolumeImpl*)vol->impl)->height = height;
-    ((StructuredVolumeImpl*)vol->impl)->depth = depth;
-    ((StructuredVolumeImpl*)vol->impl)->type = type;
-    ((StructuredVolumeImpl*)vol->impl)->rangeMin = 0.f;
-    ((StructuredVolumeImpl*)vol->impl)->rangeMax = 1.f;
-    ((StructuredVolumeImpl*)vol->impl)->distX = 1.f;
-    ((StructuredVolumeImpl*)vol->impl)->distY = 1.f;
-    ((StructuredVolumeImpl*)vol->impl)->distY = 1.f;
-    ((StructuredVolumeImpl*)vol->impl)->userPtr = data;
-    ((StructuredVolumeImpl*)vol->impl)->freeFunc = freeFunc;
-    return vol;
-}
+// ========================================================
+// Visitor
+// ========================================================
 
 ASGVisitor asgNewVisitor(void (*visitFunc)(ASGObject, void*), void* userData)
 {
@@ -96,12 +106,156 @@ ASGError_t asgApplyVisitor(ASGObject self, ASGVisitor visitor,
 }
 
 // ========================================================
+// RGBA luts
+// ========================================================
+
+struct LUT1D {
+    float* rgb;
+    float* alpha;
+    int32_t numEntries;
+    float* rgbUserPtr;
+    float* alphaUserPtr;
+    ASGFreeFunc freeFunc;
+};
+
+ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
+                                     ASGFreeFunc freeFunc)
+{
+    ASGLookupTable1D lut = (ASGLookupTable1D)asgNewObject();
+    lut->type = ASG_TYPE_LOOKUP_TABLE1D;
+    lut->impl = (LUT1D*)calloc(1,sizeof(LUT1D));
+    ((LUT1D*)lut->impl)->rgb = rgb;
+    ((LUT1D*)lut->impl)->alpha = alpha;
+    ((LUT1D*)lut->impl)->numEntries = numEntries;
+    ((LUT1D*)lut->impl)->rgbUserPtr = rgb;
+    ((LUT1D*)lut->impl)->alphaUserPtr = alpha;
+    ((LUT1D*)lut->impl)->freeFunc = freeFunc;
+    return lut;
+}
+
+// ========================================================
+// Volumes
+// ========================================================
+
+struct StructuredVolume {
+    void* data;
+    int32_t width, height, depth;
+    ASGDataType_t type;
+    float rangeMin, rangeMax;
+    float distX, distY, distZ;
+    ASGLookupTable1D lut1D;
+    void* userPtr;
+    ASGFreeFunc freeFunc;
+};
+
+ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t height,
+                                          int32_t depth, ASGDataType_t type,
+                                          ASGFreeFunc freeFunc)
+{
+    ASGStructuredVolume vol = (ASGStructuredVolume)asgNewObject();
+    vol->type = ASG_TYPE_STRUCTURED_VOLUME;
+    vol->impl = (StructuredVolume*)calloc(1,sizeof(StructuredVolume));
+    ((StructuredVolume*)vol->impl)->data = data;
+    ((StructuredVolume*)vol->impl)->width = width;
+    ((StructuredVolume*)vol->impl)->height = height;
+    ((StructuredVolume*)vol->impl)->depth = depth;
+    ((StructuredVolume*)vol->impl)->type = type;
+    ((StructuredVolume*)vol->impl)->rangeMin = 0.f;
+    ((StructuredVolume*)vol->impl)->rangeMax = 1.f;
+    ((StructuredVolume*)vol->impl)->distX = 1.f;
+    ((StructuredVolume*)vol->impl)->distY = 1.f;
+    ((StructuredVolume*)vol->impl)->distY = 1.f;
+    ((StructuredVolume*)vol->impl)->lut1D = NULL;
+    ((StructuredVolume*)vol->impl)->userPtr = data;
+    ((StructuredVolume*)vol->impl)->freeFunc = freeFunc;
+    return vol;
+}
+
+ASGError_t asgStructuredVolumeGetData(ASGStructuredVolume vol, void* data)
+{
+    data = ((StructuredVolume*)vol->impl)->data;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgStructuredVolumeGetDims(ASGStructuredVolume vol, int32_t* width,
+                                      int32_t* height, int32_t* depth)
+{
+    *width = ((StructuredVolume*)vol->impl)->width;
+    *height = ((StructuredVolume*)vol->impl)->height;
+    *depth = ((StructuredVolume*)vol->impl)->depth;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgStructuredVolumeGetType(ASGStructuredVolume vol, ASGType_t* type)
+{
+    *type = ((StructuredVolume*)vol->impl)->type;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgStructuredVolumeSetRange(ASGStructuredVolume vol, float rangeMin,
+                                       float rangeMax)
+{
+    ((StructuredVolume*)vol->impl)->rangeMin = rangeMin;
+    ((StructuredVolume*)vol->impl)->rangeMax = rangeMax;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgStructuredVolumeGetRange(ASGStructuredVolume vol, float* rangeMin,
+                                       float* rangeMax)
+{
+    *rangeMin = ((StructuredVolume*)vol->impl)->rangeMin;
+    *rangeMax = ((StructuredVolume*)vol->impl)->rangeMax;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgStructuredVolumeSetDist(ASGStructuredVolume vol, float distX, float distY,
+                                      float distZ)
+{
+    ((StructuredVolume*)vol->impl)->distX = distX;
+    ((StructuredVolume*)vol->impl)->distY = distY;
+    ((StructuredVolume*)vol->impl)->distZ = distZ;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgStructuredVolumeGetDist(ASGStructuredVolume vol, float* distX, float* distY,
+                                      float* distZ)
+{
+    *distX = ((StructuredVolume*)vol->impl)->distX;
+    *distY = ((StructuredVolume*)vol->impl)->distY;
+    *distZ = ((StructuredVolume*)vol->impl)->distZ;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgStructuredVolumeSetLookupTable1D(ASGStructuredVolume vol,
+                                               ASGLookupTable1D lut)
+{
+    StructuredVolume* impl = (StructuredVolume*)vol->impl;
+    if (impl->lut1D != NULL)
+        asgRelease(impl->lut1D);
+
+    impl->lut1D = lut;
+    asgRetain(lut);
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
+                                               ASGLookupTable1D* lut)
+{
+    *lut = ((StructuredVolume*)vol->impl)->lut1D;
+    return ASG_ERROR_NO_ERROR;
+}
+
+// ========================================================
 // I/O
 // ========================================================
 
-ASGError_t asgMakeMarchnerLobb(ASGStructuredVolume vol)
+// ========================================================
+// Procedural
+// ========================================================
+
+ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol)
 {
-    StructuredVolumeImpl* impl = (StructuredVolumeImpl*)vol->impl;
+    StructuredVolume* impl = (StructuredVolume*)vol->impl;
     int32_t volDims[3] = {
         impl->width,
         impl->height,
@@ -124,7 +278,7 @@ ASGError_t asgMakeMarchnerLobb(ASGStructuredVolume vol)
                     + x;
 
                 float val = (1.f-sinf(M_PI*zz/2.f) + a * (1+rho(sqrtf(xx*xx+yy*yy))))
-                    / (2.f*(1.f+a));
+                                            / (2.f*(1.f+a));
 
                 assert(impl->type==ASG_DATA_TYPE_FLOAT32);
                 ((float*)impl->data)[linearIndex] = val;
