@@ -190,8 +190,7 @@ struct ModelFile : Scene
                     if (auto obj = std::dynamic_pointer_cast<visionaray::sg::obj_material>(mat)) {
                         anariRelease(device, material);
                         material = anariNewMaterial(device, "matte");
-                        //anariSetParameter(device, material, "color", ANARI_FLOAT32_VEC3, &obj->cd);
-                        anariSetParameter(device, material, "kd", ANARI_FLOAT32_VEC3, &obj->cd);
+                        anariSetParameter(device, material, "color", ANARI_FLOAT32_VEC3, &obj->cd);
                         anariCommit(device, material);
                     }
                     node_visitor::apply(sp);
