@@ -12,6 +12,7 @@ extern "C" {
 
 typedef int ASGError_t;
 #define ASG_ERROR_NO_ERROR                  0
+#define ASG_ERROR_INVALID_LUT_ID            700
 
 typedef int ASGType_t;
 #define ASG_TYPE_OBJECT                     0
@@ -29,6 +30,9 @@ typedef int ASGDataType_t;
 typedef int ASGVisitorTraversalType_t;
 #define ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN 0
 #define ASG_VISITOR_TRAVERSAL_TYPE_PARENTS  1
+
+typedef int ASGLutID;
+#define ASG_LUT_ID_DEFAULT_LUT              0
 
 struct _ASGObject;
 
@@ -63,7 +67,8 @@ ASGAPI ASGError_t asgGetType(ASGObject obj, ASGType_t* type);
 ASGAPI ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child);
 
 // Visitor
-ASGAPI ASGVisitor asgNewVisitor(void (*visitFunc)(ASGObject, void*), void* userData);
+ASGAPI ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGObject, void*), void* userData);
+ASGAPI ASGError_t asgDestroyVisitor(ASGVisitor visitor);
 ASGAPI ASGError_t asgApplyVisitor(ASGObject obj, ASGVisitor visitor,
                                   ASGVisitorTraversalType_t traversalType);
 
@@ -73,6 +78,10 @@ ASGAPI ASGSurface asgNewSurface(/*TODO*/);
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
                                             ASGFreeFunc freeFunc);
+ASGAPI ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float* rgb);
+ASGAPI ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float* alpha);
+ASGAPI ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut,
+                                                int32_t* numEntries);
 
 // Volumes
 ASGAPI ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width,
@@ -101,10 +110,11 @@ ASGAPI ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
 
 // Procedural volumes, builtin RGBA LUTs, etc.
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);
+ASGAPI ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID);
 
-// Builtin visitors
-ASGAPI ASGError_t asgMakeANARIWorldVisitor(ASGVisitor visitor, ANARIDevice devivce,
-                                           ANARIWorld world);
+// Build ANARI world
+ASGAPI ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld world,
+                                     uint64_t flags);
 
 #ifdef __cplusplus
 }

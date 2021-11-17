@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <vector>
 #include "asg.h"
 
 // ========================================================
@@ -20,6 +21,10 @@ struct _ASGObject {
 
     // Private implementation
     ASGImpl impl;
+
+    // Updated/used by visitors
+    bool dirty;
+    uint64_t mask;
 };
 
 void _asgAccept(struct _ASGObject* _obj, ASGVisitor _visitor,
@@ -52,6 +57,8 @@ ASGObject asgNewObject()
     obj->parents = NULL;
     obj->accept = _asgAccept;
     obj->impl = NULL;
+    obj->dirty = false;
+    obj->mask = 0ULL;
     return obj;
 }
 
@@ -90,12 +97,18 @@ ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child)
 // Visitor
 // ========================================================
 
-ASGVisitor asgNewVisitor(void (*visitFunc)(ASGObject, void*), void* userData)
+ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGObject, void*), void* userData)
 {
     ASGVisitor visitor = (ASGVisitor)calloc(1,sizeof(_ASGVisitor));
     visitor->visit = (ASGVisitFunc)visitFunc;
     visitor->userData = userData;
     return visitor;
+}
+
+ASGError_t asgDestroyVisitor(ASGVisitor visitor)
+{
+    free(visitor);
+    return ASG_ERROR_NO_ERROR;
 }
 
 ASGError_t asgApplyVisitor(ASGObject self, ASGVisitor visitor,
@@ -124,6 +137,7 @@ ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntrie
     ASGLookupTable1D lut = (ASGLookupTable1D)asgNewObject();
     lut->type = ASG_TYPE_LOOKUP_TABLE1D;
     lut->impl = (LUT1D*)calloc(1,sizeof(LUT1D));
+    lut->dirty = true;
     ((LUT1D*)lut->impl)->rgb = rgb;
     ((LUT1D*)lut->impl)->alpha = alpha;
     ((LUT1D*)lut->impl)->numEntries = numEntries;
@@ -131,6 +145,24 @@ ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntrie
     ((LUT1D*)lut->impl)->alphaUserPtr = alpha;
     ((LUT1D*)lut->impl)->freeFunc = freeFunc;
     return lut;
+}
+
+ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float* rgb)
+{
+    rgb = ((LUT1D*)lut->impl)->rgb;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float* alpha)
+{
+    alpha = ((LUT1D*)lut->impl)->alpha;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut, int32_t* numEntries)
+{
+    *numEntries = ((LUT1D*)lut->impl)->numEntries;
+    return ASG_ERROR_NO_ERROR;
 }
 
 // ========================================================
@@ -146,6 +178,8 @@ struct StructuredVolume {
     ASGLookupTable1D lut1D;
     void* userPtr;
     ASGFreeFunc freeFunc;
+    // Exclusively used by ANARI build visitors
+    ANARIVolume anariVolume = NULL;
 };
 
 ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t height,
@@ -155,6 +189,7 @@ ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t he
     ASGStructuredVolume vol = (ASGStructuredVolume)asgNewObject();
     vol->type = ASG_TYPE_STRUCTURED_VOLUME;
     vol->impl = (StructuredVolume*)calloc(1,sizeof(StructuredVolume));
+    vol->dirty = true;
     ((StructuredVolume*)vol->impl)->data = data;
     ((StructuredVolume*)vol->impl)->width = width;
     ((StructuredVolume*)vol->impl)->height = height;
@@ -284,6 +319,138 @@ ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol)
                 ((float*)impl->data)[linearIndex] = val;
             }
         }
+    }
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID)
+{
+    switch (lutID)
+    {
+        case ASG_LUT_ID_DEFAULT_LUT: {
+            int numEntries = ((LUT1D*)lut->impl)->numEntries;
+            assert(numEntries == 5);
+
+            float rgba[] = {
+                    1.f, 1.f, 1.f, .005f,
+                    0.f, .1f, .1f, .25f,
+                    .5f, .5f, .7f, .5f,
+                    .7f, .7f, .07f, .75f,
+                    1.f, .3f, .3f, 1.f
+                    };
+            for (int i=0; i<numEntries; ++i) {
+                ((LUT1D*)lut->impl)->rgb[i*3] = rgba[i*4];
+                ((LUT1D*)lut->impl)->rgb[i*3+1] = rgba[i*4+1];
+                ((LUT1D*)lut->impl)->rgb[i*3+2] = rgba[i*4+2];
+                ((LUT1D*)lut->impl)->alpha[i] = rgba[i*4+3];
+            }
+            break;
+        }
+
+        default: return ASG_ERROR_INVALID_LUT_ID;
+    }
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+// ========================================================
+// Builtin visitors
+// ========================================================
+
+struct ANARIArraySizes {
+    int numVolumes;
+};
+
+struct ANARI {
+    ANARIDevice device;
+    ANARIWorld world;
+    std::vector<ANARIVolume> volumes;
+};
+
+static void visitANARIWorld(ASGObject obj, void* userData) {
+
+    ANARI* anari = (ANARI*)userData;
+    ASGType_t t;
+    asgGetType(obj,&t);
+
+    switch (t)
+    {
+        case ASG_TYPE_OBJECT: break;
+        case ASG_TYPE_SURFACE: break;
+        case ASG_TYPE_STRUCTURED_VOLUME: {
+            StructuredVolume* impl = (StructuredVolume*)obj->impl;
+            if (obj->dirty) {
+                obj->dirty = false;
+                anariRelease(anari->device,impl->anariVolume);
+                impl->anariVolume = anariNewVolume(anari->device,"scivis");
+
+                assert(impl->type == ASG_DATA_TYPE_FLOAT32); // TODO!
+
+                int volDims[] = {
+                    impl->width,
+                    impl->height,
+                    impl->depth,
+                };
+
+                ANARIArray3D scalar = anariNewArray3D(anari->device,impl->data,
+                                                      0,0,ANARI_FLOAT32,
+                                                      volDims[0],volDims[1],volDims[2],
+                                                      0,0,0);
+
+                ANARISpatialField field = anariNewSpatialField(anari->device,
+                                                               "structuredRegular");
+                anariSetParameter(anari->device, field,"data",ANARI_ARRAY3D,&scalar);
+                const char* filter = "linear";
+                anariSetParameter(anari->device,field,"filter",ANARI_STRING,filter);
+                anariCommit(anari->device, field);
+
+                float valueRange[2] = {0.f,1.f};
+                //anariSetParameter(anari->device,impl->anariVolume,"valueRange",ANARI_FLOAT32_BOX1,&valueRange);
+
+                anariSetParameter(anari->device,impl->anariVolume,"field",
+                                  ANARI_SPATIAL_FIELD, &field);
+
+                anariRelease(anari->device, scalar);
+                anariRelease(anari->device, field);
+
+                anari->volumes.push_back(impl->anariVolume);
+            }
+
+            if (impl->lut1D != NULL && impl->lut1D->dirty) {
+                impl->lut1D->dirty = false;
+            } else if (impl->lut1D == NULL) {
+                int32_t numEntries = 5;
+                float* rgb = (float*)malloc(numEntries*3*sizeof(float));
+                float* alpha = (float*)malloc(numEntries*sizeof(float));
+                impl->lut1D = asgNewLookupTable1D(rgb,alpha,numEntries,free);
+                asgMakeDefaultLUT1D(impl->lut1D,ASG_LUT_ID_DEFAULT_LUT);
+                impl->lut1D->dirty = false;
+            }
+
+            break;
+        }
+        default: break;
+    }
+}
+
+ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld world,
+                              uint64_t flags)
+{
+    // flags ignored for now, but could be used to, e.g., only extract volumes, etc.
+
+    ANARI anari;
+    anari.device = device;
+    anari.world = world;
+    ASGVisitor visitor = asgCreateVisitor(visitANARIWorld,&anari);
+    asgApplyVisitor(obj,visitor,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
+    asgDestroyVisitor(visitor);
+
+    if (anari.volumes.size() > 0) {
+        ANARIArray1D volumes = anariNewArray1D(device,anari.volumes.data(),0,0,
+                                               ANARI_VOLUME,anari.volumes.size(),0);
+        anariSetParameter(device,world,"volume",ANARI_ARRAY1D,&volumes);
+        anariRelease(device,volumes);
     }
 
     return ASG_ERROR_NO_ERROR;

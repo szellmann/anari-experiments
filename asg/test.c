@@ -1,5 +1,4 @@
 #include <stdio.h>
-#define ASG_INCLUDE_IMPL
 #include "asg.h"
 
 void printObjectType(ASGObject n, void* userData) {
@@ -22,8 +21,9 @@ int main() {
 
     asgMakeMarschnerLobb(c0);
 
-    ASGVisitor visitor = asgNewVisitor(printObjectType,NULL);
+    ASGVisitor visitor = asgCreateVisitor(printObjectType,NULL);
     asgApplyVisitor(root,visitor,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
+    asgDestroyVisitor(visitor);
 }
 
 
