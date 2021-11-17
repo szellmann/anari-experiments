@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <algorithm>
 #include <iostream>
 #include <ostream>
 #include <random>
@@ -19,9 +20,11 @@
 #include <vkt/StructuredVolume.hpp>
 #include <vkt/VolumeFile.hpp>
 #include "volkit/src/vkt/TransfuncEditor.hpp"
+#include <asg/asg.h>
 #include <anari/anari_cpp.hpp>
 #include <imgui.h>
 
+#define ASG_SAFE_CALL(X) X
 
 static std::string getExt(const std::string &fileName)
 {
@@ -63,99 +66,51 @@ struct Scene
     {
     }
 
-    virtual ~Scene() {}
-
-    void release()
+    virtual ~Scene()
     {
-        for (auto& s : surfs) {
-            anariRelease(device, s);
-        }
-        anariRelease(device, volume);
-        anariRelease(device, volumes);
+        ASG_SAFE_CALL(asgRelease(root));
     }
 
-    virtual void commit() = 0;
-
-    virtual visionaray::aabb getBounds() = 0;
-
-    void commitVolume(float* volData, int* volDims)
+    virtual visionaray::aabb getBounds()
     {
-        if (volume != nullptr)
-            anariRelease(device, volume);
-
-        volume = anariNewVolume(device, "scivis");
-
-        ANARIArray3D scalar = anariNewArray3D(device, volData, 0, 0, ANARI_FLOAT32,
-                                              volDims[0],volDims[1],volDims[2],0,0,0);
-        ANARISpatialField field = anariNewSpatialField(device, "structuredRegular");
-        anariSetParameter(device, field, "data", ANARI_ARRAY3D, &scalar);
-        const char* filter = "nearest";
-        anariSetParameter(device, field, "filter", ANARI_STRING, filter);
-        anariCommit(device, field);
-
-        float valueRange[2] = {0.f,1.f};
-        //anariSetParameter(anari.device, anari.scene->volume, "valueRange", ANARI_FLOAT32_BOX1, &valueRange);
-
-        anariSetParameter(device, volume, "field", ANARI_SPATIAL_FIELD, &field);
-
-        if (volumes != nullptr)
-            anariRelease(device, volumes);
-
-        volumes = anariNewArray1D(device, &volume, 0, 0, ANARI_VOLUME, 1, 0);
-        anariCommit(device, volumes);
-
-        anariSetParameter(device, world, "volume", ANARI_ARRAY1D, &volumes);
-
-        anariCommit(device, world);
-
-        anariRelease(device, scalar);
-        anariRelease(device, field);
+        return {};
     }
 
     ANARIDevice device = nullptr;
     ANARIWorld world = nullptr;
-    std::vector<ANARISurface> surfs;
-    ANARIVolume volume = nullptr;
-    ANARIArray1D surfaces = nullptr;
-    ANARIArray1D volumes = nullptr;
+
+    ASGObject root = nullptr;
 };
 
 struct MarschnerLobb : Scene
 {
-    MarschnerLobb() = default;
-
     MarschnerLobb(ANARIDevice dev, ANARIWorld wrld)
-        : Scene(dev, wrld)
+        : Scene(dev,wrld)
     {
         volDims[0] = volDims[1] = volDims[2] = 63;
+
+        root = asgNewObject();
         volData.resize(volDims[0]*volDims[1]*volDims[2]);
-        
-        float fM = 6.f, a = .25f;
-        auto rho = [=](float r) {
-            return cosf(2.f*M_PI*fM*cosf(M_PI*r/2.f));
-        };
-        for (int z=0; z<volDims[2]; ++z) {
-            for (int y=0; y<volDims[1]; ++y) {
-                for (int x=0; x<volDims[0]; ++x) {
+        volume = asgNewStructuredVolume(volData.data(),volDims[0],volDims[1],volDims[2],
+                                        ASG_DATA_TYPE_FLOAT32,NULL);
+        ASG_SAFE_CALL(asgMakeMarschnerLobb(volume));
 
-                    float xx = (float)x/volDims[0]*2.f-1.f;
-                    float yy = (float)y/volDims[1]*2.f-1.f;
-                    float zz = (float)z/volDims[2]*2.f-1.f;
-                    unsigned linearIndex = volDims[0]*volDims[1]*z
-                                                + volDims[0]*y
-                                                + x;
+        rgbLUT.resize(15);
+        alphaLUT.resize(5);
+        lut = asgNewLookupTable1D(rgbLUT.data(),alphaLUT.data(),alphaLUT.size(),NULL);
+        ASG_SAFE_CALL(asgMakeDefaultLUT1D(lut,ASG_LUT_ID_DEFAULT_LUT));
+        ASG_SAFE_CALL(asgStructuredVolumeSetLookupTable1D(volume,lut));
 
-                    volData[linearIndex] = (1.f-sinf(M_PI*zz/2.f) + a * (1+rho(sqrtf(xx*xx+yy*yy))))
-                                                / (2.f*(1.f+a));
-                }
-            }
-        }
+        ASG_SAFE_CALL(asgObjectAddChild(root,volume));
+
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,0));
+
+        anariCommit(device,world);
     }
 
-    void commit()
+   ~MarschnerLobb()
     {
-        if (!volData.empty())
-            commitVolume(volData.data(),volDims);
+        ASG_SAFE_CALL(asgRelease(volume));
     }
 
     visionaray::aabb getBounds()
@@ -163,215 +118,26 @@ struct MarschnerLobb : Scene
         return {{0,0,0},{(float)volDims[0],(float)volDims[1],(float)volDims[2]}};
     }
 
-    std::vector<float> volData;
+    void updateLUT(float* rgb, float* alpha, int numEntries)
+    {
+        rgbLUT.resize(numEntries*3);
+        alphaLUT.resize(numEntries);
+        std::copy(rgb,rgb+numEntries*3,rgbLUT.data());
+        std::copy(alpha,alpha+numEntries,alphaLUT.data());
+
+        ASG_SAFE_CALL(asgRelease(lut));
+        lut = asgNewLookupTable1D(rgbLUT.data(),alphaLUT.data(),alphaLUT.size(),NULL);
+        ASG_SAFE_CALL(asgStructuredVolumeSetLookupTable1D(volume,lut));
+
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,0));
+    }
+
+    ASGStructuredVolume volume = nullptr;
+    ASGLookupTable1D lut = nullptr;
     int volDims[3];
-};
-
-struct ModelFile : Scene
-{
-    ModelFile() = default;
-
-    ModelFile(const char* fileName, ANARIDevice dev, ANARIWorld wrld)
-        : Scene(dev,wrld)
-    {
-        mod.load(fileName);
-    }
-
-    void commit()
-    {
-        if (mod.scene_graph != nullptr) {
-            struct visitor : visionaray::sg::node_visitor
-            {
-                using node_visitor::apply;
-
-                void apply(visionaray::sg::surface_properties& sp) {
-                    auto mat = sp.material();
-
-                    if (auto obj = std::dynamic_pointer_cast<visionaray::sg::obj_material>(mat)) {
-                        anariRelease(device, material);
-                        material = anariNewMaterial(device, "matte");
-                        anariSetParameter(device, material, "color", ANARI_FLOAT32_VEC3, &obj->cd);
-                        anariCommit(device, material);
-                    }
-                    node_visitor::apply(sp);
-                }
-
-                void apply(visionaray::sg::triangle_mesh& tm) {
-                    ANARIGeometry geom = anariNewGeometry(device, "triangle");
-                    ANARIArray1D vertexPosition = anariNewArray1D(device, (float*)tm.vertices.data(), 0, 0, ANARI_FLOAT32_VEC3, tm.vertices.size(), 0);
-
-                    anariSetParameter(device, geom, "vertex.position", ANARI_ARRAY1D, &vertexPosition);
-                    anariCommit(device, geom);
-                    ANARISurface surf = anariNewSurface(device);
-                    anariSetParameter(device, surf, "geometry", ANARI_GEOMETRY, &geom);
-                    if (material != nullptr)
-                        anariSetParameter(device, surf, "material", ANARI_MATERIAL, &material);
-                    anariCommit(device, surf);
-                    surfs.push_back(surf);
-
-                    anariRelease(device, geom);
-                    anariRelease(device, vertexPosition);
-
-                    node_visitor::apply(tm);
-                }
-
-                void apply(visionaray::sg::indexed_triangle_mesh& itm) {
-                    ANARIGeometry geom = anariNewGeometry(device, "triangle");
-                    ANARIArray1D vertexPosition = anariNewArray1D(device, (float*)itm.vertices->data(), 0, 0, ANARI_FLOAT32_VEC3, itm.vertices->size(), 0);
-
-                    anariSetParameter(device, geom, "vertex.position", ANARI_ARRAY1D, &vertexPosition);
-
-                    std::vector<visionaray::vec3ui> primitiveIndexData;
-                    for (size_t i=0; i<itm.vertex_indices.size(); i+=3) {
-                        primitiveIndexData.push_back({itm.vertex_indices[i],
-                                                      itm.vertex_indices[i+1],
-                                                      itm.vertex_indices[i+2]});
-                    }
-                    ANARIArray1D primitiveIndex = anariNewArray1D(device, primitiveIndexData.data(), 0, 0, ANARI_UINT32_VEC3, primitiveIndexData.size(), 0);
-
-                    anariSetParameter(device, geom, "primitive.index", ANARI_ARRAY1D, &primitiveIndex);
-
-                    anariCommit(device, geom);
-                    ANARISurface surf = anariNewSurface(device);
-                    anariSetParameter(device, surf, "geometry", ANARI_GEOMETRY, &geom);
-                    if (material != nullptr)
-                        anariSetParameter(device, surf, "material", ANARI_MATERIAL, &material);
-                    anariCommit(device, surf);
-                    surfs.push_back(surf);
-
-                    anariRelease(device, geom);
-                    anariRelease(device, vertexPosition);
-                    anariRelease(device, primitiveIndex);
-
-                    node_visitor::apply(itm);
-                }
-
-                visitor(ANARIDevice dev, std::vector<ANARISurface>& srfs)
-                    : device(dev)
-                    , surfs(srfs)
-                {
-                }
-
-                ANARIDevice device;
-                std::vector<ANARISurface>& surfs;
-                ANARIMaterial material = nullptr;
-            };
-
-            visitor vis(device,surfs);
-            mod.scene_graph->accept(vis);
-            anariRelease(device, vis.material);
-        }
-
-        surfaces = anariNewArray1D(device, surfs.data(), 0, 0, ANARI_SURFACE, surfs.size(), 0);
-        anariCommit(device, surfaces);
-
-        anariSetParameter(device, world, "surface", ANARI_ARRAY1D, &surfaces);
-
-        anariCommit(device, world);
-    }
-
-    visionaray::aabb getBounds()
-    {
-        visionaray::aabb bounds;
-        bounds.invalidate();
-
-        if (mod.scene_graph != nullptr) {
-            struct visitor : visionaray::sg::node_visitor
-            {
-                using node_visitor::apply;
-
-                visitor(visionaray::aabb& b) : bounds(b) {}
-
-                void apply(visionaray::sg::triangle_mesh& tm) {
-                    for (auto v : tm.vertices) {
-                        bounds.insert(v);
-                    }
-                    node_visitor::apply(tm);
-                }
-
-                void apply(visionaray::sg::indexed_triangle_mesh& itm) {
-                    for (auto vi : itm.vertex_indices) {
-                        bounds.insert((*itm.vertices)[vi]);
-                    }
-                    node_visitor::apply(itm);
-                }
-
-                visionaray::aabb& bounds;
-            };
-
-            visitor vis(bounds);
-            mod.scene_graph->accept(vis);
-        }
-
-        return bounds;
-    }
-
-    visionaray::model mod;
-};
-
-struct VolumeFile : Scene
-{
-    VolumeFile() = default;
-
-    VolumeFile(const char* fileName, ANARIDevice dev, ANARIWorld wrld)
-        : Scene(dev,wrld)
-    {
-        vkt::VolumeFile file(fileName, vkt::OpenMode::Read);
-
-        vkt::VolumeFileHeader hdr = file.getHeader();
-
-        if (!hdr.isStructured)
-        {
-            std::cerr << "No valid volume file\n";
-            return;
-        }
-
-        vkt::Vec3i dims = hdr.dims;
-        if (dims.x * dims.y * dims.z < 1)
-        {
-            std::cerr << "Cannot parse dimensions from file name\n";
-            return;
-        }
-
-        vkt::DataFormat dataFormat = hdr.dataFormat;
-        if (dataFormat == vkt::DataFormat::Unspecified)
-        {
-            std::cerr << "Cannot parse data format from file name, guessing uint8...\n";
-            dataFormat = vkt::DataFormat::UInt8;
-        }
-
-        volkitVolume = new vkt::StructuredVolume(dims.x, dims.y, dims.z, dataFormat);
-        vkt::InputStream is(file);
-        is.read(*volkitVolume);
-    }
-
-   ~VolumeFile()
-    {
-        delete volkitVolume;
-    }
-
-    void commit()
-    {
-        int volDims[] = { volkitVolume->getDims().x,
-                          volkitVolume->getDims().y,
-                          volkitVolume->getDims().z };
-
-        vkt::StructuredVolume resampled(volDims[0],volDims[1],volDims[2],
-                                        vkt::DataFormat::Float32,1.f,1.f,1.f,0.f,1.f);
-        vkt::Resample(resampled,*volkitVolume,vkt::FilterMode::Nearest);
-        commitVolume((float*)resampled.getData(),volDims);
-    }
-
-    visionaray::aabb getBounds()
-    {
-        int volDims[] = { volkitVolume->getDims().x,
-                          volkitVolume->getDims().y,
-                          volkitVolume->getDims().z };
-
-        return {{0,0,0},{(float)volDims[0],(float)volDims[1],(float)volDims[2]}};
-    }
-
-    vkt::StructuredVolume *volkitVolume = nullptr;
+    std::vector<float> volData;
+    std::vector<float> rgbLUT;
+    std::vector<float> alphaLUT;
 };
 
 struct Viewer : visionaray::viewer_glut
@@ -379,7 +145,6 @@ struct Viewer : visionaray::viewer_glut
     visionaray::pinhole_camera cam;
 
     vkt::TransfuncEditor tfe;
-    vkt::ResourceHandle originalTF;
 
     std::string fileName;
 
@@ -413,33 +178,24 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, camera, "up", ANARI_FLOAT32_VEC3, &up);
         anariCommit(anari.device, camera);
 
-        if (anari.scene->surfaces == nullptr && anari.scene->volume == nullptr)
-            anari.scene->commit();
-
-        if (anari.scene->volume != nullptr) { // i.e., we're using volume rendering
-            // Apply transfer function
+        if (auto volumeScene = dynamic_cast<MarschnerLobb*>(anari.scene)) {
             vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
-            if (lut == nullptr)
-                lut = (vkt::LookupTable*)vkt::GetManagedResource(originalTF); // not yet updated
-            auto dims = lut->getDims();
-            auto lutData = (float*)lut->getData();
-            float* colorVals = new float[dims.x*3];
-            float* alphaVals = new float[dims.x];
-            for (int i=0; i<dims.x; ++i) {
-                colorVals[i*3] = lutData[i*4];
-                colorVals[i*3+1] = lutData[i*4+1];
-                colorVals[i*3+2] = lutData[i*4+2];
-                alphaVals[i] = lutData[i*4+3];
+            if (lut != nullptr) {
+                auto dims = lut->getDims();
+                auto lutData = (float*)lut->getData();
+                float* colorVals = new float[dims.x*3];
+                float* alphaVals = new float[dims.x];
+                for (int i=0; i<dims.x; ++i) {
+                    colorVals[i*3] = lutData[i*4];
+                    colorVals[i*3+1] = lutData[i*4+1];
+                    colorVals[i*3+2] = lutData[i*4+2];
+                    alphaVals[i] = lutData[i*4+3];
+                }
+                // Apply transfer function
+                volumeScene->updateLUT(colorVals,alphaVals,dims.x);
+                delete[] alphaVals;
+                delete[] colorVals;
             }
-            ANARIArray1D color = anariNewArray1D(anari.device, colorVals, 0, 0, ANARI_FLOAT32_VEC3, dims.x, 0);
-
-            ANARIArray1D opacity = anariNewArray1D(anari.device, alphaVals, 0, 0, ANARI_FLOAT32, dims.x, 0);
-
-            anariSetParameter(anari.device, anari.scene->volume, "color", ANARI_ARRAY1D, &color);
-            anariSetParameter(anari.device, anari.scene->volume, "opacity", ANARI_ARRAY1D, &opacity);
-            anariCommit(anari.device, anari.scene->volume);
-            anariRelease(anari.device, color);
-            anariRelease(anari.device, opacity);
         }
 
         float bgColor[4] = {.3f, .3f, .3f, 1.f};
@@ -477,7 +233,7 @@ struct Viewer : visionaray::viewer_glut
         anariRelease(anari.device, camera);
         anariRelease(anari.device, frame);
 
-        if (anari.scene->volume != nullptr) {
+        if (dynamic_cast<MarschnerLobb*>(anari.scene)) { 
             ImGui::Begin("Volume");
             tfe.drawImmediate();
             ImGui::End();
@@ -515,10 +271,10 @@ struct Viewer : visionaray::viewer_glut
             world = anariNewWorld(device);
             if (fileName.empty())
                 scene = new MarschnerLobb(device,world);
-            else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
-                scene = new VolumeFile(fileName.c_str(),device,world);
-            else
-                scene = new ModelFile(fileName.c_str(),device,world);
+            // else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
+            //     scene = new VolumeFile(fileName.c_str(),device,world);
+            // else
+            //     scene = new ModelFile(fileName.c_str(),device,world);
 
             // Setup renderer
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);
@@ -544,7 +300,6 @@ struct Viewer : visionaray::viewer_glut
         }
 
         void release() {
-            scene->release();
             delete scene;
             anariRelease(device, renderer);
             anariRelease(device, world);
@@ -570,18 +325,29 @@ int main(int argc, char** argv)
     // Setup ANARI library, device, and renderer
     viewer.anari.init(viewer.fileName);
 
-    // Set up the TFE through volkit
-    float rgba[] = {
-            1.f, 1.f, 1.f, .005f,
-            0.f, .1f, .1f, .25f,
-            .5f, .5f, .7f, .5f,
-            .7f, .7f, .07f, .75f,
-            1.f, .3f, .3f, 1.f
-            };
-    vkt::LookupTable lut(5,1,1,vkt::ColorFormat::RGBA32F);
-    lut.setData((uint8_t*)rgba);
-    viewer.tfe.setLookupTableResource(lut.getResourceHandle());
-    viewer.originalTF = lut.getResourceHandle();
+    // Set up the volkit TFE
+    vkt::LookupTable lut; // keep alive throughout main loop
+    if (auto volumeScene = dynamic_cast<MarschnerLobb*>(viewer.anari.scene)) {
+        float* rgb;
+        float* alpha;
+        int32_t numEntries;
+
+        ASG_SAFE_CALL(asgLookupTable1DGetRGB(volumeScene->lut, &rgb));
+        ASG_SAFE_CALL(asgLookupTable1DGetAlpha(volumeScene->lut, &alpha));
+        ASG_SAFE_CALL(asgLookupTable1DGetNumEntries(volumeScene->lut, &numEntries));
+
+        std::vector<float> rgba(numEntries*4);
+        for (int32_t i=0; i<numEntries; ++i) {
+            rgba[i*4] = rgb[i*3];
+            rgba[i*4+1] = rgb[i*3+1];
+            rgba[i*4+2] = rgb[i*3+2];
+            rgba[i*4+3] = alpha[i];
+        }
+
+        lut = vkt::LookupTable(5,1,1,vkt::ColorFormat::RGBA32F);
+        lut.setData((uint8_t*)rgba.data());
+        viewer.tfe.setLookupTableResource(lut.getResourceHandle());
+    }
 
     // More boilerplate to set up camera manipulators
     float aspect = viewer.width()/(float)viewer.height();

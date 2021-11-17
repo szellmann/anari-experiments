@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <iostream>
 #include <vector>
 #include "asg.h"
 
@@ -147,15 +148,15 @@ ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntrie
     return lut;
 }
 
-ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float* rgb)
+ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float** rgb)
 {
-    rgb = ((LUT1D*)lut->impl)->rgb;
+    *rgb = ((LUT1D*)lut->impl)->rgb;
     return ASG_ERROR_NO_ERROR;
 }
 
-ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float* alpha)
+ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float** alpha)
 {
-    alpha = ((LUT1D*)lut->impl)->alpha;
+    *alpha = ((LUT1D*)lut->impl)->alpha;
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -206,9 +207,9 @@ ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t he
     return vol;
 }
 
-ASGError_t asgStructuredVolumeGetData(ASGStructuredVolume vol, void* data)
+ASGError_t asgStructuredVolumeGetData(ASGStructuredVolume vol, void** data)
 {
-    data = ((StructuredVolume*)vol->impl)->data;
+    *data = ((StructuredVolume*)vol->impl)->data;
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -269,6 +270,7 @@ ASGError_t asgStructuredVolumeSetLookupTable1D(ASGStructuredVolume vol,
         asgRelease(impl->lut1D);
 
     impl->lut1D = lut;
+    impl->lut1D->dirty = true;
     asgRetain(lut);
     return ASG_ERROR_NO_ERROR;
 }
@@ -417,14 +419,32 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
                 anari->volumes.push_back(impl->anariVolume);
             }
 
-            if (impl->lut1D != NULL && impl->lut1D->dirty) {
-                impl->lut1D->dirty = false;
-            } else if (impl->lut1D == NULL) {
+            if (impl->lut1D == NULL) {
                 int32_t numEntries = 5;
                 float* rgb = (float*)malloc(numEntries*3*sizeof(float));
                 float* alpha = (float*)malloc(numEntries*sizeof(float));
                 impl->lut1D = asgNewLookupTable1D(rgb,alpha,numEntries,free);
                 asgMakeDefaultLUT1D(impl->lut1D,ASG_LUT_ID_DEFAULT_LUT);
+                impl->lut1D->dirty = true;
+            }
+
+            if (impl->lut1D->dirty) {
+                float* rgb;
+                float* alpha;
+                int32_t numEntries;
+
+                asgLookupTable1DGetRGB(impl->lut1D, &rgb);
+                asgLookupTable1DGetAlpha(impl->lut1D, &alpha);
+                asgLookupTable1DGetNumEntries(impl->lut1D, &numEntries);
+
+                ANARIArray1D color = anariNewArray1D(anari->device, rgb, 0, 0, ANARI_FLOAT32_VEC3, numEntries, 0);
+                ANARIArray1D opacity = anariNewArray1D(anari->device, alpha, 0, 0, ANARI_FLOAT32, numEntries, 0);
+
+                anariSetParameter(anari->device, impl->anariVolume, "color", ANARI_ARRAY1D, &color);
+                anariSetParameter(anari->device, impl->anariVolume, "opacity", ANARI_ARRAY1D, &opacity);
+                anariCommit(anari->device, impl->anariVolume);
+                anariRelease(anari->device, color);
+                anariRelease(anari->device, opacity);
                 impl->lut1D->dirty = false;
             }
 

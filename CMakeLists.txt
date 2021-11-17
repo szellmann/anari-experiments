@@ -41,6 +41,7 @@ add_executable(viewer
 
 target_include_directories(viewer
     PRIVATE
+    ${PROJECT_SOURCE_DIR} # for asg headers
     ${IMGUI_DIR}
     ${VOLKIT_DIR}/include/c
     ${VOLKIT_DIR}/include/cpp

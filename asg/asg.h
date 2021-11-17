@@ -78,8 +78,8 @@ ASGAPI ASGSurface asgNewSurface(/*TODO*/);
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
                                             ASGFreeFunc freeFunc);
-ASGAPI ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float* rgb);
-ASGAPI ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float* alpha);
+ASGAPI ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float** rgb);
+ASGAPI ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float** alpha);
 ASGAPI ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut,
                                                 int32_t* numEntries);
 
