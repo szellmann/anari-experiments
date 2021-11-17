@@ -82,18 +82,31 @@ struct Scene
     ASGObject root = nullptr;
 };
 
-struct MarschnerLobb : Scene
+struct VolumeScene : Scene
 {
-    MarschnerLobb(ANARIDevice dev, ANARIWorld wrld)
+    VolumeScene(ANARIDevice dev, ANARIWorld wrld, const char* fileName = NULL)
         : Scene(dev,wrld)
     {
-        volDims[0] = volDims[1] = volDims[2] = 63;
-
         root = asgNewObject();
-        volData.resize(volDims[0]*volDims[1]*volDims[2]);
-        volume = asgNewStructuredVolume(volData.data(),volDims[0],volDims[1],volDims[2],
-                                        ASG_DATA_TYPE_FLOAT32,NULL);
-        ASG_SAFE_CALL(asgMakeMarschnerLobb(volume));
+
+        volDims[0] = volDims[1] = volDims[2] = 0;
+
+        if (fileName != nullptr) {
+            volume = asgNewStructuredVolume(nullptr,0,0,0,ASG_DATA_TYPE_FLOAT32,nullptr);
+            // load volume, resample to FLOAT32 if format is different
+            ASG_SAFE_CALL(asgLoadStructuredVolumeFile(volume,fileName,ASG_IO_FLAG_RESAMPLE_VOXEL_TYPE));
+            ASG_SAFE_CALL(asgStructuredVolumeGetDims(volume,&volDims[0],&volDims[1],
+                                                     &volDims[2]));
+        }
+
+        if (volDims[0] == 0) { // volume wasn't loaded; generate one
+            volDims[0] = volDims[1] = volDims[2] = 63;
+
+            volData.resize(volDims[0]*volDims[1]*volDims[2]);
+            volume = asgNewStructuredVolume(volData.data(),volDims[0],volDims[1],volDims[2],
+                                            ASG_DATA_TYPE_FLOAT32,NULL);
+            ASG_SAFE_CALL(asgMakeMarschnerLobb(volume));
+        }
 
         rgbLUT.resize(15);
         alphaLUT.resize(5);
@@ -108,7 +121,7 @@ struct MarschnerLobb : Scene
         anariCommit(device,world);
     }
 
-   ~MarschnerLobb()
+   ~VolumeScene()
     {
         ASG_SAFE_CALL(asgRelease(volume));
     }
@@ -178,7 +191,7 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, camera, "up", ANARI_FLOAT32_VEC3, &up);
         anariCommit(anari.device, camera);
 
-        if (auto volumeScene = dynamic_cast<MarschnerLobb*>(anari.scene)) {
+        if (auto volumeScene = dynamic_cast<VolumeScene*>(anari.scene)) {
             vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
             if (lut != nullptr) {
                 auto dims = lut->getDims();
@@ -233,7 +246,7 @@ struct Viewer : visionaray::viewer_glut
         anariRelease(anari.device, camera);
         anariRelease(anari.device, frame);
 
-        if (dynamic_cast<MarschnerLobb*>(anari.scene)) { 
+        if (dynamic_cast<VolumeScene*>(anari.scene)) {
             ImGui::Begin("Volume");
             tfe.drawImmediate();
             ImGui::End();
@@ -270,9 +283,9 @@ struct Viewer : visionaray::viewer_glut
             device = dev;
             world = anariNewWorld(device);
             if (fileName.empty())
-                scene = new MarschnerLobb(device,world);
-            // else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
-            //     scene = new VolumeFile(fileName.c_str(),device,world);
+                scene = new VolumeScene(device,world);
+            else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
+                scene = new VolumeScene(device,world,fileName.c_str());
             // else
             //     scene = new ModelFile(fileName.c_str(),device,world);
 
@@ -327,7 +340,7 @@ int main(int argc, char** argv)
 
     // Set up the volkit TFE
     vkt::LookupTable lut; // keep alive throughout main loop
-    if (auto volumeScene = dynamic_cast<MarschnerLobb*>(viewer.anari.scene)) {
+    if (auto volumeScene = dynamic_cast<VolumeScene*>(viewer.anari.scene)) {
         float* rgb;
         float* alpha;
         int32_t numEntries;

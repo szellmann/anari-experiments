@@ -12,6 +12,8 @@ extern "C" {
 
 typedef int ASGError_t;
 #define ASG_ERROR_NO_ERROR                  0
+#define ASG_ERROR_MISSING_FILE_HANDLER      100
+#define ASG_ERROR_FILE_IO_ERROR             150
 #define ASG_ERROR_INVALID_LUT_ID            700
 
 typedef int ASGType_t;
@@ -33,6 +35,9 @@ typedef int ASGVisitorTraversalType_t;
 
 typedef int ASGLutID;
 #define ASG_LUT_ID_DEFAULT_LUT              0
+
+#define ASG_IO_FLAG_RESAMPLE_VOLUME_DIMS    1
+#define ASG_IO_FLAG_RESAMPLE_VOXEL_TYPE     2
 
 struct _ASGObject;
 
@@ -107,6 +112,8 @@ ASGAPI ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
                                                       ASGLookupTable1D* lut);
 
 // I/O
+ASGAPI ASGError_t asgLoadStructuredVolumeFile(ASGStructuredVolume vol,
+                                              const char* fileName, uint64_t flags);
 
 // Procedural volumes, builtin RGBA LUTs, etc.
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);

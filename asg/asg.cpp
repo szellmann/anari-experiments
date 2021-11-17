@@ -1,6 +1,13 @@
 #include <assert.h>
+#include <string.h>
 #include <iostream>
 #include <vector>
+#if ASG_HAVE_VOLKIT
+#include <vkt/InputStream.hpp>
+#include <vkt/Resample.hpp>
+#include <vkt/StructuredVolume.hpp>
+#include <vkt/VolumeFile.hpp>
+#endif
 #include "asg.h"
 
 // ========================================================
@@ -285,6 +292,88 @@ ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
 // ========================================================
 // I/O
 // ========================================================
+
+ASGError_t asgLoadStructuredVolumeFile(ASGStructuredVolume vol, const char* fileName,
+                                       uint64_t flags)
+{
+#if ASG_HAVE_VOLKIT
+    vkt::VolumeFile file(fileName, vkt::OpenMode::Read);
+
+    vkt::VolumeFileHeader hdr = file.getHeader();
+
+    if (!hdr.isStructured)
+        return ASG_ERROR_FILE_IO_ERROR;
+
+    vkt::Vec3i dims = hdr.dims;
+    if (dims.x * dims.y * dims.z < 1)
+        return ASG_ERROR_FILE_IO_ERROR;
+
+    vkt::DataFormat dataFormat = hdr.dataFormat;
+    if (dataFormat == vkt::DataFormat::Unspecified)
+    {
+        // just guessing here..
+        dataFormat = vkt::DataFormat::UInt8;
+    }
+
+    vkt::StructuredVolume inputVolume(dims.x, dims.y, dims.z, dataFormat);
+    vkt::InputStream is(file);
+    is.read(inputVolume);
+
+    StructuredVolume* impl = (StructuredVolume*)vol->impl;
+
+    vkt::StructuredVolume volkitVolume = inputVolume;
+    if (flags & ASG_IO_FLAG_RESAMPLE_VOXEL_TYPE) {
+        vkt::DataFormat destDataFormat = vkt::DataFormat::UInt8;
+        if (impl->type == ASG_DATA_TYPE_UINT8)
+            destDataFormat = vkt::DataFormat::UInt16;
+        else if (impl->type == ASG_DATA_TYPE_UINT16)
+            destDataFormat = vkt::DataFormat::UInt16;
+        else if (impl->type == ASG_DATA_TYPE_FLOAT32)
+            destDataFormat = vkt::DataFormat::Float32;
+        else
+            return ASG_ERROR_FILE_IO_ERROR;
+
+        if (destDataFormat != dataFormat) {
+            volkitVolume = vkt::StructuredVolume(dims.x, dims.y, dims.z, destDataFormat);
+            vkt::Resample(volkitVolume,inputVolume,vkt::FilterMode::Nearest);
+            hdr.dataFormat = dataFormat = destDataFormat;
+        }
+    }
+    // TODO: same for volume dims
+
+    size_t bpv(-1);
+    if (dataFormat == vkt::DataFormat::UInt8)
+        bpv = 1;
+    else if (dataFormat == vkt::DataFormat::UInt16)
+        bpv = 2;
+    else if (dataFormat == vkt::DataFormat::Float32)
+        bpv = 4;
+    else
+        return ASG_ERROR_FILE_IO_ERROR;
+
+    asgRelease(vol);
+
+    impl->data = malloc(dims.x * dims.y * dims.z * bpv);
+    std::memcpy(impl->data,volkitVolume.getData(),dims.x * dims.y * dims.z * bpv);
+    impl->width = dims.x;
+    impl->height = dims.y;
+    impl->depth = dims.z;
+    impl->type = bpv==1 ? ASG_DATA_TYPE_UINT8
+                        : bpv==2 ? ASG_DATA_TYPE_UINT16 : ASG_DATA_TYPE_FLOAT32;
+    impl->rangeMin = volkitVolume.getVoxelMapping().x;
+    impl->rangeMax = volkitVolume.getVoxelMapping().y;
+    impl->distX = volkitVolume.getDist().x;
+    impl->distY = volkitVolume.getDist().x;
+    impl->distZ = volkitVolume.getDist().z;
+    impl->lut1D = NULL; // TODO: file might actually have a lut
+    impl->userPtr = impl->data;
+    impl->freeFunc = free;
+    vol->dirty = true;
+    return ASG_ERROR_NO_ERROR;
+#else
+    return ASG_ERROR_MISSING_FILE_HANDLER;
+#endif
+}
 
 // ========================================================
 // Procedural
