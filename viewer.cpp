@@ -94,7 +94,7 @@ struct VolumeScene : Scene
         if (fileName != nullptr) {
             volume = asgNewStructuredVolume(nullptr,0,0,0,ASG_DATA_TYPE_FLOAT32,nullptr);
             // load volume, resample to FLOAT32 if format is different
-            ASG_SAFE_CALL(asgLoadStructuredVolumeFile(volume,fileName,ASG_IO_FLAG_RESAMPLE_VOXEL_TYPE));
+            ASG_SAFE_CALL(asgLoadVOLKIT(volume,fileName,ASG_IO_FLAG_RESAMPLE_VOXEL_TYPE));
             ASG_SAFE_CALL(asgStructuredVolumeGetDims(volume,&volDims[0],&volDims[1],
                                                      &volDims[2]));
         }

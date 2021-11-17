@@ -293,8 +293,7 @@ ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
 // I/O
 // ========================================================
 
-ASGError_t asgLoadStructuredVolumeFile(ASGStructuredVolume vol, const char* fileName,
-                                       uint64_t flags)
+ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName, uint64_t flags)
 {
 #if ASG_HAVE_VOLKIT
     vkt::VolumeFile file(fileName, vkt::OpenMode::Read);
