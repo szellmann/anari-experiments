@@ -26,10 +26,8 @@
 struct _ASGObject {
     // Node interface
     ASGType_t type;
-    unsigned numChildren;
-    struct _ASGObject** children;
-    unsigned numParents;
-    struct _ASGObject** parents;
+    std::vector<_ASGObject*> children;
+    std::vector<_ASGObject*> parents;
 
     // Ref count (TODO!)
 
@@ -52,13 +50,13 @@ void _asgAccept(struct _ASGObject* _obj, ASGVisitor _visitor,
     ASGObject obj = (ASGObject)_obj;
 
     if (traversalType==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN) {
-        for (unsigned i=0; i<obj->numChildren; ++i) {
-            ASGObject child = ((ASGObject*)(obj->children))[i];
+        for (unsigned i=0; i<obj->children.size(); ++i) {
+            ASGObject child = obj->children[i];
             child->accept(child,_visitor,traversalType);
         }
     } else {
-        for (unsigned i=0; i<obj->numParents; ++i) {
-            ASGObject parent = ((ASGObject*)(obj->parents))[i];
+        for (unsigned i=0; i<obj->parents.size(); ++i) {
+            ASGObject parent = obj->parents[i];
             parent->accept(parent,_visitor,traversalType);
         }
     }
@@ -68,10 +66,6 @@ ASGObject asgNewObject()
 {
     ASGObject obj = (ASGObject)calloc(1,sizeof(struct _ASGObject));
     obj->type = ASG_TYPE_OBJECT;
-    obj->numChildren = 0;
-    obj->children = NULL;
-    obj->numParents = 0;
-    obj->parents = NULL;
     obj->accept = _asgAccept;
     obj->impl = NULL;
     obj->dirty = false;
@@ -98,14 +92,8 @@ ASGError_t asgRetain(ASGObject obj)
 
 ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child)
 {
-    obj->numChildren++;
-    obj->children = (struct _ASGObject**)realloc(obj->children,obj->numChildren);
-    // TODO: check if reallocation failed
-    ((ASGObject*)obj->children)[obj->numChildren-1] = child;
-
-    child->numParents++;
-    child->parents = (struct _ASGObject**)realloc(child->parents,child->numParents);
-    ((ASGObject*)child->parents)[child->numParents-1] = obj;
+    obj->children.push_back(child);
+    child->parents.push_back(obj);
 
     return ASG_ERROR_NO_ERROR;
 }
@@ -466,7 +454,7 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
 #if ASG_HAVE_ASSIMP
     Assimp::DefaultLogger::create("",Assimp::Logger::VERBOSE);
 
-    Assimp::Importer importer;
+    static Assimp::Importer importer;
 
     const aiScene* scene = importer.ReadFile(fileName,aiProcess_Triangulate);
 
