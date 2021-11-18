@@ -1,7 +1,16 @@
 #include <assert.h>
+#include <float.h>
 #include <string.h>
+#include <algorithm>
 #include <iostream>
 #include <vector>
+#if ASG_HAVE_ASSIMP
+#include <assimp/DefaultLogger.hpp>
+#include <assimp/Importer.hpp>
+#include <assimp/Matrix4x4.h>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#endif
 #if ASG_HAVE_VOLKIT
 #include <vkt/InputStream.hpp>
 #include <vkt/Resample.hpp>
@@ -124,6 +133,69 @@ ASGError_t asgApplyVisitor(ASGObject self, ASGVisitor visitor,
 {
     self->accept(self,visitor,traversalType);
     return ASG_ERROR_NO_ERROR;
+}
+
+// ========================================================
+// Geometries
+// ========================================================
+
+struct TriangleGeom {
+    float* vertices;
+    float* vertexNormals;
+    float* vertexColors;
+    uint32_t numVertices;
+    uint32_t* indices;
+    uint32_t numIndices;
+    float* verticesUserPtr;
+    float* vertexNormalsUserPtr;
+    float* vertexColorsUserPtr;
+    uint32_t* indicesUserPtr;
+    ASGFreeFunc freeFunc;
+};
+
+ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals,
+                                           float* vertexColors, uint32_t numVertices,
+                                           uint32_t* indices, uint32_t numIndices,
+                                           ASGFreeFunc freeFunc)
+{
+    ASGTriangleGeometry geom = (ASGTriangleGeometry)asgNewObject();
+    geom->type = ASG_TYPE_TRIANGLE_GEOMETRY;
+    geom->impl = (TriangleGeom*)calloc(1,sizeof(TriangleGeom));
+    geom->dirty = true;
+    ((TriangleGeom*)geom->impl)->vertices = vertices;
+    ((TriangleGeom*)geom->impl)->vertexNormals = vertexNormals;
+    ((TriangleGeom*)geom->impl)->vertexColors = vertexColors;
+    ((TriangleGeom*)geom->impl)->numVertices = numVertices;
+    ((TriangleGeom*)geom->impl)->indices = indices;
+    ((TriangleGeom*)geom->impl)->numIndices = numIndices;
+    ((TriangleGeom*)geom->impl)->verticesUserPtr = vertices;
+    ((TriangleGeom*)geom->impl)->vertexNormalsUserPtr = vertexNormals;
+    ((TriangleGeom*)geom->impl)->vertexColorsUserPtr = vertexColors;
+    ((TriangleGeom*)geom->impl)->indicesUserPtr = indices;
+    ((TriangleGeom*)geom->impl)->freeFunc = freeFunc;
+    return geom;
+}
+
+// ========================================================
+// Surface
+// ========================================================
+
+struct Surface {
+    ASGGeometry geometry;
+    ASGMaterial material;
+    // Exclusively used by ANARI build visitors
+    ANARISurface anariSurface = NULL;
+};
+
+ASGSurface asgNewSurface(ASGGeometry geom, ASGMaterial mat)
+{
+    ASGSurface surf = (ASGSurface)asgNewObject();
+    surf->type = ASG_TYPE_SURFACE;
+    surf->impl = (Surface*)calloc(1,sizeof(Surface));
+    surf->dirty = true;
+    ((Surface*)surf->impl)->geometry = geom;
+    ((Surface*)surf->impl)->material = mat;
+    return surf;
 }
 
 // ========================================================
@@ -293,6 +365,125 @@ ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
 // I/O
 // ========================================================
 
+namespace assimp {
+
+    typedef uint64_t VisitFlags;
+
+    VisitFlags FLAG_GEOMETRY         = 1;
+    VisitFlags FLAG_ACCUM_TRANSFORMS = 2;
+
+    void Visit(aiNode* node, const aiScene* scene, ASGObject obj,
+               aiMatrix4x4 accTransform, VisitFlags flags)
+    {
+        aiMatrix4x4 transform;
+
+        if (node->mNumMeshes > 0) {
+            if (flags & FLAG_GEOMETRY) {
+                for (unsigned i=0; i<node->mNumMeshes; ++i) {
+                    unsigned meshID = node->mMeshes[i];
+                    aiMesh* mesh = scene->mMeshes[meshID];
+
+                    float* vertices = (float*)malloc(mesh->mNumVertices*3*sizeof(float));
+
+                    float* vertexNormals = NULL;
+                    if (mesh->HasNormals())
+                        vertexNormals
+                                = (float*)malloc(mesh->mNumVertices*4*sizeof(float));
+
+                    float* vertexColors = NULL;
+                    if (mesh->mColors[0] != NULL) // TODO:(?) AI_MAX_NUMBER_OF_COLOR_SETS
+                        vertexColors
+                                = (float*)malloc(mesh->mNumVertices*3*sizeof(float));
+
+                    for (unsigned j=0; j<mesh->mNumVertices; ++j) {
+                        aiVector3D v = mesh->mVertices[j];
+
+                        if (flags & FLAG_ACCUM_TRANSFORMS) {
+                            v *= accTransform;
+                        }
+
+                        vertices[j*3] = v.x;
+                        vertices[j*3+1] = v.y;
+                        vertices[j*3+2] = v.z;
+
+                        if (vertexNormals != NULL) {
+                            aiVector3D vn = mesh->mNormals[j];
+
+                            // TODO: accum. inverse-transpose, too
+                            if (flags & FLAG_ACCUM_TRANSFORMS) {
+                                //vn *= accTransform;
+                            }
+
+                            vertexNormals[j*3] = vn.x;
+                            vertexNormals[j*3+1] = vn.y;
+                            vertexNormals[j*3+2] = vn.z;
+                        }
+
+                        if (vertexColors != NULL) {
+                            aiColor4D vc = mesh->mColors[0][j];
+                            vertexColors[j*4] = vc.r;
+                            vertexColors[j*4+1] = vc.g;
+                            vertexColors[j*4+2] = vc.b;
+                            vertexColors[j*4+3] = vc.a;
+                        }
+                    }
+
+                    ASGMaterial mat = nullptr;
+
+                    if (scene->HasMaterials()) { // TODO!
+                        unsigned materialID = mesh->mMaterialIndex;
+                    }
+
+                    ASGTriangleGeometry geom = asgNewTriangleGeometry(vertices,
+                                                                      vertexNormals,
+                                                                      vertexColors,
+                                                                      mesh->mNumVertices,
+                                                                      NULL, // no indices
+                                                                      0, // no indices
+                                                                      free);
+
+                    ASGSurface surf = asgNewSurface(geom,mat);
+
+                    asgObjectAddChild(obj,surf);
+                }
+                transform = aiMatrix4x4(); // identity
+            }
+        } else {
+            if (flags & FLAG_ACCUM_TRANSFORMS) {
+                transform = node->mTransformation * accTransform;
+            }
+        }
+
+        for (unsigned i=0; i<node->mNumChildren; ++i) {
+            if (flags & FLAG_ACCUM_TRANSFORMS) // flatten
+                Visit(node->mChildren[i],scene,obj,transform,flags);
+        }
+    }
+} // ::assimp
+
+ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
+{
+#if ASG_HAVE_ASSIMP
+    Assimp::DefaultLogger::create("",Assimp::Logger::VERBOSE);
+
+    Assimp::Importer importer;
+
+    const aiScene* scene = importer.ReadFile(fileName,aiProcess_Triangulate);
+
+    if (scene == nullptr) {
+        Assimp::DefaultLogger::get()->error(importer.GetErrorString());
+        return ASG_ERROR_FILE_IO_ERROR;
+    }
+
+    assimp::VisitFlags vflags = assimp::FLAG_GEOMETRY | assimp::FLAG_ACCUM_TRANSFORMS;
+    assimp::Visit(scene->mRootNode,scene,obj,aiMatrix4x4(),vflags);
+
+    return ASG_ERROR_NO_ERROR;
+#else
+    return ASG_ERROR_MISSING_FILE_HANDLER;
+#endif
+}
+
 ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName, uint64_t flags)
 {
 #if ASG_HAVE_VOLKIT
@@ -448,6 +639,84 @@ ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID)
 // Builtin visitors
 // ========================================================
 
+// Compute bounds
+
+struct Bounds {
+    float minX, minY, minZ;
+    float maxX, maxY, maxZ;
+};
+
+static void visitBounds(ASGObject obj, void* userData) {
+
+    ASGType_t t;
+    asgGetType(obj,&t);
+
+    Bounds* bounds = (Bounds*)userData;
+
+    switch (t)
+    {
+        case ASG_TYPE_OBJECT: break;
+        case ASG_TYPE_SURFACE: {
+            Surface* surf = (Surface*)obj->impl;
+            assert(surf->geometry != nullptr);
+
+            if (surf->geometry->type == ASG_TYPE_TRIANGLE_GEOMETRY) {
+
+                TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
+
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    for (unsigned i=0; i<geom->numIndices; ++i) {
+                        float* v = &geom->vertices[geom->indices[i]*3];
+                        bounds->minX = std::min(bounds->minX,v[0]);
+                        bounds->minY = std::min(bounds->minX,v[1]);
+                        bounds->minZ = std::min(bounds->minX,v[2]);
+                        bounds->maxX = std::max(bounds->maxX,v[0]);
+                        bounds->maxY = std::max(bounds->maxX,v[1]);
+                        bounds->maxZ = std::max(bounds->maxX,v[2]);
+                    }
+                } else {
+                    // No indices, so just insert the verts directly
+                    for (unsigned i=0; i<geom->numVertices; ++i) {
+                        float* v = &geom->vertices[i*3];
+                        bounds->minX = std::min(bounds->minX,v[0]);
+                        bounds->minY = std::min(bounds->minX,v[1]);
+                        bounds->minZ = std::min(bounds->minX,v[2]);
+                        bounds->maxX = std::max(bounds->maxX,v[0]);
+                        bounds->maxY = std::max(bounds->maxX,v[1]);
+                        bounds->maxZ = std::max(bounds->maxX,v[2]);
+                    }
+                }
+            }
+
+            break;
+        }
+
+        case ASG_TYPE_STRUCTURED_VOLUME: {
+            // TODO!
+            break;
+        }
+        default: break;
+    }
+}
+
+ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ,
+                            float* maxX, float* maxY, float* maxZ, uint64_t nodeMask)
+{
+    Bounds bounds{+FLT_MAX,+FLT_MAX,+FLT_MAX,
+                  -FLT_MAX,-FLT_MAX,-FLT_MAX};
+    ASGVisitor visitor = asgCreateVisitor(visitBounds,&bounds);
+    asgApplyVisitor(obj,visitor,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
+    asgDestroyVisitor(visitor);
+
+    *minX = bounds.minX; *minY = bounds.minY; *minZ = bounds.minZ;
+    *maxX = bounds.maxX; *maxY = bounds.maxY; *maxZ = bounds.maxZ;
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+
+// Build ANARI world
+
 struct ANARIArraySizes {
     int numVolumes;
 };
@@ -455,6 +724,7 @@ struct ANARIArraySizes {
 struct ANARI {
     ANARIDevice device;
     ANARIWorld world;
+    std::vector<ANARISurface> surfaces;
     std::vector<ANARIVolume> volumes;
 };
 
@@ -467,7 +737,60 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
     switch (t)
     {
         case ASG_TYPE_OBJECT: break;
-        case ASG_TYPE_SURFACE: break;
+        case ASG_TYPE_SURFACE: {
+            Surface* surf = (Surface*)obj->impl;
+            if (obj->dirty) {
+                obj->dirty = false;
+
+                assert(surf->geometry != nullptr);
+
+                ANARIGeometry anariGeometry;
+
+                if (surf->geometry->type == ASG_TYPE_TRIANGLE_GEOMETRY) {
+                    // TODO: check if dirty; surf might have been dirty
+                    // for other reasons!
+                    TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
+                    anariGeometry = anariNewGeometry(anari->device,"triangle");
+                    ANARIArray1D vertexPosition = anariNewArray1D(anari->device,
+                                                                  geom->vertices,
+                                                                  0,0,ANARI_FLOAT32_VEC3,
+                                                                  geom->numVertices,0);
+
+                    anariSetParameter(anari->device,anariGeometry,"vertex.position",
+                                      ANARI_ARRAY1D,&vertexPosition);
+
+                    anariRelease(anari->device,vertexPosition);
+
+                    if (geom->indices != nullptr && geom->numIndices > 0) {
+                        ANARIArray1D primitiveIndex = anariNewArray1D(anari->device,
+                                                                      geom->indices,
+                                                                      0,0,
+                                                                      ANARI_UINT32_VEC3,
+                                                                      geom->numIndices,
+                                                                      0);
+                        anariSetParameter(anari->device,anariGeometry,"primitive.index",
+                                          ANARI_ARRAY1D,&primitiveIndex);
+
+                        anariRelease(anari->device,primitiveIndex);
+                    }
+
+                    anariCommit(anari->device,anariGeometry);
+                }
+
+                surf->anariSurface = anariNewSurface(anari->device);
+                anariSetParameter(anari->device,surf->anariSurface,"geometry",
+                                  ANARI_GEOMETRY,&anariGeometry);
+                // TODO: material
+                anariCommit(anari->device,surf->anariSurface);
+
+                anari->surfaces.push_back(surf->anariSurface);
+
+                anariRelease(anari->device,anariGeometry);
+            }
+
+            break;
+        }
+
         case ASG_TYPE_STRUCTURED_VOLUME: {
             StructuredVolume* impl = (StructuredVolume*)obj->impl;
             if (obj->dirty) {
@@ -543,7 +866,7 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
 }
 
 ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld world,
-                              uint64_t flags)
+                              uint64_t flags, uint64_t nodeMask)
 {
     // flags ignored for now, but could be used to, e.g., only extract volumes, etc.
 
@@ -553,6 +876,13 @@ ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld worl
     ASGVisitor visitor = asgCreateVisitor(visitANARIWorld,&anari);
     asgApplyVisitor(obj,visitor,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
     asgDestroyVisitor(visitor);
+
+    if (anari.surfaces.size() > 0) {
+        ANARIArray1D surfaces = anariNewArray1D(device,anari.surfaces.data(),0,0,
+                                                ANARI_SURFACE,anari.surfaces.size(),0);
+        anariSetParameter(device,world,"surface",ANARI_ARRAY1D,&surfaces);
+        anariRelease(device,surfaces);
+    }
 
     if (anari.volumes.size() > 0) {
         ANARIArray1D volumes = anariNewArray1D(device,anari.volumes.data(),0,0,

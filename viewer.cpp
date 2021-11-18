@@ -58,8 +58,6 @@ void statusFunc(void *userData,
 
 struct Scene
 {
-    Scene() = default;
-
     Scene(ANARIDevice dev, ANARIWorld wrld)
         : device(dev)
         , world(wrld)
@@ -82,6 +80,7 @@ struct Scene
     ASGObject root = nullptr;
 };
 
+// Load volume file or generate default volume
 struct VolumeScene : Scene
 {
     VolumeScene(ANARIDevice dev, ANARIWorld wrld, const char* fileName = NULL)
@@ -116,7 +115,7 @@ struct VolumeScene : Scene
 
         ASG_SAFE_CALL(asgObjectAddChild(root,volume));
 
-        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,0));
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,0,0));
 
         anariCommit(device,world);
     }
@@ -142,7 +141,7 @@ struct VolumeScene : Scene
         lut = asgNewLookupTable1D(rgbLUT.data(),alphaLUT.data(),alphaLUT.size(),NULL);
         ASG_SAFE_CALL(asgStructuredVolumeSetLookupTable1D(volume,lut));
 
-        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,0));
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,0,0));
     }
 
     ASGStructuredVolume volume = nullptr;
@@ -151,6 +150,39 @@ struct VolumeScene : Scene
     std::vector<float> volData;
     std::vector<float> rgbLUT;
     std::vector<float> alphaLUT;
+};
+
+// Load scene w/ pbrtParser (TODO)
+struct PBRT : Scene {};
+
+// Load scene w/ assimp
+struct Model : Scene
+{
+    Model(ANARIDevice device, ANARIWorld wrld, const char* fileName)
+        : Scene(device,wrld)
+    {
+        bbox.invalidate();
+
+        root = asgNewObject();
+
+        ASG_SAFE_CALL(asgLoadASSIMP(root,fileName,0));
+
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,0,0));
+
+        anariCommit(device,world);
+    }
+
+    virtual visionaray::aabb getBounds()
+    {
+        if (bbox.invalid()) {
+            asgComputeBounds(root,&bbox.min.x,&bbox.min.y,&bbox.min.z,&bbox.max.x,
+                             &bbox.max.y,&bbox.max.z,0);
+        }
+
+        return bbox;
+    }
+
+    visionaray::aabb bbox;
 };
 
 struct Viewer : visionaray::viewer_glut
@@ -286,8 +318,8 @@ struct Viewer : visionaray::viewer_glut
                 scene = new VolumeScene(device,world);
             else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
                 scene = new VolumeScene(device,world,fileName.c_str());
-            // else
-            //     scene = new ModelFile(fileName.c_str(),device,world);
+            else
+                scene = new Model(device,world,fileName.c_str());
 
             // Setup renderer
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);

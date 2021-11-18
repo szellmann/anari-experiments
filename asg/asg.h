@@ -18,10 +18,11 @@ typedef int ASGError_t;
 
 typedef int ASGType_t;
 #define ASG_TYPE_OBJECT                     0
-#define ASG_TYPE_SURFACE                    1000
-#define ASG_TYPE_LOOKUP_TABLE1D             1010
-#define ASG_TYPE_STRUCTURED_VOLUME          1020
-#define ASG_TYPE_INSTANCE                   1030
+#define ASG_TYPE_TRIANGLE_GEOMETRY          1000
+#define ASG_TYPE_SURFACE                    1010
+#define ASG_TYPE_LOOKUP_TABLE1D             1020
+#define ASG_TYPE_STRUCTURED_VOLUME          1030
+#define ASG_TYPE_INSTANCE                   1040
 
 typedef int ASGDataType_t;
 #define ASG_DATA_TYPE_UINT8                 0
@@ -57,8 +58,8 @@ typedef _ASGVisitor *ASGVisitor;
 typedef void _ASGImpl;
 typedef _ASGImpl *ASGImpl;
 
-typedef struct _ASGObject *ASGObject, *ASGSurface, *ASGLookupTable1D,
-    *ASGStructuredVolume, *ASGInstance;
+typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry, *ASGMaterial,
+    *ASGSurface, *ASGLookupTable1D, *ASGStructuredVolume, *ASGInstance;
 
 
 /* ========================================================
@@ -77,8 +78,16 @@ ASGAPI ASGError_t asgDestroyVisitor(ASGVisitor visitor);
 ASGAPI ASGError_t asgApplyVisitor(ASGObject obj, ASGVisitor visitor,
                                   ASGVisitorTraversalType_t traversalType);
 
+// Geometries
+ASGAPI ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals,
+                                                  float* vertexColors,
+                                                  uint32_t numVertices, uint32_t* indices,
+                                                  uint32_t numIncidices,
+                                                  ASGFreeFunc freeFunc);
+// TODO: special handling for 64-bit triangle indices (asgNewTriangleGeometry64?)
+
 // Surface
-ASGAPI ASGSurface asgNewSurface(/*TODO*/);
+ASGAPI ASGSurface asgNewSurface(ASGGeometry geom, ASGMaterial mat);
 
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
@@ -112,6 +121,7 @@ ASGAPI ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
                                                       ASGLookupTable1D* lut);
 
 // I/O
+ASGAPI ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags);
 ASGAPI ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName,
                                 uint64_t flags);
 
@@ -119,9 +129,12 @@ ASGAPI ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName,
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);
 ASGAPI ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID);
 
-// Build ANARI world
+// Builtin visitors / routines that traverse the whole graph
+ASGAPI ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ,
+                                   float* maxX, float* maxY, float* maxZ,
+                                   uint64_t nodeMask);
 ASGAPI ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld world,
-                                     uint64_t flags);
+                                     uint64_t flags, uint64_t nodeMask);
 
 #ifdef __cplusplus
 }
