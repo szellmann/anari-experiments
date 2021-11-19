@@ -3,6 +3,7 @@
 #include <string.h>
 #include <algorithm>
 #include <iostream>
+#include <string>
 #include <vector>
 #if ASG_HAVE_ASSIMP
 #include <assimp/DefaultLogger.hpp>
@@ -228,8 +229,7 @@ struct _ASGObject {
     // Private implementation
     ASGImpl impl;
 
-    // Updated/used by visitors
-    bool dirty;
+    // Used by visitors to, e.g., cull nodes
     uint64_t mask;
 };
 
@@ -259,7 +259,6 @@ ASGObject asgNewObject()
     obj->type = ASG_TYPE_OBJECT;
     obj->accept = _asgAccept;
     obj->impl = NULL;
-    obj->dirty = false;
     obj->mask = 0ULL;
     return obj;
 }
@@ -319,9 +318,11 @@ ASGError_t asgApplyVisitor(ASGObject self, ASGVisitor visitor,
 // ========================================================
 
 struct Material {
-    const char* type;
-    const char* name;
+    std::string type;
+    std::string name;
     std::vector<ASGParam> params;
+    // Exclusively used by ANARI build visitors
+    ANARIMaterial anariMaterial = NULL;
 };
 
 ASGMaterial asgNewMaterial(const char* materialType, const char* name)
@@ -329,7 +330,6 @@ ASGMaterial asgNewMaterial(const char* materialType, const char* name)
     ASGMaterial material = (ASGMaterial)asgNewObject();
     material->type = ASG_TYPE_MATERIAL;
     material->impl = (Material*)calloc(1,sizeof(Material));
-    material->dirty = true;
     ((Material*)material->impl)->type = materialType;
     ((Material*)material->impl)->name = name;
     return material;
@@ -337,13 +337,13 @@ ASGMaterial asgNewMaterial(const char* materialType, const char* name)
 
 ASGError_t asgMaterialGetType(ASGMaterial material, const char** materialType)
 {
-    *materialType = ((Material*)material->impl)->type;
+    *materialType = ((Material*)material->impl)->type.c_str();
     return ASG_ERROR_NO_ERROR;
 }
 
 ASGError_t asgMaterialGetName(ASGMaterial material, const char** name)
 {
-    *name = ((Material*)material->impl)->name;
+    *name = ((Material*)material->impl)->name.c_str();
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -400,6 +400,8 @@ struct TriangleGeom {
     float* vertexColorsUserPtr;
     uint32_t* indicesUserPtr;
     ASGFreeFunc freeFunc;
+    // Exclusively used by ANARI build visitors
+    ANARIGeometry anariGeometry = NULL;
 };
 
 ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals,
@@ -410,7 +412,6 @@ ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals
     ASGTriangleGeometry geom = (ASGTriangleGeometry)asgNewObject();
     geom->type = ASG_TYPE_TRIANGLE_GEOMETRY;
     geom->impl = (TriangleGeom*)calloc(1,sizeof(TriangleGeom));
-    geom->dirty = true;
     ((TriangleGeom*)geom->impl)->vertices = vertices;
     ((TriangleGeom*)geom->impl)->vertexNormals = vertexNormals;
     ((TriangleGeom*)geom->impl)->vertexColors = vertexColors;
@@ -441,10 +442,21 @@ ASGSurface asgNewSurface(ASGGeometry geom, ASGMaterial mat)
     ASGSurface surf = (ASGSurface)asgNewObject();
     surf->type = ASG_TYPE_SURFACE;
     surf->impl = (Surface*)calloc(1,sizeof(Surface));
-    surf->dirty = true;
     ((Surface*)surf->impl)->geometry = geom;
     ((Surface*)surf->impl)->material = mat;
     return surf;
+}
+
+ASGGeometry asgSurfaceGetGeometry(ASGSurface surf, ASGGeometry* geom)
+{
+    *geom = ((Surface*)surf->impl)->geometry;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGMaterial asgSurfaceGetMaterial(ASGSurface surf, ASGMaterial* mat)
+{
+    *mat = ((Surface*)surf->impl)->material;
+    return ASG_ERROR_NO_ERROR;
 }
 
 // ========================================================
@@ -466,7 +478,6 @@ ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntrie
     ASGLookupTable1D lut = (ASGLookupTable1D)asgNewObject();
     lut->type = ASG_TYPE_LOOKUP_TABLE1D;
     lut->impl = (LUT1D*)calloc(1,sizeof(LUT1D));
-    lut->dirty = true;
     ((LUT1D*)lut->impl)->rgb = rgb;
     ((LUT1D*)lut->impl)->alpha = alpha;
     ((LUT1D*)lut->impl)->numEntries = numEntries;
@@ -509,6 +520,7 @@ struct StructuredVolume {
     ASGFreeFunc freeFunc;
     // Exclusively used by ANARI build visitors
     ANARIVolume anariVolume = NULL;
+    ANARISpatialField anariSpatialField = NULL;
 };
 
 ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t height,
@@ -518,7 +530,6 @@ ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t he
     ASGStructuredVolume vol = (ASGStructuredVolume)asgNewObject();
     vol->type = ASG_TYPE_STRUCTURED_VOLUME;
     vol->impl = (StructuredVolume*)calloc(1,sizeof(StructuredVolume));
-    vol->dirty = true;
     ((StructuredVolume*)vol->impl)->data = data;
     ((StructuredVolume*)vol->impl)->width = width;
     ((StructuredVolume*)vol->impl)->height = height;
@@ -598,7 +609,6 @@ ASGError_t asgStructuredVolumeSetLookupTable1D(ASGStructuredVolume vol,
         asgRelease(impl->lut1D);
 
     impl->lut1D = lut;
-    impl->lut1D->dirty = true;
     asgRetain(lut);
     return ASG_ERROR_NO_ERROR;
 }
@@ -842,7 +852,6 @@ ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName, uint64_t
     impl->lut1D = NULL; // TODO: file might actually have a lut
     impl->userPtr = impl->data;
     impl->freeFunc = free;
-    vol->dirty = true;
     return ASG_ERROR_NO_ERROR;
 #else
     return ASG_ERROR_MISSING_FILE_HANDLER;
@@ -1020,6 +1029,7 @@ struct ANARIArraySizes {
 struct ANARI {
     ANARIDevice device;
     ANARIWorld world;
+    ASGBuildWorldFlags_t flags;
     std::vector<ANARISurface> surfaces;
     std::vector<ANARIVolume> volumes;
 };
@@ -1035,151 +1045,158 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
         case ASG_TYPE_OBJECT: break;
         case ASG_TYPE_SURFACE: {
             Surface* surf = (Surface*)obj->impl;
-            if (obj->dirty) {
-                obj->dirty = false;
 
-                assert(surf->geometry != nullptr);
+            assert(surf->geometry != nullptr);
+            TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
 
-                ANARIGeometry anariGeometry;
+            if ((anari->flags & ASG_BUILD_WORLD_FLAG_GEOMETRIES) &&
+                surf->geometry->type == ASG_TYPE_TRIANGLE_GEOMETRY) {
 
-                if (surf->geometry->type == ASG_TYPE_TRIANGLE_GEOMETRY) {
-                    // TODO: check if dirty; surf might have been dirty
-                    // for other reasons!
-                    TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
-                    anariGeometry = anariNewGeometry(anari->device,"triangle");
-                    ANARIArray1D vertexPosition = anariNewArray1D(anari->device,
-                                                                  geom->vertices,
-                                                                  0,0,ANARI_FLOAT32_VEC3,
-                                                                  geom->numVertices,0);
+                if (geom->anariGeometry == nullptr)
+                    geom->anariGeometry
+                        = anariNewGeometry(anari->device,"triangle");
 
-                    anariSetParameter(anari->device,anariGeometry,"vertex.position",
-                                      ANARI_ARRAY1D,&vertexPosition);
+                ANARIArray1D vertexPosition = anariNewArray1D(anari->device,
+                                                              geom->vertices,
+                                                              0,0,ANARI_FLOAT32_VEC3,
+                                                              geom->numVertices,0);
 
-                    anariRelease(anari->device,vertexPosition);
+                anariSetParameter(anari->device,geom->anariGeometry,"vertex.position",
+                                  ANARI_ARRAY1D,&vertexPosition);
 
-                    if (geom->indices != nullptr && geom->numIndices > 0) {
-                        ANARIArray1D primitiveIndex = anariNewArray1D(anari->device,
-                                                                      geom->indices,
-                                                                      0,0,
-                                                                      ANARI_UINT32_VEC3,
-                                                                      geom->numIndices,
-                                                                      0);
-                        anariSetParameter(anari->device,anariGeometry,"primitive.index",
-                                          ANARI_ARRAY1D,&primitiveIndex);
+                anariRelease(anari->device,vertexPosition);
 
-                        anariRelease(anari->device,primitiveIndex);
-                    }
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    ANARIArray1D primitiveIndex = anariNewArray1D(anari->device,
+                                                                  geom->indices,
+                                                                  0,0,
+                                                                  ANARI_UINT32_VEC3,
+                                                                  geom->numIndices,
+                                                                  0);
+                    anariSetParameter(anari->device,geom->anariGeometry,
+                                      "primitive.index",
+                                      ANARI_ARRAY1D,&primitiveIndex);
 
-                    anariCommit(anari->device,anariGeometry);
+                    anariRelease(anari->device,primitiveIndex);
                 }
 
-                ANARIMaterial anariMat = nullptr;
-
-                if (surf->material != nullptr) {
-                    Material* mat = (Material*)surf->material->impl;
-
-                    if (strncmp(mat->type,"matte",5)==0) {
-                        ASGParam kdParam;
-                        ASGError_t res = asgMaterialGetParam(surf->material,"kd",
-                                                             &kdParam);
-                        if (res != ASG_ERROR_PARAM_NOT_FOUND) {
-                            anariMat = anariNewMaterial(anari->device, "matte");
-                            float kd[3];
-                            asgParamGetValue(kdParam,kd);
-                            //std::cout << kd[0] << ' ' << kd[1] << ' ' << kd[2] << '\n';
-
-                            anariSetParameter(anari->device,anariMat,"color",
-                                              ANARI_FLOAT32_VEC3,kd);
-                            anariCommit(anari->device,anariMat);
-                        }
-                    }
-                }
-
-                surf->anariSurface = anariNewSurface(anari->device);
-                anariSetParameter(anari->device,surf->anariSurface,"geometry",
-                                  ANARI_GEOMETRY,&anariGeometry);
-                if (anariMat != nullptr) {
-                    anariSetParameter(anari->device,surf->anariSurface,"material",
-                                      ANARI_MATERIAL,&anariMat);
-                }
-                anariCommit(anari->device,surf->anariSurface);
-
-                anari->surfaces.push_back(surf->anariSurface);
-
-                anariRelease(anari->device,anariMat);
-                anariRelease(anari->device,anariGeometry);
+                anariCommit(anari->device,geom->anariGeometry);
             }
+
+            if ((anari->flags & ASG_BUILD_WORLD_FLAG_MATERIALS)
+                    && surf->material != nullptr) {
+                Material* mat = (Material*)surf->material->impl;
+
+                if (strncmp(mat->type.c_str(),"matte",5)==0) {
+                    ASGParam kdParam;
+                    ASGError_t res = asgMaterialGetParam(surf->material,"kd",
+                                                         &kdParam);
+                    if (res != ASG_ERROR_PARAM_NOT_FOUND) {
+                        if (mat->anariMaterial == nullptr)
+                            mat->anariMaterial = anariNewMaterial(anari->device, "matte");
+
+                        float kd[3];
+                        asgParamGetValue(kdParam,kd);
+                        //std::cout << kd[0] << ' ' << kd[1] << ' ' << kd[2] << '\n';
+
+                        anariSetParameter(anari->device,mat->anariMaterial,"color",
+                                          ANARI_FLOAT32_VEC3,kd);
+                        anariCommit(anari->device,mat->anariMaterial);
+                    }
+                }
+            }
+
+            if (surf->anariSurface == nullptr)
+                surf->anariSurface = anariNewSurface(anari->device);
+
+            anariSetParameter(anari->device,surf->anariSurface,"geometry",
+                              ANARI_GEOMETRY,&geom->anariGeometry);
+            if (surf->material != nullptr
+                 && ((Material*)(surf->material->impl))->anariMaterial != nullptr) {
+                Material* mat = (Material*)surf->material->impl;
+                anariSetParameter(anari->device,surf->anariSurface,"material",
+                                  ANARI_MATERIAL,&mat->anariMaterial);
+            }
+            anariCommit(anari->device,surf->anariSurface);
+
+            anari->surfaces.push_back(surf->anariSurface);
 
             break;
         }
 
         case ASG_TYPE_STRUCTURED_VOLUME: {
-            StructuredVolume* impl = (StructuredVolume*)obj->impl;
-            if (obj->dirty) {
-                obj->dirty = false;
-                anariRelease(anari->device,impl->anariVolume);
-                impl->anariVolume = anariNewVolume(anari->device,"scivis");
+            StructuredVolume* vol = (StructuredVolume*)obj->impl;
 
-                assert(impl->type == ASG_DATA_TYPE_FLOAT32); // TODO!
+            if (vol->anariVolume == nullptr)
+                vol->anariVolume = anariNewVolume(anari->device,"scivis");
+
+            if (anari->flags & ASG_BUILD_WORLD_FLAG_VOLUMES) {
+
+                assert(vol->type == ASG_DATA_TYPE_FLOAT32); // TODO!
 
                 int volDims[] = {
-                    impl->width,
-                    impl->height,
-                    impl->depth,
+                    vol->width,
+                    vol->height,
+                    vol->depth,
                 };
 
-                ANARIArray3D scalar = anariNewArray3D(anari->device,impl->data,
+                anariRelease(anari->device, vol->anariSpatialField);
+
+                ANARIArray3D scalar = anariNewArray3D(anari->device,vol->data,
                                                       0,0,ANARI_FLOAT32,
                                                       volDims[0],volDims[1],volDims[2],
                                                       0,0,0);
 
-                ANARISpatialField field = anariNewSpatialField(anari->device,
-                                                               "structuredRegular");
-                anariSetParameter(anari->device, field,"data",ANARI_ARRAY3D,&scalar);
+                vol->anariSpatialField = anariNewSpatialField(anari->device,
+                                                              "structuredRegular");
+                anariSetParameter(anari->device,vol->anariSpatialField,"data",
+                                  ANARI_ARRAY3D,&scalar);
                 const char* filter = "linear";
-                anariSetParameter(anari->device,field,"filter",ANARI_STRING,filter);
-                anariCommit(anari->device, field);
+                anariSetParameter(anari->device,vol->anariSpatialField,"filter",
+                                  ANARI_STRING,filter);
+                anariCommit(anari->device, vol->anariSpatialField);
 
                 float valueRange[2] = {0.f,1.f};
-                //anariSetParameter(anari->device,impl->anariVolume,"valueRange",ANARI_FLOAT32_BOX1,&valueRange);
+                //anariSetParameter(anari->device,vol->anariVolume,"valueRange",ANARI_FLOAT32_BOX1,&valueRange);
 
-                anariSetParameter(anari->device,impl->anariVolume,"field",
-                                  ANARI_SPATIAL_FIELD, &field);
+                anariSetParameter(anari->device,vol->anariVolume,"field",
+                                  ANARI_SPATIAL_FIELD, &vol->anariSpatialField);
+
+                anariCommit(anari->device, vol->anariVolume);
 
                 anariRelease(anari->device, scalar);
-                anariRelease(anari->device, field);
-
-                anari->volumes.push_back(impl->anariVolume);
             }
 
-            if (impl->lut1D == NULL) {
-                int32_t numEntries = 5;
-                float* rgb = (float*)malloc(numEntries*3*sizeof(float));
-                float* alpha = (float*)malloc(numEntries*sizeof(float));
-                impl->lut1D = asgNewLookupTable1D(rgb,alpha,numEntries,free);
-                asgMakeDefaultLUT1D(impl->lut1D,ASG_LUT_ID_DEFAULT_LUT);
-                impl->lut1D->dirty = true;
-            }
-
-            if (impl->lut1D->dirty) {
+            if (anari->flags & ASG_BUILD_WORLD_FLAG_LUTS) {
                 float* rgb;
                 float* alpha;
                 int32_t numEntries;
 
-                asgLookupTable1DGetRGB(impl->lut1D, &rgb);
-                asgLookupTable1DGetAlpha(impl->lut1D, &alpha);
-                asgLookupTable1DGetNumEntries(impl->lut1D, &numEntries);
+                if (vol->lut1D == NULL) {
+                    numEntries = 5;
+                    rgb = (float*)malloc(numEntries*3*sizeof(float));
+                    alpha = (float*)malloc(numEntries*sizeof(float));
+                    vol->lut1D = asgNewLookupTable1D(rgb,alpha,numEntries,free);
+                    asgMakeDefaultLUT1D(vol->lut1D,ASG_LUT_ID_DEFAULT_LUT);
+                } else {
+                    asgLookupTable1DGetRGB(vol->lut1D, &rgb);
+                    asgLookupTable1DGetAlpha(vol->lut1D, &alpha);
+                    asgLookupTable1DGetNumEntries(vol->lut1D, &numEntries);
+                }
 
-                ANARIArray1D color = anariNewArray1D(anari->device, rgb, 0, 0, ANARI_FLOAT32_VEC3, numEntries, 0);
-                ANARIArray1D opacity = anariNewArray1D(anari->device, alpha, 0, 0, ANARI_FLOAT32, numEntries, 0);
+                ANARIArray1D anariColor = anariNewArray1D(anari->device, rgb, 0, 0, ANARI_FLOAT32_VEC3, numEntries, 0);
+                ANARIArray1D anariOpacity = anariNewArray1D(anari->device, alpha, 0, 0, ANARI_FLOAT32, numEntries, 0);
 
-                anariSetParameter(anari->device, impl->anariVolume, "color", ANARI_ARRAY1D, &color);
-                anariSetParameter(anari->device, impl->anariVolume, "opacity", ANARI_ARRAY1D, &opacity);
-                anariCommit(anari->device, impl->anariVolume);
-                anariRelease(anari->device, color);
-                anariRelease(anari->device, opacity);
-                impl->lut1D->dirty = false;
+                anariSetParameter(anari->device, vol->anariVolume, "color", ANARI_ARRAY1D, &anariColor);
+                anariSetParameter(anari->device, vol->anariVolume, "opacity", ANARI_ARRAY1D, &anariOpacity);
+
+                anariCommit(anari->device, vol->anariVolume);
+
+                anariRelease(anari->device, anariColor);
+                anariRelease(anari->device, anariOpacity);
             }
+
+            anari->volumes.push_back(vol->anariVolume);
 
             break;
         }
@@ -1188,13 +1205,15 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
 }
 
 ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld world,
-                              uint64_t flags, uint64_t nodeMask)
+                              ASGBuildWorldFlags_t flags, uint64_t nodeMask)
 {
-    // flags ignored for now, but could be used to, e.g., only extract volumes, etc.
+    if (flags == 0)
+        flags = ASG_BUILD_WORLD_FLAG_FULL_REBUILD;
 
     ANARI anari;
     anari.device = device;
     anari.world = world;
+    anari.flags = flags;
     ASGVisitor visitor = asgCreateVisitor(visitANARIWorld,&anari);
     asgApplyVisitor(obj,visitor,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
     asgDestroyVisitor(visitor);

@@ -99,6 +99,14 @@ typedef int ASGLutID;
 #define ASG_IO_FLAG_RESAMPLE_VOLUME_DIMS    1
 #define ASG_IO_FLAG_RESAMPLE_VOXEL_TYPE     2
 
+typedef uint64_t ASGBuildWorldFlags_t;
+#define ASG_BUILD_WORLD_FLAG_FULL_REBUILD   0xFFFFFFFFFFFFFFFFULL
+#define ASG_BUILD_WORLD_FLAG_GEOMETRIES     0x0000000000000001ULL
+#define ASG_BUILD_WORLD_FLAG_VOLUMES        0x0000000000000002ULL
+#define ASG_BUILD_WORLD_FLAG_MATERIALS      0x0000000000000004ULL
+#define ASG_BUILD_WORLD_FLAG_TRANSFORMS     0x0000000000000008ULL
+#define ASG_BUILD_WORLD_FLAG_LUTS           0x0000000000000010ULL
+
 struct _ASGObject;
 
 typedef void (*ASGVisitFunc)(struct _ASGObject*, void*);
@@ -197,6 +205,8 @@ ASGAPI ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertex
 
 // Surface
 ASGAPI ASGSurface asgNewSurface(ASGGeometry geom, ASGMaterial mat);
+ASGAPI ASGGeometry asgSurfaceGetGeometry(ASGSurface surf, ASGGeometry* geom);
+ASGAPI ASGMaterial asgSurfaceGetMaterial(ASGSurface surf, ASGMaterial* mat);
 
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
@@ -241,11 +251,17 @@ ASGAPI ASGError_t asgMakeMatte(ASGMaterial* material, const char* name, float kd
                                ASGSampler2D mapKD);
 
 // Builtin visitors / routines that traverse the whole graph
+
 ASGAPI ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ,
                                    float* maxX, float* maxY, float* maxZ,
                                    uint64_t nodeMask);
+
+/*! Build ANARI world from ASG subgraph
+  Visits the subgraph induced by @param obj and updates the ANARI world
+  accordingly. The routine tries to only update those nodes that have the dirty
+  flag set */
 ASGAPI ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld world,
-                                     uint64_t flags, uint64_t nodeMask);
+                                     ASGBuildWorldFlags_t flags, uint64_t nodeMask);
 
 #ifdef __cplusplus
 }
