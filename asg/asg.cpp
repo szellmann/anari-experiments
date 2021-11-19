@@ -694,7 +694,10 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
 
     static Assimp::Importer importer;
 
-    const aiScene* scene = importer.ReadFile(fileName,aiProcess_Triangulate);
+    const aiScene* scene = importer.ReadFile(fileName,
+                                             aiProcess_Triangulate |
+                                             //aiProcess_JoinIdenticalVertices  |
+                                             aiProcess_SortByPType);
 
     if (scene == nullptr) {
         Assimp::DefaultLogger::get()->error(importer.GetErrorString());
