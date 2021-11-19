@@ -349,7 +349,19 @@ ASGError_t asgMaterialGetName(ASGMaterial material, const char** name)
 
 ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param)
 {
-    ((Material*)material->impl)->params.push_back(param);
+    auto it = std::find_if(((Material*)material->impl)->params.begin(),
+                           ((Material*)material->impl)->params.end(),
+                           [param](ASGParam p) {
+                                size_t n=std::max(strlen(param.name),strlen(p.name));
+                                return strncmp(param.name,p.name,n)==0;
+                           });
+
+    if (it == ((Material*)material->impl)->params.end()) {
+        ((Material*)material->impl)->params.push_back(param);
+    } else {
+        *it = param;
+    }
+
     return ASG_ERROR_NO_ERROR;
 }
 
