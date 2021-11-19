@@ -320,17 +320,31 @@ ASGError_t asgApplyVisitor(ASGObject self, ASGVisitor visitor,
 
 struct Material {
     const char* type;
+    const char* name;
     std::vector<ASGParam> params;
 };
 
-ASGMaterial asgNewMaterial(const char* materialType)
+ASGMaterial asgNewMaterial(const char* materialType, const char* name)
 {
     ASGMaterial material = (ASGMaterial)asgNewObject();
     material->type = ASG_TYPE_MATERIAL;
     material->impl = (Material*)calloc(1,sizeof(Material));
     material->dirty = true;
     ((Material*)material->impl)->type = materialType;
+    ((Material*)material->impl)->name = name;
     return material;
+}
+
+ASGError_t asgMaterialGetType(ASGMaterial material, const char** materialType)
+{
+    *materialType = ((Material*)material->impl)->type;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgMaterialGetName(ASGMaterial material, const char** name)
+{
+    *name = ((Material*)material->impl)->name;
+    return ASG_ERROR_NO_ERROR;
 }
 
 ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param)
@@ -719,15 +733,17 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
 
     std::vector<ASGMaterial> materials;
     for (unsigned i=0; i<scene->mNumMaterials; ++i) {
-        ASGMaterial mat = asgNewMaterial("");
+        ASGMaterial mat = asgNewMaterial("","");
 
         aiMaterial* assimpMAT = scene->mMaterials[i];
         aiColor3D col;
         assimpMAT->Get(AI_MATKEY_COLOR_DIFFUSE,col);
+        aiString name;
+        assimpMAT->Get(AI_MATKEY_NAME,name);
 
         float kd[3] = {col.r,col.g,col.b};
 
-        asgMakeMatte(&mat,kd,NULL);
+        asgMakeMatte(&mat,name.C_Str(),kd,NULL);
         materials.push_back(mat);
         Material* m = (Material*)mat->impl;
     }
@@ -891,10 +907,11 @@ ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID)
     return ASG_ERROR_NO_ERROR;
 }
 
-ASGError_t asgMakeMatte(ASGMaterial* material, float kd[3], ASGSampler2D mapKD)
+ASGError_t asgMakeMatte(ASGMaterial* material, const char* name, float kd[3],
+                        ASGSampler2D mapKD)
 {
     asgRelease(*material);
-    *material = asgNewMaterial("matte");
+    *material = asgNewMaterial("matte",name);
 
     asgMaterialSetParam(*material,asgParam3fv("kd",kd));
     asgMaterialSetParam(*material,asgParamSampler2D("mapKD",mapKD));

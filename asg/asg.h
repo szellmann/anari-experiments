@@ -180,7 +180,9 @@ ASGAPI ASGError_t asgApplyVisitor(ASGObject obj, ASGVisitor visitor,
   application, and also the ANARI implementation, are relatively free to
   interpret these in any way imaginable. Materials are directly placed in the
   scene graph where they affect all the surfaces etc. underneath */
-ASGAPI ASGMaterial asgNewMaterial(const char* materialType);
+ASGAPI ASGMaterial asgNewMaterial(const char* materialType, const char* name);
+ASGAPI ASGError_t asgMaterialGetType(ASGMaterial material, const char** materialType);
+ASGAPI ASGError_t asgMaterialGetName(ASGMaterial material, const char** name);
 ASGAPI ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param);
 ASGAPI ASGError_t asgMaterialGetParam(ASGMaterial material, const char* paramName,
                                       ASGParam* param);
@@ -235,7 +237,8 @@ ASGAPI ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName,
 // Procedural volumes, builtin materials, RGBA LUTs, etc.
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);
 ASGAPI ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID);
-ASGAPI ASGError_t asgMakeMatte(ASGMaterial* material, float kd[3], ASGSampler2D mapKD);
+ASGAPI ASGError_t asgMakeMatte(ASGMaterial* material, const char* name, float kd[3],
+                               ASGSampler2D mapKD);
 
 // Builtin visitors / routines that traverse the whole graph
 ASGAPI ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ,
