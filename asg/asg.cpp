@@ -652,6 +652,19 @@ namespace assimp {
                         }
                     }
 
+                    uint32_t* indices = NULL;
+                    uint32_t numIndices = 0;
+                    if (mesh->HasFaces()) {
+                        numIndices = mesh->mNumFaces;
+                        // The following is valid as we're importing with triangulation
+                        indices = (uint32_t*)malloc(numIndices*3*sizeof(uint32_t));
+                        for (unsigned j=0; j<mesh->mNumFaces; ++j) {
+                            indices[j*3] = mesh->mFaces[j].mIndices[0];
+                            indices[j*3+1] = mesh->mFaces[j].mIndices[1];
+                            indices[j*3+2] = mesh->mFaces[j].mIndices[2];
+                        }
+                    }
+
                     ASGMaterial mat = nullptr;
 
                     unsigned materialID = mesh->mMaterialIndex;
@@ -664,8 +677,8 @@ namespace assimp {
                                                                       vertexNormals,
                                                                       vertexColors,
                                                                       mesh->mNumVertices,
-                                                                      NULL, // no indices
-                                                                      0, // no indices
+                                                                      indices,
+                                                                      numIndices,
                                                                       free);
 
                     ASGSurface surf = asgNewSurface(geom,mat);
