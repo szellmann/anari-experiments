@@ -20,6 +20,197 @@
 #include "asg.h"
 
 // ========================================================
+// Data types
+// ========================================================
+
+struct TypeInfo {
+    ASGDataType_t type;
+    size_t size;
+};
+
+static const TypeInfo g_typeInfo[] = {
+    { ASG_DATA_TYPE_INT8,                        1  },
+    { ASG_DATA_TYPE_INT8_VEC1,                   1  },
+    { ASG_DATA_TYPE_INT8_VEC2,                   2  },
+    { ASG_DATA_TYPE_INT8_VEC3,                   3  },
+    { ASG_DATA_TYPE_INT8_VEC4,                   4  },
+
+    { ASG_DATA_TYPE_INT16,                       2  },
+    { ASG_DATA_TYPE_INT16_VEC1,                  2  },
+    { ASG_DATA_TYPE_INT16_VEC2,                  4  },
+    { ASG_DATA_TYPE_INT16_VEC3,                  6  },
+    { ASG_DATA_TYPE_INT16_VEC4,                  8  },
+
+    { ASG_DATA_TYPE_INT32,                       4  },
+    { ASG_DATA_TYPE_INT32_VEC1,                  4  },
+    { ASG_DATA_TYPE_INT32_VEC2,                  8  },
+    { ASG_DATA_TYPE_INT32_VEC3,                 12  },
+    { ASG_DATA_TYPE_INT32_VEC4,                 16  },
+
+    { ASG_DATA_TYPE_INT64,                       8  },
+    { ASG_DATA_TYPE_INT64_VEC1,                  8  },
+    { ASG_DATA_TYPE_INT64_VEC2,                 16  },
+    { ASG_DATA_TYPE_INT64_VEC3,                 24  },
+    { ASG_DATA_TYPE_INT64_VEC4,                 32  },
+
+    { ASG_DATA_TYPE_UINT8,                       1  },
+    { ASG_DATA_TYPE_UINT8_VEC1,                  1  },
+    { ASG_DATA_TYPE_UINT8_VEC2,                  2  },
+    { ASG_DATA_TYPE_UINT8_VEC3,                  3  },
+    { ASG_DATA_TYPE_UINT8_VEC4,                  4  },
+
+    { ASG_DATA_TYPE_UINT16,                      2  },
+    { ASG_DATA_TYPE_UINT16_VEC1,                 2  },
+    { ASG_DATA_TYPE_UINT16_VEC2,                 4  },
+    { ASG_DATA_TYPE_UINT16_VEC3,                 6  },
+    { ASG_DATA_TYPE_UINT16_VEC4,                 8  },
+
+    { ASG_DATA_TYPE_UINT32,                      4  },
+    { ASG_DATA_TYPE_UINT32_VEC1,                 4  },
+    { ASG_DATA_TYPE_UINT32_VEC2,                 8  },
+    { ASG_DATA_TYPE_UINT32_VEC3,                12  },
+    { ASG_DATA_TYPE_UINT32_VEC4,                16  },
+
+    { ASG_DATA_TYPE_UINT64,                      8  },
+    { ASG_DATA_TYPE_UINT64_VEC1,                 8  },
+    { ASG_DATA_TYPE_UINT64_VEC2,                16  },
+    { ASG_DATA_TYPE_UINT64_VEC3,                24  },
+    { ASG_DATA_TYPE_UINT64_VEC4,                32  },
+
+    { ASG_DATA_TYPE_FLOAT32,                     4  },
+    { ASG_DATA_TYPE_FLOAT32_VEC1,                4  },
+    { ASG_DATA_TYPE_FLOAT32_VEC2,                8  },
+    { ASG_DATA_TYPE_FLOAT32_VEC3,               12  },
+    { ASG_DATA_TYPE_FLOAT32_VEC4,               16  },
+
+    { ASG_DATA_TYPE_HANDLE,         sizeof(void*)   },
+};
+
+size_t asgSizeOfDataType(ASGDataType_t type)
+{
+    auto begin = g_typeInfo;
+    auto end = g_typeInfo + sizeof(g_typeInfo)/sizeof(TypeInfo);
+    auto it = std::find_if(begin,end,[type](TypeInfo info)
+                                     { return info.type==type; });
+
+    if (it != end)
+        return it->size;
+
+    return size_t(-1);
+}
+
+// ========================================================
+// ASGParam
+// ========================================================
+
+#define PARAM_DEF1(TYPE,TYPENAME,MNEMONIC)                                              \
+ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1) {                               \
+    ASGParam param;                                                                     \
+    param.name = name;                                                                  \
+    param.type = TYPENAME;                                                              \
+    std::memcpy(&param.value,&v1,asgSizeOfDataType(TYPENAME));                          \
+    return param;                                                                       \
+}
+
+#define PARAM_DEF2(TYPE,TYPENAME,MNEMONIC)                                              \
+ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1, TYPE v2) {                      \
+    ASGParam param;                                                                     \
+    param.name = name;                                                                  \
+    param.type = TYPENAME##_VEC2;                                                       \
+    size_t sodt = asgSizeOfDataType(TYPENAME);                                          \
+    std::memcpy(&param.value,&v1,sodt);                                                 \
+    std::memcpy(&param.value+sodt,&v2,sodt);                                            \
+    return param;                                                                       \
+}
+
+#define PARAM_DEF3(TYPE,TYPENAME,MNEMONIC)                                              \
+ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3) {             \
+    ASGParam param;                                                                     \
+    param.name = name;                                                                  \
+    param.type = TYPENAME##_VEC3;                                                       \
+    size_t sodt = asgSizeOfDataType(TYPENAME);                                          \
+    std::memcpy(&param.value,&v1,sodt);                                                 \
+    std::memcpy(&param.value+sodt,&v2,sodt);                                            \
+    std::memcpy(&param.value+2*sodt,&v3,sodt);                                          \
+    return param;                                                                       \
+}
+
+#define PARAM_DEF4(TYPE,TYPENAME,MNEMONIC)                                              \
+ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3, TYPE v4) {    \
+    ASGParam param;                                                                     \
+    param.name = name;                                                                  \
+    param.type = TYPENAME##_VEC4;                                                       \
+    size_t sodt = asgSizeOfDataType(TYPENAME);                                          \
+    std::memcpy(&param.value,&v1,sodt);                                                 \
+    std::memcpy(&param.value+sodt,&v2,sodt);                                            \
+    std::memcpy(&param.value+2*sodt,&v3,sodt);                                          \
+    std::memcpy(&param.value+3*sodt,&v4,sodt);                                          \
+    return param;                                                                       \
+}
+
+#define PARAM_DEF2V(TYPE,TYPENAME,MNEMONIC)                                             \
+ASGParam asgParam2##MNEMONIC(const char* name, TYPE* v) {                               \
+    ASGParam param;                                                                     \
+    param.name = name;                                                                  \
+    param.type = TYPENAME;                                                              \
+    std::memcpy(&param.value,v,asgSizeOfDataType(TYPENAME));                            \
+    return param;                                                                       \
+}
+
+#define PARAM_DEF3V(TYPE,TYPENAME,MNEMONIC)                                             \
+ASGParam asgParam3##MNEMONIC(const char* name, TYPE* v) {                               \
+    ASGParam param;                                                                     \
+    param.name = name;                                                                  \
+    param.type = TYPENAME;                                                              \
+    std::memcpy(&param.value,v,asgSizeOfDataType(TYPENAME));                            \
+    return param;                                                                       \
+}
+
+#define PARAM_DEF4V(TYPE,TYPENAME,MNEMONIC)                                             \
+ASGParam asgParam4##MNEMONIC(const char* name, TYPE* v) {                               \
+    ASGParam param;                                                                     \
+    param.name = name;                                                                  \
+    param.type = TYPENAME;                                                              \
+    std::memcpy(&param.value,v,asgSizeOfDataType(TYPENAME));                            \
+    return param;                                                                       \
+}
+
+PARAM_DEF1(int,ASG_DATA_TYPE_INT32,i)
+PARAM_DEF2(int,ASG_DATA_TYPE_INT32,i)
+PARAM_DEF3(int,ASG_DATA_TYPE_INT32,i)
+PARAM_DEF4(int,ASG_DATA_TYPE_INT32,i)
+PARAM_DEF2V(int,ASG_DATA_TYPE_INT32_VEC2,iv)
+PARAM_DEF3V(int,ASG_DATA_TYPE_INT32_VEC3,iv)
+PARAM_DEF4V(int,ASG_DATA_TYPE_INT32_VEC3,iv)
+
+PARAM_DEF1(float,ASG_DATA_TYPE_FLOAT32,f)
+PARAM_DEF2(float,ASG_DATA_TYPE_FLOAT32,f)
+PARAM_DEF3(float,ASG_DATA_TYPE_FLOAT32,f)
+PARAM_DEF4(float,ASG_DATA_TYPE_FLOAT32,f)
+PARAM_DEF2V(float,ASG_DATA_TYPE_FLOAT32_VEC2,fv)
+PARAM_DEF3V(float,ASG_DATA_TYPE_FLOAT32_VEC3,fv)
+PARAM_DEF4V(float,ASG_DATA_TYPE_FLOAT32_VEC3,fv)
+
+ASGParam asgParamSampler2D(const char* name, ASGSampler2D samp)
+{
+    ASGParam param;
+    param.name = name;
+    param.type = ASG_DATA_TYPE_HANDLE;
+    // TODO: this stuff here needs validation...
+    if (samp == nullptr)
+        std::memset(&param.value,0,sizeof(param.value));
+    else
+        std::memcpy(&param.value,samp,asgSizeOfDataType(ASG_DATA_TYPE_HANDLE));
+    return param;
+}
+
+ASGError_t asgParamGetValue(ASGParam param, void* mem)
+{
+    std::memcpy(mem,&param.value,asgSizeOfDataType(param.type));
+    return ASG_ERROR_NO_ERROR;
+}
+
+// ========================================================
 // Ref-counted objects
 // ========================================================
 
@@ -121,6 +312,50 @@ ASGError_t asgApplyVisitor(ASGObject self, ASGVisitor visitor,
 {
     self->accept(self,visitor,traversalType);
     return ASG_ERROR_NO_ERROR;
+}
+
+// ========================================================
+// Material
+// ========================================================
+
+struct Material {
+    const char* type;
+    std::vector<ASGParam> params;
+};
+
+ASGMaterial asgNewMaterial(const char* materialType)
+{
+    ASGMaterial material = (ASGMaterial)asgNewObject();
+    material->type = ASG_TYPE_MATERIAL;
+    material->impl = (Material*)calloc(1,sizeof(Material));
+    material->dirty = true;
+    ((Material*)material->impl)->type = materialType;
+    return material;
+}
+
+ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param)
+{
+    ((Material*)material->impl)->params.push_back(param);
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgMaterialGetParam(ASGMaterial material, const char* paramName,
+                               ASGParam* param)
+{
+    auto it = std::find_if(((Material*)material->impl)->params.begin(),
+                           ((Material*)material->impl)->params.end(),
+                           [paramName](ASGParam p) {
+                                size_t n=std::max(strlen(paramName),strlen(p.name));
+                                return strncmp(paramName,p.name,n)==0;
+                           });
+
+    if (it != ((Material*)material->impl)->params.end()) {
+        ASGParam p = *it;
+        std::memcpy(param,&p,sizeof(ASGParam));
+        return ASG_ERROR_NO_ERROR;
+    }
+
+    return ASG_ERROR_PARAM_NOT_FOUND;
 }
 
 // ========================================================
@@ -361,7 +596,8 @@ namespace assimp {
     VisitFlags FLAG_ACCUM_TRANSFORMS = 2;
 
     void Visit(aiNode* node, const aiScene* scene, ASGObject obj,
-               aiMatrix4x4 accTransform, VisitFlags flags)
+               const std::vector<ASGMaterial>& materials, aiMatrix4x4 accTransform,
+               VisitFlags flags)
     {
         aiMatrix4x4 transform;
 
@@ -418,8 +654,10 @@ namespace assimp {
 
                     ASGMaterial mat = nullptr;
 
-                    if (scene->HasMaterials()) { // TODO!
-                        unsigned materialID = mesh->mMaterialIndex;
+                    unsigned materialID = mesh->mMaterialIndex;
+
+                    if (materialID < materials.size()) { // TODO: error handling
+                        mat = materials[materialID];
                     }
 
                     ASGTriangleGeometry geom = asgNewTriangleGeometry(vertices,
@@ -444,7 +682,7 @@ namespace assimp {
 
         for (unsigned i=0; i<node->mNumChildren; ++i) {
             if (flags & FLAG_ACCUM_TRANSFORMS) // flatten
-                Visit(node->mChildren[i],scene,obj,transform,flags);
+                Visit(node->mChildren[i],scene,obj,materials,transform,flags);
         }
     }
 } // ::assimp
@@ -463,8 +701,22 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
         return ASG_ERROR_FILE_IO_ERROR;
     }
 
+    std::vector<ASGMaterial> materials;
+    for (unsigned i=0; i<scene->mNumMaterials; ++i) {
+        ASGMaterial mat = asgNewMaterial("");
+
+        aiMaterial* assimpMAT = scene->mMaterials[i];
+        aiColor3D col;
+        assimpMAT->Get(AI_MATKEY_COLOR_DIFFUSE,col);
+
+        float kd[3] = {col.r,col.g,col.b};
+
+        asgMakeMatte(&mat,kd,NULL);
+        materials.push_back(mat);
+        Material* m = (Material*)mat->impl;
+    }
     assimp::VisitFlags vflags = assimp::FLAG_GEOMETRY | assimp::FLAG_ACCUM_TRANSFORMS;
-    assimp::Visit(scene->mRootNode,scene,obj,aiMatrix4x4(),vflags);
+    assimp::Visit(scene->mRootNode,scene,obj,materials,aiMatrix4x4(),vflags);
 
     return ASG_ERROR_NO_ERROR;
 #else
@@ -623,6 +875,17 @@ ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID)
     return ASG_ERROR_NO_ERROR;
 }
 
+ASGError_t asgMakeMatte(ASGMaterial* material, float kd[3], ASGSampler2D mapKD)
+{
+    asgRelease(*material);
+    *material = asgNewMaterial("matte");
+
+    asgMaterialSetParam(*material,asgParam3fv("kd",kd));
+    asgMaterialSetParam(*material,asgParamSampler2D("mapKD",mapKD));
+
+    return ASG_ERROR_NO_ERROR;
+}
+
 // ========================================================
 // Builtin visitors
 // ========================================================
@@ -765,14 +1028,40 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
                     anariCommit(anari->device,anariGeometry);
                 }
 
+                ANARIMaterial anariMat = nullptr;
+
+                if (surf->material != nullptr) {
+                    Material* mat = (Material*)surf->material->impl;
+
+                    if (strncmp(mat->type,"matte",5)==0) {
+                        ASGParam kdParam;
+                        ASGError_t res = asgMaterialGetParam(surf->material,"kd",
+                                                             &kdParam);
+                        if (res != ASG_ERROR_PARAM_NOT_FOUND) {
+                            anariMat = anariNewMaterial(anari->device, "matte");
+                            float kd[3];
+                            asgParamGetValue(kdParam,kd);
+                            //std::cout << kd[0] << ' ' << kd[1] << ' ' << kd[2] << '\n';
+
+                            anariSetParameter(anari->device,anariMat,"color",
+                                              ANARI_FLOAT32_VEC3,kd);
+                            anariCommit(anari->device,anariMat);
+                        }
+                    }
+                }
+
                 surf->anariSurface = anariNewSurface(anari->device);
                 anariSetParameter(anari->device,surf->anariSurface,"geometry",
                                   ANARI_GEOMETRY,&anariGeometry);
-                // TODO: material
+                if (anariMat != nullptr) {
+                    anariSetParameter(anari->device,surf->anariSurface,"material",
+                                      ANARI_MATERIAL,&anariMat);
+                }
                 anariCommit(anari->device,surf->anariSurface);
 
                 anari->surfaces.push_back(surf->anariSurface);
 
+                anariRelease(anari->device,anariMat);
                 anariRelease(anari->device,anariGeometry);
             }
 

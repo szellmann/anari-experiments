@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <anari/anari.h>
@@ -8,10 +9,14 @@
 extern "C" {
 #endif
 
+/*! @file asg.h
+ ANARI Scene Graph (ASG) C99 API */
+
 #define ASGAPI /*TODO*/
 
 typedef int ASGError_t;
 #define ASG_ERROR_NO_ERROR                  0
+#define ASG_ERROR_PARAM_NOT_FOUND           50
 #define ASG_ERROR_MISSING_FILE_HANDLER      100
 #define ASG_ERROR_FILE_IO_ERROR             150
 #define ASG_ERROR_INVALID_LUT_ID            700
@@ -19,16 +24,70 @@ typedef int ASGError_t;
 typedef int ASGType_t;
 #define ASG_TYPE_OBJECT                     0
 #define ASG_TYPE_TRIANGLE_GEOMETRY          1000
-#define ASG_TYPE_SURFACE                    1010
-#define ASG_TYPE_LOOKUP_TABLE1D             1020
-#define ASG_TYPE_STRUCTURED_VOLUME          1030
-#define ASG_TYPE_INSTANCE                   1040
+#define ASG_TYPE_MATERIAL                   1010
+#define ASG_TYPE_SURFACE                    1020
+#define ASG_TYPE_LOOKUP_TABLE1D             1030
+#define ASG_TYPE_STRUCTURED_VOLUME          1040
+#define ASG_TYPE_INSTANCE                   1050
 
 typedef int ASGDataType_t;
-#define ASG_DATA_TYPE_UINT8                 0
-#define ASG_DATA_TYPE_UINT16                1
-#define ASG_DATA_TYPE_UINT32                2
-#define ASG_DATA_TYPE_FLOAT32               3
+#define ASG_DATA_TYPE_INT8                  0
+#define ASG_DATA_TYPE_INT8_VEC1             0
+#define ASG_DATA_TYPE_INT8_VEC2             1
+#define ASG_DATA_TYPE_INT8_VEC3             2
+#define ASG_DATA_TYPE_INT8_VEC4             3
+
+#define ASG_DATA_TYPE_INT16                 10
+#define ASG_DATA_TYPE_INT16_VEC1            10
+#define ASG_DATA_TYPE_INT16_VEC2            11
+#define ASG_DATA_TYPE_INT16_VEC3            12
+#define ASG_DATA_TYPE_INT16_VEC4            13
+
+#define ASG_DATA_TYPE_INT32                 20
+#define ASG_DATA_TYPE_INT32_VEC1            20
+#define ASG_DATA_TYPE_INT32_VEC2            21
+#define ASG_DATA_TYPE_INT32_VEC3            22
+#define ASG_DATA_TYPE_INT32_VEC4            23
+
+#define ASG_DATA_TYPE_INT64                 30
+#define ASG_DATA_TYPE_INT64_VEC1            30
+#define ASG_DATA_TYPE_INT64_VEC2            31
+#define ASG_DATA_TYPE_INT64_VEC3            32
+#define ASG_DATA_TYPE_INT64_VEC4            33
+
+#define ASG_DATA_TYPE_UINT8                 100
+#define ASG_DATA_TYPE_UINT8_VEC1            100
+#define ASG_DATA_TYPE_UINT8_VEC2            101
+#define ASG_DATA_TYPE_UINT8_VEC3            102
+#define ASG_DATA_TYPE_UINT8_VEC4            103
+
+#define ASG_DATA_TYPE_UINT16                110
+#define ASG_DATA_TYPE_UINT16_VEC1           110
+#define ASG_DATA_TYPE_UINT16_VEC2           111
+#define ASG_DATA_TYPE_UINT16_VEC3           112
+#define ASG_DATA_TYPE_UINT16_VEC4           113
+
+#define ASG_DATA_TYPE_UINT32                120
+#define ASG_DATA_TYPE_UINT32_VEC1           120
+#define ASG_DATA_TYPE_UINT32_VEC2           121
+#define ASG_DATA_TYPE_UINT32_VEC3           122
+#define ASG_DATA_TYPE_UINT32_VEC4           123
+
+#define ASG_DATA_TYPE_UINT64                130
+#define ASG_DATA_TYPE_UINT64_VEC1           130
+#define ASG_DATA_TYPE_UINT64_VEC2           131
+#define ASG_DATA_TYPE_UINT64_VEC3           132
+#define ASG_DATA_TYPE_UINT64_VEC4           133
+
+#define ASG_DATA_TYPE_FLOAT32               230
+#define ASG_DATA_TYPE_FLOAT32_VEC1          230
+#define ASG_DATA_TYPE_FLOAT32_VEC2          231
+#define ASG_DATA_TYPE_FLOAT32_VEC3          232
+#define ASG_DATA_TYPE_FLOAT32_VEC4          233
+
+#define ASG_DATA_TYPE_FLOAT64               300
+
+#define ASG_DATA_TYPE_HANDLE                666
 
 typedef int ASGVisitorTraversalType_t;
 #define ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN 0
@@ -52,6 +111,16 @@ typedef struct {
 typedef _ASGVisitor *ASGVisitor;
 
 /* ========================================================
+ * ASGParam
+ * ========================================================*/
+
+typedef struct {
+    const char* name;
+    ASGDataType_t type;
+    struct { uint32_t r0,r1,r2,r3; } value;
+} ASGParam;
+
+/* ========================================================
  * ASGObject
  * ========================================================*/
 
@@ -59,14 +128,42 @@ typedef void _ASGImpl;
 typedef _ASGImpl *ASGImpl;
 
 typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry, *ASGMaterial,
-    *ASGSurface, *ASGLookupTable1D, *ASGStructuredVolume, *ASGInstance;
+    *ASGSurface, *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume, *ASGInstance;
 
 
 /* ========================================================
  * API functions
  * ========================================================*/
 
-// Objects
+//Helpers
+ASGAPI size_t asgSizeOfDataType(ASGDataType_t type);
+
+ASGAPI ASGParam asgParam1i(const char* name, int v1);
+ASGAPI ASGParam asgParam2i(const char* name, int v1, int v2);
+ASGAPI ASGParam asgParam3i(const char* name, int v1, int v2, int v3);
+ASGAPI ASGParam asgParam4i(const char* name, int v1, int v2, int v3, int v4);
+ASGAPI ASGParam asgParam2iv(const char* name, int* v);
+ASGAPI ASGParam asgParam3iv(const char* name, int* v);
+ASGAPI ASGParam asgParam4iv(const char* name, int* v);
+
+ASGAPI ASGParam asgParam1f(const char* name, float v1);
+ASGAPI ASGParam asgParam2f(const char* name, float v1, float v2);
+ASGAPI ASGParam asgParam3f(const char* name, float v1, float v2, float v3);
+ASGAPI ASGParam asgParam4f(const char* name, float v1, float v2, float v3, float v4);
+ASGAPI ASGParam asgParam2fv(const char* name, float* v);
+ASGAPI ASGParam asgParam3fv(const char* name, float* v);
+ASGAPI ASGParam asgParam4fv(const char* name, float* v);
+
+ASGAPI ASGParam asgParamSampler2D(const char* name, ASGSampler2D samp);
+
+ASGAPI ASGError_t asgParamGetValue(ASGParam param, void* mem);
+
+/*! Construct ref-counted objects
+  These are the base type that scene graphs are composed of; objects follow the
+  same ref counting semantics as ANARI. Every object in the scene graph derives
+  from this common object type. Constructor functions are denoted asgNewXXX(),
+  where XXX is the name of the type; this naming scheme indicates that the type
+  is derived from ASGObject */
 ASGAPI ASGObject asgNewObject();
 ASGAPI ASGError_t asgRelease(ASGObject obj);
 ASGAPI ASGError_t asgGetType(ASGObject obj, ASGType_t* type);
@@ -77,6 +174,16 @@ ASGAPI ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGObject, void*), void* us
 ASGAPI ASGError_t asgDestroyVisitor(ASGVisitor visitor);
 ASGAPI ASGError_t asgApplyVisitor(ASGObject obj, ASGVisitor visitor,
                                   ASGVisitorTraversalType_t traversalType);
+
+/*! Construct materials
+  Materials intentionally are simple collections of @see ASGParam's; the
+  application, and also the ANARI implementation, are relatively free to
+  interpret these in any way imaginable. Materials are directly placed in the
+  scene graph where they affect all the surfaces etc. underneath */
+ASGAPI ASGMaterial asgNewMaterial(const char* materialType);
+ASGAPI ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param);
+ASGAPI ASGError_t asgMaterialGetParam(ASGMaterial material, const char* paramName,
+                                      ASGParam* param);
 
 // Geometries
 ASGAPI ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals,
@@ -125,9 +232,10 @@ ASGAPI ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t fl
 ASGAPI ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName,
                                 uint64_t flags);
 
-// Procedural volumes, builtin RGBA LUTs, etc.
+// Procedural volumes, builtin materials, RGBA LUTs, etc.
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);
 ASGAPI ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID);
+ASGAPI ASGError_t asgMakeMatte(ASGMaterial* material, float kd[3], ASGSampler2D mapKD);
 
 // Builtin visitors / routines that traverse the whole graph
 ASGAPI ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ,
