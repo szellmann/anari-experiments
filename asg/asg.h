@@ -28,7 +28,7 @@ typedef int ASGType_t;
 #define ASG_TYPE_SURFACE                    1020
 #define ASG_TYPE_LOOKUP_TABLE1D             1030
 #define ASG_TYPE_STRUCTURED_VOLUME          1040
-#define ASG_TYPE_INSTANCE                   1050
+#define ASG_TYPE_TRANSFORM                  1050
 
 typedef int ASGDataType_t;
 #define ASG_DATA_TYPE_INT8                  0
@@ -112,21 +112,18 @@ typedef uint64_t ASGBuildWorldFlags_t;
 #define ASG_BUILD_WORLD_FLAG_LUTS           0x0000000000000010ULL
 
 #ifdef __cplusplus
-#define ASG_DFLT_PARAM(P) P
+#define ASG_DFLT_PARAM(P) =P
 #else
 #define ASG_DFLT_PARAM(P)
 #endif
 
 struct _ASGObject;
+struct _ASGVisitor;
 
-typedef void (*ASGVisitFunc)(struct _ASGObject*, void*);
+typedef void (*ASGVisitFunc)(struct _ASGVisitor*, struct _ASGObject*, void*);
 typedef void (*ASGFreeFunc)(void*);
 
-typedef struct {
-    ASGVisitFunc visit;
-    void* userData;
-} _ASGVisitor;
-typedef _ASGVisitor *ASGVisitor;
+typedef struct _ASGVisitor *ASGVisitor;
 
 /* ========================================================
  * ASGParam
@@ -146,7 +143,7 @@ typedef void _ASGImpl;
 typedef _ASGImpl *ASGImpl;
 
 typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry, *ASGMaterial,
-    *ASGSurface, *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume, *ASGInstance;
+    *ASGSurface, *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform;
 
 
 /* ========================================================
@@ -186,12 +183,14 @@ ASGAPI ASGObject asgNewObject();
 ASGAPI ASGError_t asgRelease(ASGObject obj);
 ASGAPI ASGError_t asgGetType(ASGObject obj, ASGType_t* type);
 ASGAPI ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child);
+ASGAPI ASGError_t asgObjectAccept(ASGObject obj, ASGVisitor visitor);
 
 // Visitor
-ASGAPI ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGObject, void*), void* userData);
+ASGAPI ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGVisitor, ASGObject, void*),
+                                   void* userData,
+                                   ASGVisitorTraversalType_t traversalType);
 ASGAPI ASGError_t asgDestroyVisitor(ASGVisitor visitor);
-ASGAPI ASGError_t asgApplyVisitor(ASGObject obj, ASGVisitor visitor,
-                                  ASGVisitorTraversalType_t traversalType);
+ASGAPI ASGError_t asgVisitorApply(ASGVisitor visitor, ASGObject obj);
 
 /*! Construct materials
   Materials intentionally are simple collections of @see ASGParam's; the
@@ -218,12 +217,10 @@ ASGAPI ASGSurface asgNewSurface(ASGGeometry geom, ASGMaterial mat);
 ASGAPI ASGGeometry asgSurfaceGetGeometry(ASGSurface surf, ASGGeometry* geom);
 ASGAPI ASGMaterial asgSurfaceGetMaterial(ASGSurface surf, ASGMaterial* mat);
 
-// Instance
-ASGAPI ASGInstance asgNewInstance(ASGObject group, float transform[12],
-                                  ASGMatrixFormat_t format
-                                  ASG_DFLT_PARAM(=ASG_MATRIX_FORMAT_COL_MAJOR));
-ASGAPI ASGError_t asgInstanceGetGroup(ASGInstance inst, ASGObject* group);
-ASGAPI ASGError_t asgInstanceGetTransform(ASGInstance inst, float* transform[12]);
+// Transform
+ASGAPI ASGTransform asgNewTransform(float matrix[12], ASGMatrixFormat_t format
+                                    ASG_DFLT_PARAM(ASG_MATRIX_FORMAT_COL_MAJOR));
+ASGAPI ASGError_t asgTransformGetMatrix(ASGTransform trans, float* matrix[12]);
 
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
@@ -265,13 +262,13 @@ ASGAPI ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName,
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);
 ASGAPI ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID);
 ASGAPI ASGError_t asgMakeMatte(ASGMaterial* material, const char* name, float kd[3],
-                               ASGSampler2D mapKD ASG_DFLT_PARAM(=NULL));
+                               ASGSampler2D mapKD ASG_DFLT_PARAM(NULL));
 
 // Builtin visitors / routines that traverse the whole graph
 
 ASGAPI ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ,
                                    float* maxX, float* maxY, float* maxZ,
-                                   uint64_t nodeMask ASG_DFLT_PARAM(=0));
+                                   uint64_t nodeMask ASG_DFLT_PARAM(0));
 
 /*! Build ANARI world from ASG subgraph
   Visits the subgraph induced by @param obj and updates the ANARI world
@@ -279,8 +276,8 @@ ASGAPI ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, floa
   flag set */
 ASGAPI ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld world,
                                      ASGBuildWorldFlags_t flags
-                                     ASG_DFLT_PARAM(=ASG_BUILD_WORLD_FLAG_FULL_REBUILD),
-                                     uint64_t nodeMask ASG_DFLT_PARAM(=0));
+                                     ASG_DFLT_PARAM(ASG_BUILD_WORLD_FLAG_FULL_REBUILD),
+                                     uint64_t nodeMask ASG_DFLT_PARAM(0));
 
 #ifdef __cplusplus
 }

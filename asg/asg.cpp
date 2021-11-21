@@ -224,7 +224,7 @@ struct _ASGObject {
     // Ref count (TODO!)
 
     // Visitable interface
-    void (*accept)(struct _ASGObject*, ASGVisitor, ASGVisitorTraversalType_t);
+    void (*accept)(struct _ASGObject*, ASGVisitor);
 
     // Private implementation
     ASGImpl impl;
@@ -233,22 +233,32 @@ struct _ASGObject {
     uint64_t mask;
 };
 
-void _asgAccept(struct _ASGObject* _obj, ASGVisitor _visitor,
-                ASGVisitorTraversalType_t traversalType)
-{
-    _visitor->visit(_obj, _visitor->userData);
+struct _ASGVisitor {
+    ASGVisitFunc visit;
+    void* userData;
+    ASGVisitorTraversalType_t traversalType;
 
+    void (*apply)(ASGVisitor, ASGObject); // TODO: C++ ...
+};
+
+void _asgAccept(struct _ASGObject* _obj, ASGVisitor _visitor)
+{
+    _visitor->visit(_visitor, _obj, _visitor->userData);
+}
+
+void _asgApply(ASGVisitor _visitor, struct _ASGObject* _obj)
+{
     ASGObject obj = (ASGObject)_obj;
 
-    if (traversalType==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN) {
+    if (_visitor->traversalType==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN) {
         for (unsigned i=0; i<obj->children.size(); ++i) {
             ASGObject child = obj->children[i];
-            child->accept(child,_visitor,traversalType);
+            child->accept(child,_visitor);
         }
     } else {
         for (unsigned i=0; i<obj->parents.size(); ++i) {
             ASGObject parent = obj->parents[i];
-            parent->accept(parent,_visitor,traversalType);
+            parent->accept(parent,_visitor);
         }
     }
 }
@@ -288,15 +298,25 @@ ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child)
     return ASG_ERROR_NO_ERROR;
 }
 
+ASGError_t asgObjectAccept(ASGObject obj, ASGVisitor visitor)
+{
+    obj->accept(obj,visitor);
+    return ASG_ERROR_NO_ERROR;
+}
+
 // ========================================================
 // Visitor
 // ========================================================
 
-ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGObject, void*), void* userData)
+ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGVisitor, ASGObject, void*),
+                            void* userData,
+                            ASGVisitorTraversalType_t traversalType)
 {
     ASGVisitor visitor = (ASGVisitor)calloc(1,sizeof(_ASGVisitor));
     visitor->visit = (ASGVisitFunc)visitFunc;
     visitor->userData = userData;
+    visitor->traversalType = traversalType;
+    visitor->apply = _asgApply;
     return visitor;
 }
 
@@ -306,10 +326,9 @@ ASGError_t asgDestroyVisitor(ASGVisitor visitor)
     return ASG_ERROR_NO_ERROR;
 }
 
-ASGError_t asgApplyVisitor(ASGObject self, ASGVisitor visitor,
-                           ASGVisitorTraversalType_t traversalType)
+ASGError_t asgVisitorApply(ASGVisitor visitor, ASGObject obj)
 {
-    self->accept(self,visitor,traversalType);
+    visitor->apply(visitor,obj);
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -460,35 +479,25 @@ ASGMaterial asgSurfaceGetMaterial(ASGSurface surf, ASGMaterial* mat)
 }
 
 // ========================================================
-// Instance
+// Transform
 // ========================================================
 
-struct Instance {
-    ASGObject group;
-    float transform[12];
-    // Exclusively used by ANARI build visitors
-    ANARIInstance anariInstance = NULL;
+struct Transform {
+    float matrix[12];
 };
 
-ASGInstance asgNewInstance(ASGObject group, float transform[12])
+ASGTransform asgNewTransform(float matrix[12], ASGMatrixFormat_t format)
 {
-    ASGInstance inst = (ASGInstance)asgNewObject();
-    inst->type = ASG_TYPE_INSTANCE;
-    inst->impl = (Instance*)calloc(1,sizeof(Instance));
-    ((Instance*)inst->impl)->group = group;
-    std::memcpy(((Instance*)inst->impl)->transform,transform,12*sizeof(float));
-    return inst;
+    ASGTransform trans = (ASGTransform)asgNewObject();
+    trans->type = ASG_TYPE_TRANSFORM;
+    trans->impl = (Transform*)calloc(1,sizeof(Transform));
+    std::memcpy(((Transform*)trans->impl)->matrix,matrix,12*sizeof(float));
+    return trans;
 }
 
-ASGError_t asgInstanceGetGroup(ASGInstance inst, ASGObject* group)
+ASGError_t asgTransformGetMatrix(ASGTransform trans, float* matrix[12])
 {
-    *group = ((Instance*)inst->impl)->group;
-    return ASG_ERROR_NO_ERROR;
-}
-
-ASGError_t asgInstanceGetTransform(ASGInstance inst, float* trans[12])
-{
-    std::memcpy(*trans,((Instance*)inst->impl)->transform,12*sizeof(float));
+    std::memcpy(*matrix,((Transform*)trans->impl)->matrix,12*sizeof(float));
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -984,7 +993,7 @@ struct Bounds {
     float maxX, maxY, maxZ;
 };
 
-static void visitBounds(ASGObject obj, void* userData) {
+static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
 
     ASGType_t t;
     asgGetType(obj,&t);
@@ -993,7 +1002,6 @@ static void visitBounds(ASGObject obj, void* userData) {
 
     switch (t)
     {
-        case ASG_TYPE_OBJECT: break;
         case ASG_TYPE_SURFACE: {
             Surface* surf = (Surface*)obj->impl;
             assert(surf->geometry != nullptr);
@@ -1033,7 +1041,12 @@ static void visitBounds(ASGObject obj, void* userData) {
             // TODO!
             break;
         }
-        default: break;
+        case ASG_TYPE_OBJECT:
+            // fall-through
+        default: {
+            asgVisitorApply(self,obj);
+            break;
+        }
     }
 }
 
@@ -1042,8 +1055,9 @@ ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ
 {
     Bounds bounds{+FLT_MAX,+FLT_MAX,+FLT_MAX,
                   -FLT_MAX,-FLT_MAX,-FLT_MAX};
-    ASGVisitor visitor = asgCreateVisitor(visitBounds,&bounds);
-    asgApplyVisitor(obj,visitor,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
+    ASGVisitor visitor = asgCreateVisitor(visitBounds,&bounds,
+                                          ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
+    asgObjectAccept(obj,visitor);
     asgDestroyVisitor(visitor);
 
     *minX = bounds.minX; *minY = bounds.minY; *minZ = bounds.minZ;
@@ -1055,19 +1069,17 @@ ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ
 
 // Build ANARI world
 
-struct ANARIArraySizes {
-    int numVolumes;
-};
-
 struct ANARI {
     ANARIDevice device;
-    ANARIWorld world;
     ASGBuildWorldFlags_t flags;
+    float matrix[12];
+    std::vector<ANARIInstance> instances;
     std::vector<ANARISurface> surfaces;
     std::vector<ANARIVolume> volumes;
+    std::vector<ANARILight> lights;
 };
 
-static void visitANARIWorld(ASGObject obj, void* userData) {
+static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
     ANARI* anari = (ANARI*)userData;
     ASGType_t t;
@@ -1075,7 +1087,17 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
 
     switch (t)
     {
-        case ASG_TYPE_OBJECT: break;
+        case ASG_TYPE_TRANSFORM: {
+            Transform* trans = (Transform*)obj->impl;
+
+            if (anari->flags & ASG_BUILD_WORLD_FLAG_TRANSFORMS) {
+                // TODO!
+                asgVisitorApply(self,obj);
+            }
+
+            break;
+        }
+
         case ASG_TYPE_SURFACE: {
             Surface* surf = (Surface*)obj->impl;
 
@@ -1233,7 +1255,12 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
 
             break;
         }
-        default: break;
+        case ASG_TYPE_OBJECT:
+            // fall-through
+        default: {
+            asgVisitorApply(self,obj);
+            break;
+        }
     }
 }
 
@@ -1242,11 +1269,21 @@ ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld worl
 {
     ANARI anari;
     anari.device = device;
-    anari.world = world;
     anari.flags = flags;
-    ASGVisitor visitor = asgCreateVisitor(visitANARIWorld,&anari);
-    asgApplyVisitor(obj,visitor,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
+    ASGVisitor visitor = asgCreateVisitor(visitANARIWorld,&anari,
+                                          ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
+    asgObjectAccept(obj,visitor);
     asgDestroyVisitor(visitor);
+
+    assert(anari.instances.size()==anari.asgInstances.size());
+
+    if (anari.instances.size() > 0) {
+        ANARIArray1D instances = anariNewArray1D(device,anari.instances.data(),0,0,
+                                                 ANARI_INSTANCE,
+                                                 anari.instances.size(),0);
+        anariSetParameter(device,world,"instance",ANARI_ARRAY1D,&instances);
+        anariRelease(device,instances);
+    }
 
     if (anari.surfaces.size() > 0) {
         ANARIArray1D surfaces = anariNewArray1D(device,anari.surfaces.data(),0,0,
