@@ -460,6 +460,39 @@ ASGMaterial asgSurfaceGetMaterial(ASGSurface surf, ASGMaterial* mat)
 }
 
 // ========================================================
+// Instance
+// ========================================================
+
+struct Instance {
+    ASGObject group;
+    float transform[12];
+    // Exclusively used by ANARI build visitors
+    ANARIInstance anariInstance = NULL;
+};
+
+ASGInstance asgNewInstance(ASGObject group, float transform[12])
+{
+    ASGInstance inst = (ASGInstance)asgNewObject();
+    inst->type = ASG_TYPE_INSTANCE;
+    inst->impl = (Instance*)calloc(1,sizeof(Instance));
+    ((Instance*)inst->impl)->group = group;
+    std::memcpy(((Instance*)inst->impl)->transform,transform,12*sizeof(float));
+    return inst;
+}
+
+ASGError_t asgInstanceGetGroup(ASGInstance inst, ASGObject* group)
+{
+    *group = ((Instance*)inst->impl)->group;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgInstanceGetTransform(ASGInstance inst, float* trans[12])
+{
+    std::memcpy(*trans,((Instance*)inst->impl)->transform,12*sizeof(float));
+    return ASG_ERROR_NO_ERROR;
+}
+
+// ========================================================
 // RGBA luts
 // ========================================================
 
@@ -1207,9 +1240,6 @@ static void visitANARIWorld(ASGObject obj, void* userData) {
 ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld world,
                               ASGBuildWorldFlags_t flags, uint64_t nodeMask)
 {
-    if (flags == 0)
-        flags = ASG_BUILD_WORLD_FLAG_FULL_REBUILD;
-
     ANARI anari;
     anari.device = device;
     anari.world = world;
