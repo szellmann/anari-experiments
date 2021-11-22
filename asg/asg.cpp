@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 #if ASG_HAVE_ASSIMP
 #include <assimp/DefaultLogger.hpp>
@@ -484,6 +485,8 @@ ASGMaterial asgSurfaceGetMaterial(ASGSurface surf, ASGMaterial* mat)
 
 struct Transform {
     float matrix[12];
+    // Exclusively used by ANARI build visitors
+    ANARIInstance anariInstance = NULL;
 };
 
 ASGTransform asgNewTransform(float matrix[12], ASGMatrixFormat_t format)
@@ -1072,12 +1075,37 @@ ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ
 struct ANARI {
     ANARIDevice device;
     ASGBuildWorldFlags_t flags;
-    float matrix[12];
     std::vector<ANARIInstance> instances;
     std::vector<ANARISurface> surfaces;
     std::vector<ANARIVolume> volumes;
     std::vector<ANARILight> lights;
 };
+
+template <typename GroupNode>
+void setANARIEntities(GroupNode groupNode, ANARI& anari)
+{
+    if (anari.instances.size() > 0) {
+        ANARIArray1D instances = anariNewArray1D(anari.device,anari.instances.data(),0,0,
+                                                 ANARI_INSTANCE,
+                                                 anari.instances.size(),0);
+        anariSetParameter(anari.device,groupNode,"instance",ANARI_ARRAY1D,&instances);
+        anariRelease(anari.device,instances);
+    }
+
+    if (anari.surfaces.size() > 0) {
+        ANARIArray1D surfaces = anariNewArray1D(anari.device,anari.surfaces.data(),0,0,
+                                                ANARI_SURFACE,anari.surfaces.size(),0);
+        anariSetParameter(anari.device,groupNode,"surface",ANARI_ARRAY1D,&surfaces);
+        anariRelease(anari.device,surfaces);
+    }
+
+    if (anari.volumes.size() > 0) {
+        ANARIArray1D volumes = anariNewArray1D(anari.device,anari.volumes.data(),0,0,
+                                               ANARI_VOLUME,anari.volumes.size(),0);
+        anariSetParameter(anari.device,groupNode,"volume",ANARI_ARRAY1D,&volumes);
+        anariRelease(anari.device,volumes);
+    }
+}
 
 static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
@@ -1091,8 +1119,46 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
             Transform* trans = (Transform*)obj->impl;
 
             if (anari->flags & ASG_BUILD_WORLD_FLAG_TRANSFORMS) {
-                // TODO!
+
+                // TODO: check if we already found the surface being instances;
+                // this isn't supported by the current implementation yet
+                std::vector<ANARIInstance> instances(anari->instances);
+                std::vector<ANARISurface> surfaces(anari->surfaces);
+                std::vector<ANARIVolume> volumes(anari->volumes);
+                std::vector<ANARILight> lights(anari->lights);
+
+                anari->instances.clear();
+                anari->surfaces.clear();
+                anari->volumes.clear();
+                anari->lights.clear();
+
                 asgVisitorApply(self,obj);
+
+                assert(anari->instances.empty());
+
+                ANARIGroup anariGroup = anariNewGroup(anari->device);
+                setANARIEntities(anariGroup,*anari);
+                anariCommit(anari->device,anariGroup);
+
+
+                anari->instances = std::move(instances);
+                anari->surfaces = std::move(surfaces);
+                anari->volumes = std::move(volumes);
+                anari->lights = std::move(lights);
+
+                if (trans->anariInstance == nullptr)
+                    trans->anariInstance = anariNewInstance(anari->device);
+
+                anariSetParameter(anari->device,trans->anariInstance,"group",
+                                  ANARI_GROUP,&anariGroup);
+                anariSetParameter(anari->device,trans->anariInstance,"transform",
+                                  ANARI_FLOAT32_MAT3x4,trans->matrix);
+
+                anariCommit(anari->device,trans->anariInstance);
+
+                anariRelease(anari->device,anariGroup);
+
+                anari->instances.push_back(trans->anariInstance);
             }
 
             break;
@@ -1275,29 +1341,7 @@ ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld worl
     asgObjectAccept(obj,visitor);
     asgDestroyVisitor(visitor);
 
-    assert(anari.instances.size()==anari.asgInstances.size());
-
-    if (anari.instances.size() > 0) {
-        ANARIArray1D instances = anariNewArray1D(device,anari.instances.data(),0,0,
-                                                 ANARI_INSTANCE,
-                                                 anari.instances.size(),0);
-        anariSetParameter(device,world,"instance",ANARI_ARRAY1D,&instances);
-        anariRelease(device,instances);
-    }
-
-    if (anari.surfaces.size() > 0) {
-        ANARIArray1D surfaces = anariNewArray1D(device,anari.surfaces.data(),0,0,
-                                                ANARI_SURFACE,anari.surfaces.size(),0);
-        anariSetParameter(device,world,"surface",ANARI_ARRAY1D,&surfaces);
-        anariRelease(device,surfaces);
-    }
-
-    if (anari.volumes.size() > 0) {
-        ANARIArray1D volumes = anariNewArray1D(device,anari.volumes.data(),0,0,
-                                               ANARI_VOLUME,anari.volumes.size(),0);
-        anariSetParameter(device,world,"volume",ANARI_ARRAY1D,&volumes);
-        anariRelease(device,volumes);
-    }
+    setANARIEntities(world,anari);
 
     return ASG_ERROR_NO_ERROR;
 }

@@ -188,6 +188,8 @@ struct Model : Scene
                                 == materials.end())
                     materials.push_back(mat);
             }
+
+            ASG_SAFE_CALL(asgVisitorApply(self,obj));
         },&materials,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
         ASG_SAFE_CALL(asgObjectAccept(root,visitor));
 
@@ -197,8 +199,9 @@ struct Model : Scene
                           0.f,0.f,0.f};
         ASGTransform trans = asgNewTransform(matrix);
         ASG_SAFE_CALL(asgObjectAddChild(trans,root));
+
         // Build up ANARI world
-        ASG_SAFE_CALL(asgBuildANARIWorld(trans,device,world,
+        ASG_SAFE_CALL(asgBuildANARIWorld(/*root*/trans,device,world,
                                          ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
         anariCommit(device,world);
