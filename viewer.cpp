@@ -275,6 +275,8 @@ struct Viewer : visionaray::viewer_glut
                     volumeScene->updateLUT(colorVals,alphaVals,dims.x);
                     delete[] alphaVals;
                     delete[] colorVals;
+
+                    anariCommit(anari.device,anari.camera); // provoke rerender
                 }
             }
         }
