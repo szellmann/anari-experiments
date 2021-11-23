@@ -229,6 +229,8 @@ struct Viewer : visionaray::viewer_glut
 
         using namespace support;
 
+        set_background_color({.3f,.3f,.3f});
+
         add_cmdline_option(cl::makeOption<std::string&>(
             cl::Parser<>(),
             "filenames",
@@ -277,10 +279,6 @@ struct Viewer : visionaray::viewer_glut
             }
         }
 
-        float bgColor[4] = {.3f, .3f, .3f, 1.f};
-        anariSetParameter(anari.device, anari.renderer, "backgroundColor", ANARI_FLOAT32_VEC4, bgColor);
-        anariCommit(anari.device, anari.renderer);
-
         int spp=1;
         for (int frames = 0; frames < spp; frames++) {
             anariRenderFrame(anari.device, anari.frame);
@@ -288,6 +286,7 @@ struct Viewer : visionaray::viewer_glut
         }
 
         const uint32_t *fbPointer = (uint32_t *)anariMapFrame(anari.device, anari.frame, "color");
+        visionaray::vec4f bgColor(background_color(),1.f);
         glClearColor(bgColor[0],bgColor[1],bgColor[2],bgColor[3]);
         glClear(GL_COLOR_BUFFER_BIT);
         glEnable(GL_BLEND);
@@ -348,11 +347,17 @@ struct Viewer : visionaray::viewer_glut
                                                  ASG_BUILD_WORLD_FLAG_MATERIALS,0));
 
                 anariCommit(model->device,model->world);
+                anariCommit(anari.device,anari.camera); // provoke rerender
+                on_display();
             }
         }
     }
 
     void on_resize(int w, int h) {
+        visionaray::vec4f bgColor(background_color(),1.f);
+        anariSetParameter(anari.device, anari.renderer, "backgroundColor", ANARI_FLOAT32_VEC4, bgColor.data());
+        anariCommit(anari.device, anari.renderer);
+
         cam.set_viewport(0, 0, w, h);
         float aspect = w/(float)h;
         cam.perspective(45.f * visionaray::constants::degrees_to_radians<float>(), aspect, .001f, 1000.f);
@@ -367,7 +372,8 @@ struct Viewer : visionaray::viewer_glut
     }
 
     void on_mouse_move(const visionaray::mouse_event& event) {
-        resetANARICamera();
+        if (event.buttons() != visionaray::mouse::button::NoButton)
+            resetANARICamera();
         viewer_glut::on_mouse_move(event);
     }
 
