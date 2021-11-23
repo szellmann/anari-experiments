@@ -282,35 +282,25 @@ struct Viewer : visionaray::viewer_glut
         anariCommit(anari.device, anari.renderer);
 
         // Prepare frame for rendering
-        ANARIFrame frame = anariNewFrame(anari.device);
-        unsigned imgSize[2] = { (unsigned)width(), (unsigned)height() };
-        anariSetParameter(anari.device, frame, "size", ANARI_UINT32_VEC2, imgSize);
-        //ANARIDataType fbFormat = ANARI_UFIXED8_VEC4;
-        ANARIDataType fbFormat = ANARI_UFIXED8_RGBA_SRGB;
-        anariSetParameter(anari.device, frame, "color", ANARI_DATA_TYPE, &fbFormat);
-
-        anariSetParameter(anari.device, frame, "renderer", ANARI_RENDERER, &anari.renderer);
-        anariSetParameter(anari.device, frame, "camera", ANARI_CAMERA, &camera);
-        anariSetParameter(anari.device, frame, "world", ANARI_WORLD, &anari.world);
-        anariCommit(anari.device, frame);
+        anariSetParameter(anari.device, anari.frame, "camera", ANARI_CAMERA, &camera);
+        anariCommit(anari.device, anari.frame);
 
         int spp=1;
         for (int frames = 0; frames < spp; frames++) {
-            anariRenderFrame(anari.device, frame);
-            anariFrameReady(anari.device, frame, ANARI_WAIT);
+            anariRenderFrame(anari.device, anari.frame);
+            anariFrameReady(anari.device, anari.frame, ANARI_WAIT);
         }
 
-        const uint32_t *fbPointer = (uint32_t *)anariMapFrame(anari.device, frame, "color");
+        const uint32_t *fbPointer = (uint32_t *)anariMapFrame(anari.device, anari.frame, "color");
         glClearColor(bgColor[0],bgColor[1],bgColor[2],bgColor[3]);
         glClear(GL_COLOR_BUFFER_BIT);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDrawPixels(width(),height(),GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
-        anariUnmapFrame(anari.device, frame, "color");
+        anariUnmapFrame(anari.device, anari.frame, "color");
 
         // TODO: keep persistent where appropriate!
         anariRelease(anari.device, camera);
-        anariRelease(anari.device, frame);
 
         if (dynamic_cast<VolumeScene*>(anari.scene)) {
             ImGui::Begin("Volume");
@@ -374,6 +364,10 @@ struct Viewer : visionaray::viewer_glut
         float aspect = w/(float)h;
         cam.perspective(45.f * visionaray::constants::degrees_to_radians<float>(), aspect, .001f, 1000.f);
 
+        unsigned imgSize[2] = { (unsigned)w, (unsigned)h };
+        anariSetParameter(anari.device, anari.frame, "size", ANARI_UINT32_VEC2, imgSize);
+        anariCommit(anari.device, anari.frame);
+
         viewer_glut::on_resize(w,h);
     }
 
@@ -384,6 +378,7 @@ struct Viewer : visionaray::viewer_glut
         ANARIDevice device = nullptr;
         ANARIRenderer renderer = nullptr;
         ANARIWorld world = nullptr;
+        ANARIFrame frame = nullptr;
         Scene* scene = nullptr;
 
 
@@ -423,6 +418,13 @@ struct Viewer : visionaray::viewer_glut
                 }
             }
             renderer = anariNewRenderer(device, "default");
+            frame = anariNewFrame(device);
+            anariSetParameter(device, frame, "world", ANARI_WORLD, &world);
+            anariCommit(device, frame);
+            //ANARIDataType fbFormat = ANARI_UFIXED8_VEC4;
+            ANARIDataType fbFormat = ANARI_UFIXED8_RGBA_SRGB;
+            anariSetParameter(device, frame, "color", ANARI_DATA_TYPE, &fbFormat);
+            anariSetParameter(device, frame, "renderer", ANARI_RENDERER, &renderer);
             //renderer = anariNewRenderer(device, "raycast");
             //renderer = anariNewRenderer(device, "ao");
 
@@ -430,6 +432,8 @@ struct Viewer : visionaray::viewer_glut
 
         void release() {
             delete scene;
+            anariRelease(device, frame);
+            anariRelease(device, world);
             anariRelease(device, renderer);
             anariRelease(device, world);
             anariRelease(device,device);
