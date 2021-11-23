@@ -239,8 +239,7 @@ struct Viewer : visionaray::viewer_glut
             ));
     }
 
-    void on_display() {
-        // Setup camera for this frame
+    void resetANARICamera() {
         float aspect = cam.aspect();
         float pos[3] = { cam.eye().x, cam.eye().y, cam.eye().z };
         float view[3] = { cam.center().x-cam.eye().x,
@@ -253,7 +252,9 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, anari.camera, "direction", ANARI_FLOAT32_VEC3, &view);
         anariSetParameter(anari.device, anari.camera, "up", ANARI_FLOAT32_VEC3, &up);
         anariCommit(anari.device, anari.camera);
+    }
 
+    void on_display() {
         if (auto volumeScene = dynamic_cast<VolumeScene*>(anari.scene)) {
             if (tfe.updated()) {
                 vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
@@ -360,7 +361,14 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, anari.frame, "size", ANARI_UINT32_VEC2, imgSize);
         anariCommit(anari.device, anari.frame);
 
+        resetANARICamera();
+
         viewer_glut::on_resize(w,h);
+    }
+
+    void on_mouse_move(const visionaray::mouse_event& event) {
+        resetANARICamera();
+        viewer_glut::on_mouse_move(event);
     }
 
     struct {
