@@ -446,6 +446,8 @@ namespace generic {
                     break;
                 }
             }
+
+            renderer.accumID = 0;
         }
 
         void commit(Frame& frame)
