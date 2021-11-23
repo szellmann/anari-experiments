@@ -248,12 +248,11 @@ struct Viewer : visionaray::viewer_glut
                           cam.center().z-cam.eye().z };
         float up[3] = { cam.up().x, cam.up().y, cam.up().z };
 
-        ANARICamera camera = anariNewCamera(anari.device,"perspective");
-        anariSetParameter(anari.device, camera, "aspect", ANARI_FLOAT32, &aspect);
-        anariSetParameter(anari.device, camera, "position", ANARI_FLOAT32_VEC3, &pos);
-        anariSetParameter(anari.device, camera, "direction", ANARI_FLOAT32_VEC3, &view);
-        anariSetParameter(anari.device, camera, "up", ANARI_FLOAT32_VEC3, &up);
-        anariCommit(anari.device, camera);
+        anariSetParameter(anari.device, anari.camera, "aspect", ANARI_FLOAT32, &aspect);
+        anariSetParameter(anari.device, anari.camera, "position", ANARI_FLOAT32_VEC3, &pos);
+        anariSetParameter(anari.device, anari.camera, "direction", ANARI_FLOAT32_VEC3, &view);
+        anariSetParameter(anari.device, anari.camera, "up", ANARI_FLOAT32_VEC3, &up);
+        anariCommit(anari.device, anari.camera);
 
         if (auto volumeScene = dynamic_cast<VolumeScene*>(anari.scene)) {
             if (tfe.updated()) {
@@ -281,10 +280,6 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, anari.renderer, "backgroundColor", ANARI_FLOAT32_VEC4, bgColor);
         anariCommit(anari.device, anari.renderer);
 
-        // Prepare frame for rendering
-        anariSetParameter(anari.device, anari.frame, "camera", ANARI_CAMERA, &camera);
-        anariCommit(anari.device, anari.frame);
-
         int spp=1;
         for (int frames = 0; frames < spp; frames++) {
             anariRenderFrame(anari.device, anari.frame);
@@ -298,9 +293,6 @@ struct Viewer : visionaray::viewer_glut
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDrawPixels(width(),height(),GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
         anariUnmapFrame(anari.device, anari.frame, "color");
-
-        // TODO: keep persistent where appropriate!
-        anariRelease(anari.device, camera);
 
         if (dynamic_cast<VolumeScene*>(anari.scene)) {
             ImGui::Begin("Volume");
@@ -378,6 +370,7 @@ struct Viewer : visionaray::viewer_glut
         ANARIDevice device = nullptr;
         ANARIRenderer renderer = nullptr;
         ANARIWorld world = nullptr;
+        ANARICamera camera = nullptr;
         ANARIFrame frame = nullptr;
         Scene* scene = nullptr;
 
@@ -427,15 +420,20 @@ struct Viewer : visionaray::viewer_glut
             anariSetParameter(device, frame, "renderer", ANARI_RENDERER, &renderer);
             //renderer = anariNewRenderer(device, "raycast");
             //renderer = anariNewRenderer(device, "ao");
+            camera = anariNewCamera(device,"perspective");
+            // Prepare frame for rendering
+            anariSetParameter(device, frame, "camera", ANARI_CAMERA, &camera);
+            anariCommit(device, frame);
 
         }
 
         void release() {
             delete scene;
-            anariRelease(device, frame);
-            anariRelease(device, world);
-            anariRelease(device, renderer);
-            anariRelease(device, world);
+            anariRelease(device,frame);
+            anariRelease(device,camera);
+            anariRelease(device,world);
+            anariRelease(device,renderer);
+            anariRelease(device,world);
             anariRelease(device,device);
             anariUnloadLibrary(library);
         }
