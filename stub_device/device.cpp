@@ -241,18 +241,26 @@ namespace stub {
 
 static char deviceName[] = "stub";
 
-ANARI_DEFINE_LIBRARY_INIT(stub)
+extern "C" ANARI_DEFINE_LIBRARY_NEW_DEVICE(
+    stub, subtype)
 {
-  printf("...loaded stub library!\n");
-  anari::Device::registerType<stub::Device>(deviceName);
+  if (subtype == std::string("default") || subtype == std::string("stub"))
+    return (ANARIDevice) new stub::Device;
+  return nullptr;
 }
 
-ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(stub, libdata)
+extern "C" ANARI_DEFINE_LIBRARY_INIT(stub)
+{
+  printf("...loaded stub library!\n");
+}
+
+extern "C" ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(stub, libdata)
 {
   static const char *devices[] = {deviceName, nullptr};
   return devices;
 }
-ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
+
+extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
     stub, libdata, deviceSubtype, objectType)
 {
   if (objectType == ANARI_RENDERER) {
@@ -266,12 +274,14 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
   }
   return nullptr;
 }
-ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
+
+extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
     stub, libdata, deviceSubtype, objectSubtype, objectType)
 {
   return nullptr;
 }
-ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(stub,
+
+extern "C" ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(stub,
     libdata,
     deviceSubtype,
     objectSubtype,

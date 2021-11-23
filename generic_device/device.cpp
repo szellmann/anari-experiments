@@ -281,18 +281,26 @@ namespace generic {
 
 static char deviceName[] = "generic";
 
-ANARI_DEFINE_LIBRARY_INIT(generic)
+extern "C" ANARI_DEFINE_LIBRARY_NEW_DEVICE(
+    generic, subtype)
 {
-  printf("...loaded generic library!\n");
-  anari::Device::registerType<generic::Device>(deviceName);
+  if (subtype == std::string("default") || subtype == std::string("generic"))
+    return (ANARIDevice) new generic::Device;
+  return nullptr;
 }
 
-ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(generic, libdata)
+extern "C" ANARI_DEFINE_LIBRARY_INIT(generic)
+{
+  printf("...loaded generic library!\n");
+}
+
+extern "C" ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(generic, libdata)
 {
   static const char *devices[] = {deviceName, nullptr};
   return devices;
 }
-ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
+
+extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
     generic, libdata, deviceSubtype, objectType)
 {
   if (objectType == ANARI_RENDERER) {
@@ -311,7 +319,8 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
   }
   return nullptr;
 }
-ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
+
+extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
     generic, libdata, deviceSubtype, objectSubtype, objectType)
 {
   if (objectType == ANARI_RENDERER) {
@@ -319,7 +328,8 @@ ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
   }
   return nullptr;
 }
-ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(generic,
+
+extern "C" ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(generic,
     libdata,
     deviceSubtype,
     objectSubtype,
