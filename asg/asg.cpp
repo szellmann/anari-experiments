@@ -244,7 +244,7 @@ struct _ASGVisitor {
     void (*apply)(ASGVisitor, ASGObject); // TODO: C++ ...
 
     // Used by *internal* visit functions to determine if nodes are visible
-    ASGBool_t visible = ASG_TRUE;
+    ASGBool_t visible;
 };
 
 void _asgAccept(struct _ASGObject* _obj, ASGVisitor _visitor)
@@ -349,6 +349,7 @@ ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGVisitor, ASGObject, void*),
     visitor->userData = userData;
     visitor->traversalType = traversalType;
     visitor->apply = _asgApply;
+    visitor->visible = ASG_TRUE;
     return visitor;
 }
 
