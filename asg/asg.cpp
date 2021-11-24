@@ -20,6 +20,7 @@
 #include <vkt/VolumeFile.hpp>
 #endif
 #include "asg.h"
+#include "linalg.hpp"
 
 // ========================================================
 // Data types
@@ -272,24 +273,28 @@ void _asgApply(ASGVisitor _visitor, struct _ASGObject* _obj)
 // For toggles
 void _asgApplyVisible(ASGVisitor _visitor, struct _ASGObject* _obj, ASGBool_t* visibility)
 {
-    ASGObject obj = (ASGObject)_obj;
+    if (visibility != nullptr) {
+        ASGObject obj = (ASGObject)_obj;
 
-    if (_visitor->traversalType==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN) {
-        for (unsigned i=0; i<obj->children.size(); ++i) {
-            ASGBool_t prev = _visitor->visible;
-            _visitor->visible = visibility[i];
-            ASGObject child = obj->children[i];
-            child->accept(child,_visitor);
-            _visitor->visible = prev;
+        if (_visitor->traversalType==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN) {
+            for (unsigned i=0; i<obj->children.size(); ++i) {
+                ASGBool_t prev = _visitor->visible;
+                _visitor->visible = visibility[i];
+                ASGObject child = obj->children[i];
+                child->accept(child,_visitor);
+                _visitor->visible = prev;
+            }
+        } else {
+            for (unsigned i=0; i<obj->parents.size(); ++i) {
+                ASGBool_t prev = _visitor->visible;
+                _visitor->visible = visibility[i];
+                ASGObject parent = obj->parents[i];
+                parent->accept(parent,_visitor);
+                _visitor->visible = prev;
+            }
         }
     } else {
-        for (unsigned i=0; i<obj->parents.size(); ++i) {
-            ASGBool_t prev = _visitor->visible;
-            _visitor->visible = visibility[i];
-            ASGObject parent = obj->parents[i];
-            parent->accept(parent,_visitor);
-            _visitor->visible = prev;
-        }
+        _asgApply(_visitor,_obj);
     }
 }
 
@@ -1077,8 +1082,8 @@ ASGError_t asgMakeMatte(ASGMaterial* material, const char* name, float kd[3],
 // Compute bounds
 
 struct Bounds {
-    float minX, minY, minZ;
-    float maxX, maxY, maxZ;
+    asg::Vec3f minVal, maxVal;
+    std::vector<asg::Mat4x3f> transStack;
 };
 
 static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
@@ -1090,6 +1095,20 @@ static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
 
     switch (t)
     {
+        case ASG_TYPE_TRANSFORM: {
+            Transform* trans = (Transform*)obj->impl;
+
+            asg::Mat4x3f mat4x3;
+            std::memcpy(&mat4x3,trans->matrix,sizeof(mat4x3));
+            bounds->transStack.push_back(mat4x3);
+
+            asgVisitorApply(self,obj);
+
+            bounds->transStack.pop_back();
+
+            break;
+        }
+
         case ASG_TYPE_SURFACE: {
             Surface* surf = (Surface*)obj->impl;
             assert(surf->geometry != nullptr);
@@ -1100,24 +1119,34 @@ static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
 
                 if (geom->indices != nullptr && geom->numIndices > 0) {
                     for (unsigned i=0; i<geom->numIndices; ++i) {
-                        float* v = &geom->vertices[geom->indices[i]*3];
-                        bounds->minX = std::min(bounds->minX,v[0]);
-                        bounds->minY = std::min(bounds->minX,v[1]);
-                        bounds->minZ = std::min(bounds->minX,v[2]);
-                        bounds->maxX = std::max(bounds->maxX,v[0]);
-                        bounds->maxY = std::max(bounds->maxX,v[1]);
-                        bounds->maxZ = std::max(bounds->maxX,v[2]);
+                        asg::Vec3f v = {
+                            geom->vertices[geom->indices[i]*3],
+                            geom->vertices[geom->indices[i]*3+1],
+                            geom->vertices[geom->indices[i]*3+2]
+                        };
+
+                        for (asg::Mat4x3f trans : bounds->transStack) {
+                            v = trans * asg::Vec4f{v.x,v.y,v.z,1.f};
+                        }
+
+                        bounds->minVal = min(bounds->minVal,v);
+                        bounds->maxVal = max(bounds->maxVal,v);
                     }
                 } else {
                     // No indices, so just insert the verts directly
                     for (unsigned i=0; i<geom->numVertices; ++i) {
-                        float* v = &geom->vertices[i*3];
-                        bounds->minX = std::min(bounds->minX,v[0]);
-                        bounds->minY = std::min(bounds->minX,v[1]);
-                        bounds->minZ = std::min(bounds->minX,v[2]);
-                        bounds->maxX = std::max(bounds->maxX,v[0]);
-                        bounds->maxY = std::max(bounds->maxX,v[1]);
-                        bounds->maxZ = std::max(bounds->maxX,v[2]);
+                        asg::Vec3f v = {
+                            geom->vertices[i*3],
+                            geom->vertices[i*3+1],
+                            geom->vertices[i*3+2]
+                        };
+
+                        for (asg::Mat4x3f trans : bounds->transStack) {
+                            v = trans * asg::Vec4f{v.x,v.y,v.z,1.f};
+                        }
+
+                        bounds->minVal = min(bounds->minVal,v);
+                        bounds->maxVal = max(bounds->maxVal,v);
                     }
                 }
             }
@@ -1141,15 +1170,16 @@ static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
 ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ,
                             float* maxX, float* maxY, float* maxZ, uint64_t nodeMask)
 {
-    Bounds bounds{+FLT_MAX,+FLT_MAX,+FLT_MAX,
-                  -FLT_MAX,-FLT_MAX,-FLT_MAX};
+    Bounds bounds;
+    bounds.minVal = {+FLT_MAX,+FLT_MAX,+FLT_MAX};
+    bounds.maxVal = {-FLT_MAX,-FLT_MAX,-FLT_MAX};
     ASGVisitor visitor = asgCreateVisitor(visitBounds,&bounds,
                                           ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
     asgObjectAccept(obj,visitor);
     asgDestroyVisitor(visitor);
 
-    *minX = bounds.minX; *minY = bounds.minY; *minZ = bounds.minZ;
-    *maxX = bounds.maxX; *maxY = bounds.maxY; *maxZ = bounds.maxZ;
+    *minX = bounds.minVal.x; *minY = bounds.minVal.y; *minZ = bounds.minVal.z;
+    *maxX = bounds.maxVal.x; *maxY = bounds.maxVal.y; *maxZ = bounds.maxVal.z;
 
     return ASG_ERROR_NO_ERROR;
 }
