@@ -1,38 +1,21 @@
 #include <stdio.h>
-#include <algorithm>
 #include <iostream>
 #include <ostream>
 #include <random>
-#include <vector>
+#include <string>
 #include <visionaray/math/math.h>
 #include <visionaray/pinhole_camera.h>
 #include <common/viewer_glut.h>
 #include <common/manip/arcball_manipulator.h>
 #include <common/manip/pan_manipulator.h>
 #include <common/manip/zoom_manipulator.h>
-#include <common/model.h>
-#include <common/sg.h>
 #include <Support/CmdLine.h>
 #include <Support/CmdLineUtil.h>
-#include <vkt/InputStream.hpp>
-#include <vkt/LookupTable.hpp>
-#include <vkt/Resample.hpp>
-#include <vkt/StructuredVolume.hpp>
-#include <vkt/VolumeFile.hpp>
-#include "volkit/src/vkt/TransfuncEditor.hpp"
 #include <asg/asg.h>
 #include <anari/anari_cpp.hpp>
 #include <imgui.h>
-
-#define ASG_SAFE_CALL(X) X
-
-static std::string getExt(const std::string &fileName)
-{
-    int pos = fileName.rfind('.');
-    if (pos == fileName.npos)
-        return "";
-    return fileName.substr(pos);
-}
+#include "scenes.h"
+#include "util.h"
 
 
 void statusFunc(void *userData,
@@ -56,172 +39,9 @@ void statusFunc(void *userData,
         fprintf(stderr, "[INFO] %s\n", message);
 }
 
-struct Scene
-{
-    Scene(ANARIDevice dev, ANARIWorld wrld)
-        : device(dev)
-        , world(wrld)
-    {
-    }
-
-    virtual ~Scene()
-    {
-        ASG_SAFE_CALL(asgRelease(root));
-    }
-
-    virtual visionaray::aabb getBounds()
-    {
-        return {};
-    }
-
-    ANARIDevice device = nullptr;
-    ANARIWorld world = nullptr;
-
-    ASGObject root = nullptr;
-};
-
-// Load volume file or generate default volume
-struct VolumeScene : Scene
-{
-    VolumeScene(ANARIDevice dev, ANARIWorld wrld, const char* fileName = NULL)
-        : Scene(dev,wrld)
-    {
-        root = asgNewObject();
-
-        volDims[0] = volDims[1] = volDims[2] = 0;
-
-        if (fileName != nullptr) {
-            volume = asgNewStructuredVolume(nullptr,0,0,0,ASG_DATA_TYPE_FLOAT32,nullptr);
-            // load volume, resample to FLOAT32 if format is different
-            ASG_SAFE_CALL(asgLoadVOLKIT(volume,fileName,ASG_IO_FLAG_RESAMPLE_VOXEL_TYPE));
-            ASG_SAFE_CALL(asgStructuredVolumeGetDims(volume,&volDims[0],&volDims[1],
-                                                     &volDims[2]));
-        }
-
-        if (volDims[0] == 0) { // volume wasn't loaded; generate one
-            volDims[0] = volDims[1] = volDims[2] = 63;
-
-            volData.resize(volDims[0]*volDims[1]*volDims[2]);
-            volume = asgNewStructuredVolume(volData.data(),volDims[0],volDims[1],volDims[2],
-                                            ASG_DATA_TYPE_FLOAT32,NULL);
-            ASG_SAFE_CALL(asgMakeMarschnerLobb(volume));
-        }
-
-        rgbLUT.resize(15);
-        alphaLUT.resize(5);
-        lut = asgNewLookupTable1D(rgbLUT.data(),alphaLUT.data(),alphaLUT.size(),NULL);
-        ASG_SAFE_CALL(asgMakeDefaultLUT1D(lut,ASG_LUT_ID_DEFAULT_LUT));
-        ASG_SAFE_CALL(asgStructuredVolumeSetLookupTable1D(volume,lut));
-
-        ASG_SAFE_CALL(asgObjectAddChild(root,volume));
-
-        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
-                                         ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
-
-        anariCommit(device,world);
-    }
-
-   ~VolumeScene()
-    {
-        ASG_SAFE_CALL(asgRelease(volume));
-    }
-
-    visionaray::aabb getBounds()
-    {
-        return {{0,0,0},{(float)volDims[0],(float)volDims[1],(float)volDims[2]}};
-    }
-
-    void updateLUT(float* rgb, float* alpha, int numEntries)
-    {
-        rgbLUT.resize(numEntries*3);
-        alphaLUT.resize(numEntries);
-        std::copy(rgb,rgb+numEntries*3,rgbLUT.data());
-        std::copy(alpha,alpha+numEntries,alphaLUT.data());
-
-        ASG_SAFE_CALL(asgRelease(lut));
-        lut = asgNewLookupTable1D(rgbLUT.data(),alphaLUT.data(),alphaLUT.size(),NULL);
-        ASG_SAFE_CALL(asgStructuredVolumeSetLookupTable1D(volume,lut));
-
-        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,ASG_BUILD_WORLD_FLAG_LUTS,0));
-    }
-
-    ASGStructuredVolume volume = nullptr;
-    ASGLookupTable1D lut = nullptr;
-    int volDims[3];
-    std::vector<float> volData;
-    std::vector<float> rgbLUT;
-    std::vector<float> alphaLUT;
-};
-
-// Load scene w/ pbrtParser (TODO)
-struct PBRT : Scene {};
-
-// Load scene w/ assimp
-struct Model : Scene
-{
-    Model(ANARIDevice device, ANARIWorld wrld, const char* fileName)
-        : Scene(device,wrld)
-    {
-        bbox.invalidate();
-
-        root = asgNewObject();
-
-        // Load from file
-        ASG_SAFE_CALL(asgLoadASSIMP(root,fileName,0));
-
-        // Compute bounding box
-        ASG_SAFE_CALL(asgComputeBounds(root,&bbox.min.x,&bbox.min.y,&bbox.min.z,
-                                       &bbox.max.x,&bbox.max.y,&bbox.max.z,0));
-
-        // Assemble material list
-        ASGVisitor visitor = asgCreateVisitor([](ASGVisitor self, ASGObject obj,
-                                                 void* userData) {
-            std::vector<ASGMaterial>& materials
-                        = *((std::vector<ASGMaterial>*)userData);
-            ASGType_t t;
-            ASG_SAFE_CALL(asgGetType(obj,&t));
-
-            if (t==ASG_TYPE_SURFACE) {
-                ASGMaterial mat;
-                ASG_SAFE_CALL(asgSurfaceGetMaterial(obj,&mat));
-                if (mat != nullptr && std::find(materials.begin(),materials.end(),mat)
-                                == materials.end())
-                    materials.push_back(mat);
-            }
-
-            ASG_SAFE_CALL(asgVisitorApply(self,obj));
-        },&materials,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
-        ASG_SAFE_CALL(asgObjectAccept(root,visitor));
-
-        float matrix[] = {1.f,0.f,0.f,
-                          0.f,1.f,0.f,
-                          0.f,0.f,1.f,
-                          0.f,0.f,0.f};
-        ASGTransform trans = asgNewTransform(matrix);
-        ASG_SAFE_CALL(asgObjectAddChild(trans,root));
-
-        // Build up ANARI world
-        ASG_SAFE_CALL(asgBuildANARIWorld(/*root*/trans,device,world,
-                                         ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
-
-        anariCommit(device,world);
-    }
-
-    virtual visionaray::aabb getBounds()
-    {
-        return bbox;
-    }
-
-    visionaray::aabb bbox;
-
-    std::vector<ASGMaterial> materials;
-};
-
 struct Viewer : visionaray::viewer_glut
 {
     visionaray::pinhole_camera cam;
-
-    vkt::TransfuncEditor tfe;
 
     std::string fileName;
 
@@ -257,29 +77,8 @@ struct Viewer : visionaray::viewer_glut
     }
 
     void on_display() {
-        if (auto volumeScene = dynamic_cast<VolumeScene*>(anari.scene)) {
-            if (tfe.updated()) {
-                vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
-                if (lut != nullptr) {
-                    auto dims = lut->getDims();
-                    auto lutData = (float*)lut->getData();
-                    float* colorVals = new float[dims.x*3];
-                    float* alphaVals = new float[dims.x];
-                    for (int i=0; i<dims.x; ++i) {
-                        colorVals[i*3] = lutData[i*4];
-                        colorVals[i*3+1] = lutData[i*4+1];
-                        colorVals[i*3+2] = lutData[i*4+2];
-                        alphaVals[i] = lutData[i*4+3];
-                    }
-                    // Apply transfer function
-                    volumeScene->updateLUT(colorVals,alphaVals,dims.x);
-                    delete[] alphaVals;
-                    delete[] colorVals;
 
-                    anariCommit(anari.device,anari.camera); // provoke rerender
-                }
-            }
-        }
+        anari.scene->beforeRenderFrame();
 
         int spp=1;
         for (int frames = 0; frames < spp; frames++) {
@@ -296,63 +95,14 @@ struct Viewer : visionaray::viewer_glut
         glDrawPixels(width(),height(),GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
         anariUnmapFrame(anari.device, anari.frame, "color");
 
-        if (dynamic_cast<VolumeScene*>(anari.scene)) {
-            ImGui::Begin("Volume");
-            tfe.drawImmediate();
-            ImGui::End();
-        } else if (auto model = dynamic_cast<Model*>(anari.scene)) {
+        anari.scene->afterRenderFrame();
 
-            bool rebuildANARIWorld = false;
+        anari.scene->renderUI();
 
-            ImGui::Begin("Materials");
+        anari.scene->afterRenderUI();
 
-            static const char* current_item = NULL;
-            static ASGMaterial mat = NULL;
-
-            if (ImGui::BeginCombo("##combo", current_item))
-            {
-                for (size_t m=0; m<model->materials.size(); ++m)
-                {
-                    const char* name;
-                    ASG_SAFE_CALL(asgMaterialGetName(model->materials[m],&name));
-                    bool is_selected = (current_item == name);
-                    if (ImGui::Selectable(name, is_selected)) {
-                        mat = model->materials[m];
-                        current_item = name;
-                    }
-
-                    if (is_selected)
-                        ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
-            }
-
-            float kd[3] {0.f,0.f,0.f};
-            if (mat != NULL) {
-                ASGParam kdParam;
-                ASG_SAFE_CALL(asgMaterialGetParam(mat,"kd",&kdParam));
-                ASG_SAFE_CALL(asgParamGetValue(kdParam,kd));
-            }
-
-            if (ImGui::ColorEdit3("Diffuse Color",kd,
-                ImGuiColorEditFlags_HDR|ImGuiColorEditFlags_Float))
-            {
-                if (mat != NULL) {
-                    ASG_SAFE_CALL(asgMaterialSetParam(mat,asgParam3fv("kd",kd)));
-                    rebuildANARIWorld = true;
-                }
-            }
-            ImGui::End();
-
-            if (rebuildANARIWorld) {
-                ASG_SAFE_CALL(asgBuildANARIWorld(model->root,model->device,model->world,
-                                                 ASG_BUILD_WORLD_FLAG_MATERIALS,0));
-
-                anariCommit(model->device,model->world);
-                anariCommit(anari.device,anari.camera); // provoke rerender
-                on_display();
-            }
-        }
+        if (anari.scene->needFrameReset())
+            anariCommit(anari.device,anari.camera); // provoke frame reset
     }
 
     void on_resize(int w, int h) {
@@ -471,30 +221,6 @@ int main(int argc, char** argv)
 
     // Setup ANARI library, device, and renderer
     viewer.anari.init(viewer.fileName);
-
-    // Set up the volkit TFE
-    vkt::LookupTable lut; // keep alive throughout main loop
-    if (auto volumeScene = dynamic_cast<VolumeScene*>(viewer.anari.scene)) {
-        float* rgb;
-        float* alpha;
-        int32_t numEntries;
-
-        ASG_SAFE_CALL(asgLookupTable1DGetRGB(volumeScene->lut, &rgb));
-        ASG_SAFE_CALL(asgLookupTable1DGetAlpha(volumeScene->lut, &alpha));
-        ASG_SAFE_CALL(asgLookupTable1DGetNumEntries(volumeScene->lut, &numEntries));
-
-        std::vector<float> rgba(numEntries*4);
-        for (int32_t i=0; i<numEntries; ++i) {
-            rgba[i*4] = rgb[i*3];
-            rgba[i*4+1] = rgb[i*3+1];
-            rgba[i*4+2] = rgb[i*3+2];
-            rgba[i*4+3] = alpha[i];
-        }
-
-        lut = vkt::LookupTable(5,1,1,vkt::ColorFormat::RGBA32F);
-        lut.setData((uint8_t*)rgba.data());
-        viewer.tfe.setLookupTableResource(lut.getResourceHandle());
-    }
 
     // More boilerplate to set up camera manipulators
     float aspect = viewer.width()/(float)viewer.height();
