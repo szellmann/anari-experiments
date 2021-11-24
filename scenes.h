@@ -58,6 +58,134 @@ struct Scene
     ASGObject root = nullptr;
 };
 
+struct SelectTest : Scene
+{
+    SelectTest(ANARIDevice dev, ANARIWorld wrld)
+        : Scene(dev,wrld)
+    {
+        root = ASG_SAFE_CALL(asgNewSelect());
+
+        static float vertex[] = {-1.f,-1.f,-1.f,
+                                  1.f,-1.f,-1.f,
+                                  1.f, 1.f,-1.f,
+                                 -1.f, 1.f,-1.f,
+                                  1.f,-1.f, 1.f,
+                                 -1.f,-1.f, 1.f,
+                                 -1.f, 1.f, 1.f,
+                                  1.f, 1.f, 1.f};
+
+        static uint32_t index[] = {0,1,2, 0,2,3, 4,5,6, 4,6,7,
+                                   1,4,7, 1,7,2, 5,0,3, 5,3,6,
+                                   5,4,1, 5,1,0, 3,2,7, 3,7,6};
+
+        ASGTriangleGeometry boxGeom = asgNewTriangleGeometry(vertex,NULL,NULL,8,
+                                                             index,12,NULL);
+
+        // 1st
+        ASGMaterial mat1 = asgNewMaterial("","");
+        float red[3] = {1.f,0.f,0.f};
+        ASG_SAFE_CALL(asgMakeMatte(&mat1,"red",red,NULL));
+        ASGSurface surf1 = asgNewSurface(boxGeom,mat1);
+        float matrix1[] = {1.f,0.f,0.f,
+                           0.f,1.f,0.f,
+                           0.f,0.f,1.f,
+                           0.f,0.f,0.f};
+        ASGTransform trans1 = asgNewTransform(matrix1);
+        ASG_SAFE_CALL(asgObjectAddChild(trans1,surf1));
+        ASG_SAFE_CALL(asgObjectAddChild(root,trans1));
+
+        // 2nd
+        ASGMaterial mat2 = asgNewMaterial("","");
+        float yellow[3] = {1.f,1.f,0.f};
+        asgMakeMatte(&mat2,"yellow",yellow,NULL);
+        ASG_SAFE_CALL(ASGSurface surf2 = asgNewSurface(boxGeom,mat2));
+        float matrix2[] = {1.f,0.f,0.f,
+                           0.f,1.f,0.f,
+                           0.f,0.f,1.f,
+                           3.f,0.f,0.f};
+        ASGTransform trans2 = asgNewTransform(matrix2);
+        ASG_SAFE_CALL(asgObjectAddChild(trans2,surf2));
+        ASG_SAFE_CALL(asgObjectAddChild(root,trans2));
+
+        // 3rd
+        ASGMaterial mat3 = asgNewMaterial("","");
+        float green[3] = {0.f,1.f,0.f};
+        ASG_SAFE_CALL(asgMakeMatte(&mat3,"green",green,NULL));
+        ASGSurface surf3 = asgNewSurface(boxGeom,mat3);
+        float matrix3[] = {1.f,0.f,0.f,
+                           0.f,1.f,0.f,
+                           0.f,0.f,1.f,
+                           6.f,0.f,0.f};
+        ASGTransform trans3 = asgNewTransform(matrix3);
+        ASG_SAFE_CALL(asgObjectAddChild(trans3,surf3));
+        ASG_SAFE_CALL(asgObjectAddChild(root,trans3));
+
+        // Build up ANARI world
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                         ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
+
+        anariCommit(device,world);
+    }
+
+    visionaray::aabb getBounds()
+    {
+        visionaray::aabb bbox;
+        bbox.invalidate();
+        ASG_SAFE_CALL(asgComputeBounds(root,&bbox.min.x,&bbox.min.y,&bbox.min.z,
+                                       &bbox.max.x,&bbox.max.y,&bbox.max.z,0));
+        return bbox;
+    }
+
+    virtual void beforeRenderFrame()
+    {
+        if (rebuildANARIWorld) {
+            ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                             ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
+
+            anariCommit(device,world);
+        }
+
+        rebuildANARIWorld = false;
+    }
+
+    void renderUI()
+    {
+        ASGBool_t redBoxVisible, yellowBoxVisible, greenBoxVisible;
+        ASG_SAFE_CALL(asgSelectGetChildVisible(root,0,&redBoxVisible));
+        ASG_SAFE_CALL(asgSelectGetChildVisible(root,1,&yellowBoxVisible));
+        ASG_SAFE_CALL(asgSelectGetChildVisible(root,2,&greenBoxVisible));
+
+        bool redBoxVisibleB(redBoxVisible);
+        bool yellowBoxVisibleB(yellowBoxVisible);
+        bool greenBoxVisibleB(greenBoxVisible);
+
+        ImGui::Begin("Select Test");
+        if (ImGui::Checkbox("Red box", &redBoxVisibleB)) {
+            ASG_SAFE_CALL(asgSelectSetChildVisible(root,0,(ASGBool_t)redBoxVisibleB));
+            rebuildANARIWorld = true;
+        }
+
+        if (ImGui::Checkbox("Yellow box", &yellowBoxVisibleB)) {
+            ASG_SAFE_CALL(asgSelectSetChildVisible(root,1,(ASGBool_t)yellowBoxVisibleB));
+            rebuildANARIWorld = true;
+        }
+
+        if (ImGui::Checkbox("Green box", &greenBoxVisibleB)) {
+            ASG_SAFE_CALL(asgSelectSetChildVisible(root,2,(ASGBool_t)greenBoxVisibleB));
+            rebuildANARIWorld = true;
+        }
+
+        ImGui::End();
+    }
+
+    bool needFrameReset()
+    {
+        return rebuildANARIWorld;
+    }
+
+    bool rebuildANARIWorld = false;
+};
+
 // Load volume file or generate default volume
 struct VolumeScene : Scene
 {

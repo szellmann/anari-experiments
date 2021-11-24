@@ -152,8 +152,10 @@ struct Viewer : visionaray::viewer_glut
             anariCommit(dev,dev);
             device = dev;
             world = anariNewWorld(device);
-            if (fileName.empty())
+            if (fileName.empty() || fileName=="volume-test")
                 scene = new VolumeScene(device,world);
+            else if (fileName=="select-test")
+                scene = new SelectTest(device,world);
             else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
                 scene = new VolumeScene(device,world,fileName.c_str());
             else
