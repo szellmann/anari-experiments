@@ -270,7 +270,7 @@ void _asgApply(ASGVisitor _visitor, struct _ASGObject* _obj)
     }
 }
 
-// For toggles
+// For selects
 void _asgApplyVisible(ASGVisitor _visitor, struct _ASGObject* _obj, ASGBool_t* visibility)
 {
     if (visibility != nullptr) {
@@ -371,55 +371,55 @@ ASGError_t asgVisitorApply(ASGVisitor visitor, ASGObject obj)
 }
 
 // ========================================================
-// Toggle
+// Select
 // ========================================================
 
-struct Toggle {
+struct Select {
     ASGBool_t defaultVisibility;
     std::vector<ASGBool_t> visibility; // per child node
 };
 
-ASGToggle asgNewToggle(ASGBool_t defaultVisibility)
+ASGSelect asgNewSelect(ASGBool_t defaultVisibility)
 {
-    ASGToggle toggle = (ASGToggle)asgNewObject();
-    toggle->type = ASG_TYPE_TOGGLE;
-    toggle->impl = (Toggle*)calloc(1,sizeof(Toggle));
-    ((Toggle*)toggle->impl)->defaultVisibility = defaultVisibility;
+    ASGSelect select = (ASGSelect)asgNewObject();
+    select->type = ASG_TYPE_SELECT;
+    select->impl = (Select*)calloc(1,sizeof(Select));
+    ((Select*)select->impl)->defaultVisibility = defaultVisibility;
 
     // Overwrite to add the child node, and to set the
     // visibility accordingly
     // TODO: ASGObject is a candidate for a class with virtual members :-)
-    toggle->addChild = [](ASGObject obj, ASGObject child) {
-        ASGToggle toggle = (ASGToggle)obj;
-        toggle->children.push_back(child);
+    select->addChild = [](ASGObject obj, ASGObject child) {
+        ASGSelect select = (ASGSelect)obj;
+        select->children.push_back(child);
         child->parents.push_back(obj);
-        ((Toggle*)toggle->impl)->visibility.push_back(
-                ((Toggle*)toggle->impl)->defaultVisibility);
+        ((Select*)select->impl)->visibility.push_back(
+                ((Select*)select->impl)->defaultVisibility);
     };
-    return toggle;
+    return select;
 }
 
-ASGError_t asgToggleSetDefaultVisibility(ASGToggle toggle, ASGBool_t defaultVisibility)
+ASGError_t asgSelectSetDefaultVisibility(ASGSelect select, ASGBool_t defaultVisibility)
 {
-    ((Toggle*)toggle->impl)->defaultVisibility = defaultVisibility;
+    ((Select*)select->impl)->defaultVisibility = defaultVisibility;
     return ASG_ERROR_NO_ERROR;
 }
 
-ASGError_t asgToggleGetDefaultVisibility(ASGToggle toggle, ASGBool_t* defaultVisibility)
+ASGError_t asgSelectGetDefaultVisibility(ASGSelect select, ASGBool_t* defaultVisibility)
 {
-    *defaultVisibility = ((Toggle*)toggle->impl)->defaultVisibility;
+    *defaultVisibility = ((Select*)select->impl)->defaultVisibility;
     return ASG_ERROR_NO_ERROR;
 }
 
-ASGError_t asgToggleSetChildVisible(ASGToggle toggle, int childID, ASGBool_t visible)
+ASGError_t asgSelectSetChildVisible(ASGSelect select, int childID, ASGBool_t visible)
 {
-    ((Toggle*)toggle->impl)->visibility[childID] = visible;
+    ((Select*)select->impl)->visibility[childID] = visible;
     return ASG_ERROR_NO_ERROR;
 }
 
-ASGError_t asgToggleGetChildVisible(ASGToggle toggle, int childID, ASGBool_t* visible)
+ASGError_t asgSelectGetChildVisible(ASGSelect select, int childID, ASGBool_t* visible)
 {
-    *visible = ((Toggle*)toggle->impl)->visibility[childID];
+    *visible = ((Select*)select->impl)->visibility[childID];
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -1230,8 +1230,8 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
     switch (t)
     {
-        case ASG_TYPE_TOGGLE: {
-            _asgApplyVisible(self,obj,((Toggle*)obj->impl)->visibility.data());
+        case ASG_TYPE_SELECT: {
+            _asgApplyVisible(self,obj,((Select*)obj->impl)->visibility.data());
             break;
         }
 

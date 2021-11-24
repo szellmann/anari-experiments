@@ -33,7 +33,7 @@ typedef int ASGType_t;
 #define ASG_TYPE_LOOKUP_TABLE1D             1030
 #define ASG_TYPE_STRUCTURED_VOLUME          1040
 #define ASG_TYPE_TRANSFORM                  1050
-#define ASG_TYPE_TOGGLE                     1060
+#define ASG_TYPE_SELECT                     1060
 
 typedef int ASGDataType_t;
 #define ASG_DATA_TYPE_INT8                  0
@@ -149,7 +149,7 @@ typedef _ASGImpl *ASGImpl;
 
 typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry, *ASGMaterial,
     *ASGSurface, *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform,
-    *ASGToggle;
+    *ASGSelect;
 
 
 /* ========================================================
@@ -198,19 +198,19 @@ ASGAPI ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGVisitor, ASGObject, void
 ASGAPI ASGError_t asgDestroyVisitor(ASGVisitor visitor);
 ASGAPI ASGError_t asgVisitorApply(ASGVisitor visitor, ASGObject obj);
 
-/*! Construct toggle node
-  Toggle nodes are group nodes that store a visibility flag for each child node.
+/*! Construct select node
+  Select nodes are group nodes that store a visibility flag for each child node.
   When a child node is added, its visibility is set to @param defaultVisibility.
   Subtrees that are set to invisible are culled by the visitors that generate
   ANARI groups/worlds */
-ASGAPI ASGToggle asgNewToggle(ASGBool_t defaultVisibility ASG_DFLT_PARAM(ASG_TRUE));
-ASGAPI ASGError_t asgToggleSetDefaultVisibility(ASGToggle toggle,
+ASGAPI ASGSelect asgNewSelect(ASGBool_t defaultVisibility ASG_DFLT_PARAM(ASG_TRUE));
+ASGAPI ASGError_t asgSelectSetDefaultVisibility(ASGSelect select,
                                                 ASGBool_t defaultVisibility);
-ASGAPI ASGError_t asgToggleGetDefaultVisibility(ASGToggle toggle,
+ASGAPI ASGError_t asgSelectGetDefaultVisibility(ASGSelect select,
                                                 ASGBool_t* defaultVisibility);
-ASGAPI ASGError_t asgToggleSetChildVisible(ASGToggle toggle, int childID,
+ASGAPI ASGError_t asgSelectSetChildVisible(ASGSelect select, int childID,
                                            ASGBool_t visible);
-ASGAPI ASGError_t asgToggleGetChildVisible(ASGToggle toggle, int childID,
+ASGAPI ASGError_t asgSelectGetChildVisible(ASGSelect select, int childID,
                                            ASGBool_t*visible);
 
 /*! Construct materials
