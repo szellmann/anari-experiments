@@ -222,6 +222,8 @@ struct _ASGObject {
     std::vector<_ASGObject*> children;
     std::vector<_ASGObject*> parents;
 
+    void (*addChild)(_ASGObject*, _ASGObject*);
+
     // Ref count (TODO!)
 
     // Visitable interface
@@ -240,6 +242,9 @@ struct _ASGVisitor {
     ASGVisitorTraversalType_t traversalType;
 
     void (*apply)(ASGVisitor, ASGObject); // TODO: C++ ...
+
+    // Used by *internal* visit functions to determine if nodes are visible
+    ASGBool_t visible = ASG_TRUE;
 };
 
 void _asgAccept(struct _ASGObject* _obj, ASGVisitor _visitor)
@@ -264,11 +269,39 @@ void _asgApply(ASGVisitor _visitor, struct _ASGObject* _obj)
     }
 }
 
+// For toggles
+void _asgApplyVisible(ASGVisitor _visitor, struct _ASGObject* _obj, ASGBool_t* visibility)
+{
+    ASGObject obj = (ASGObject)_obj;
+
+    if (_visitor->traversalType==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN) {
+        for (unsigned i=0; i<obj->children.size(); ++i) {
+            ASGBool_t prev = _visitor->visible;
+            _visitor->visible = visibility[i];
+            ASGObject child = obj->children[i];
+            child->accept(child,_visitor);
+            _visitor->visible = prev;
+        }
+    } else {
+        for (unsigned i=0; i<obj->parents.size(); ++i) {
+            ASGBool_t prev = _visitor->visible;
+            _visitor->visible = visibility[i];
+            ASGObject parent = obj->parents[i];
+            parent->accept(parent,_visitor);
+            _visitor->visible = prev;
+        }
+    }
+}
+
 ASGObject asgNewObject()
 {
     ASGObject obj = (ASGObject)calloc(1,sizeof(struct _ASGObject));
     obj->type = ASG_TYPE_OBJECT;
     obj->accept = _asgAccept;
+    obj->addChild = [](ASGObject obj, ASGObject child) {
+        obj->children.push_back(child);
+        child->parents.push_back(obj);
+    };
     obj->impl = NULL;
     obj->mask = 0ULL;
     return obj;
@@ -293,9 +326,7 @@ ASGError_t asgRetain(ASGObject obj)
 
 ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child)
 {
-    obj->children.push_back(child);
-    child->parents.push_back(obj);
-
+    obj->addChild(obj,child);
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -330,6 +361,59 @@ ASGError_t asgDestroyVisitor(ASGVisitor visitor)
 ASGError_t asgVisitorApply(ASGVisitor visitor, ASGObject obj)
 {
     visitor->apply(visitor,obj);
+    return ASG_ERROR_NO_ERROR;
+}
+
+// ========================================================
+// Toggle
+// ========================================================
+
+struct Toggle {
+    ASGBool_t defaultVisibility;
+    std::vector<ASGBool_t> visibility; // per child node
+};
+
+ASGToggle asgNewToggle(ASGBool_t defaultVisibility)
+{
+    ASGToggle toggle = (ASGToggle)asgNewObject();
+    toggle->type = ASG_TYPE_TOGGLE;
+    toggle->impl = (Toggle*)calloc(1,sizeof(Toggle));
+    ((Toggle*)toggle->impl)->defaultVisibility = defaultVisibility;
+
+    // Overwrite to add the child node, and to set the
+    // visibility accordingly
+    // TODO: ASGObject is a candidate for a class with virtual members :-)
+    toggle->addChild = [](ASGObject obj, ASGObject child) {
+        ASGToggle toggle = (ASGToggle)obj;
+        toggle->children.push_back(child);
+        child->parents.push_back(obj);
+        ((Toggle*)toggle->impl)->visibility.push_back(
+                ((Toggle*)toggle->impl)->defaultVisibility);
+    };
+    return toggle;
+}
+
+ASGError_t asgToggleSetDefaultVisibility(ASGToggle toggle, ASGBool_t defaultVisibility)
+{
+    ((Toggle*)toggle->impl)->defaultVisibility = defaultVisibility;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgToggleGetDefaultVisibility(ASGToggle toggle, ASGBool_t* defaultVisibility)
+{
+    *defaultVisibility = ((Toggle*)toggle->impl)->defaultVisibility;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgToggleSetChildVisible(ASGToggle toggle, int childID, ASGBool_t visible)
+{
+    ((Toggle*)toggle->impl)->visibility[childID] = visible;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgToggleGetChildVisible(ASGToggle toggle, int childID, ASGBool_t* visible)
+{
+    *visible = ((Toggle*)toggle->impl)->visibility[childID];
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -1115,6 +1199,11 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
     switch (t)
     {
+        case ASG_TYPE_TOGGLE: {
+            _asgApplyVisible(self,obj,((Toggle*)obj->impl)->visibility.data());
+            break;
+        }
+
         case ASG_TYPE_TRANSFORM: {
             Transform* trans = (Transform*)obj->impl;
 
@@ -1158,7 +1247,8 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                 anariRelease(anari->device,anariGroup);
 
-                anari->instances.push_back(trans->anariInstance);
+                if (self->visible)
+                    anari->instances.push_back(trans->anariInstance);
             }
 
             break;
@@ -1240,7 +1330,8 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
             }
             anariCommit(anari->device,surf->anariSurface);
 
-            anari->surfaces.push_back(surf->anariSurface);
+            if (self->visible)
+                anari->surfaces.push_back(surf->anariSurface);
 
             break;
         }
@@ -1317,7 +1408,8 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anariRelease(anari->device, anariOpacity);
             }
 
-            anari->volumes.push_back(vol->anariVolume);
+            if (self->visible)
+                anari->volumes.push_back(vol->anariVolume);
 
             break;
         }
