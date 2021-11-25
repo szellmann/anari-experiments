@@ -220,6 +220,7 @@ ASGError_t asgParamGetValue(ASGParam param, void* mem)
 struct _ASGObject {
     // Node interface
     ASGType_t type;
+    std::string name;
     std::vector<_ASGObject*> children;
     std::vector<_ASGObject*> parents;
 
@@ -329,6 +330,20 @@ ASGError_t asgRetain(ASGObject obj)
     return ASG_ERROR_NO_ERROR;
 }
 
+ASGError_t asgObjectSetName(ASGObject obj, const char* name)
+{
+    obj->name = std::string(name);
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgObjectGetName(ASGObject obj, const char** name)
+{
+    *name = obj->name.c_str();
+
+    return ASG_ERROR_NO_ERROR;
+}
+
 ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child)
 {
     obj->addChild(obj,child);
@@ -429,31 +444,23 @@ ASGError_t asgSelectGetChildVisible(ASGSelect select, int childID, ASGBool_t* vi
 
 struct Material {
     std::string type;
-    std::string name;
     std::vector<ASGParam> params;
     // Exclusively used by ANARI build visitors
     ANARIMaterial anariMaterial = NULL;
 };
 
-ASGMaterial asgNewMaterial(const char* materialType, const char* name)
+ASGMaterial asgNewMaterial(const char* materialType)
 {
     ASGMaterial material = (ASGMaterial)asgNewObject();
     material->type = ASG_TYPE_MATERIAL;
     material->impl = (Material*)calloc(1,sizeof(Material));
     ((Material*)material->impl)->type = materialType;
-    ((Material*)material->impl)->name = name;
     return material;
 }
 
 ASGError_t asgMaterialGetType(ASGMaterial material, const char** materialType)
 {
     *materialType = ((Material*)material->impl)->type.c_str();
-    return ASG_ERROR_NO_ERROR;
-}
-
-ASGError_t asgMaterialGetName(ASGMaterial material, const char** name)
-{
-    *name = ((Material*)material->impl)->name.c_str();
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -890,7 +897,7 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
 
     std::vector<ASGMaterial> materials;
     for (unsigned i=0; i<scene->mNumMaterials; ++i) {
-        ASGMaterial mat = asgNewMaterial("","");
+        ASGMaterial mat = asgNewMaterial("");
 
         aiMaterial* assimpMAT = scene->mMaterials[i];
         aiColor3D col;
@@ -900,7 +907,8 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
 
         float kd[3] = {col.r,col.g,col.b};
 
-        asgMakeMatte(&mat,name.C_Str(),kd,NULL);
+        asgMakeMatte(&mat,kd,NULL);
+        asgObjectSetName(mat,name.C_Str());
         materials.push_back(mat);
         Material* m = (Material*)mat->impl;
     }
@@ -1063,11 +1071,10 @@ ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID)
     return ASG_ERROR_NO_ERROR;
 }
 
-ASGError_t asgMakeMatte(ASGMaterial* material, const char* name, float kd[3],
-                        ASGSampler2D mapKD)
+ASGError_t asgMakeMatte(ASGMaterial* material, float kd[3], ASGSampler2D mapKD)
 {
     asgRelease(*material);
-    *material = asgNewMaterial("matte",name);
+    *material = asgNewMaterial("matte");
 
     asgMaterialSetParam(*material,asgParam3fv("kd",kd));
     asgMaterialSetParam(*material,asgParamSampler2D("mapKD",mapKD));

@@ -82,9 +82,10 @@ struct SelectTest : Scene
                                                              index,12,NULL);
 
         // 1st
-        ASGMaterial mat1 = asgNewMaterial("","");
+        ASGMaterial mat1 = asgNewMaterial("");
         float red[3] = {1.f,0.f,0.f};
-        ASG_SAFE_CALL(asgMakeMatte(&mat1,"red",red,NULL));
+        ASG_SAFE_CALL(asgMakeMatte(&mat1,red,NULL));
+        ASG_SAFE_CALL(asgObjectSetName(mat1,"red"));
         ASGSurface surf1 = asgNewSurface(boxGeom,mat1);
         float matrix1[] = {1.f,0.f,0.f,
                            0.f,1.f,0.f,
@@ -95,9 +96,10 @@ struct SelectTest : Scene
         ASG_SAFE_CALL(asgObjectAddChild(root,trans1));
 
         // 2nd
-        ASGMaterial mat2 = asgNewMaterial("","");
+        ASGMaterial mat2 = asgNewMaterial("");
         float yellow[3] = {1.f,1.f,0.f};
-        asgMakeMatte(&mat2,"yellow",yellow,NULL);
+        ASG_SAFE_CALL(asgMakeMatte(&mat2,yellow,NULL));
+        ASG_SAFE_CALL(asgObjectSetName(mat2,"yellow"));
         ASG_SAFE_CALL(ASGSurface surf2 = asgNewSurface(boxGeom,mat2));
         float matrix2[] = {1.f,0.f,0.f,
                            0.f,1.f,0.f,
@@ -108,9 +110,10 @@ struct SelectTest : Scene
         ASG_SAFE_CALL(asgObjectAddChild(root,trans2));
 
         // 3rd
-        ASGMaterial mat3 = asgNewMaterial("","");
+        ASGMaterial mat3 = asgNewMaterial("");
+        ASG_SAFE_CALL(asgObjectSetName(mat3,"green"));
         float green[3] = {0.f,1.f,0.f};
-        ASG_SAFE_CALL(asgMakeMatte(&mat3,"green",green,NULL));
+        ASG_SAFE_CALL(asgMakeMatte(&mat3,green,NULL));
         ASGSurface surf3 = asgNewSurface(boxGeom,mat3);
         float matrix3[] = {1.f,0.f,0.f,
                            0.f,1.f,0.f,
@@ -405,7 +408,7 @@ struct Model : Scene
             for (size_t m=0; m<materials.size(); ++m)
             {
                 const char* name;
-                ASG_SAFE_CALL(asgMaterialGetName(materials[m],&name));
+                ASG_SAFE_CALL(asgObjectGetName(materials[m],&name));
                 bool is_selected = (current_item == name);
                 if (ImGui::Selectable(name, is_selected)) {
                     mat = materials[m];
