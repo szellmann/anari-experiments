@@ -20,6 +20,7 @@ typedef uint8_t ASGBool_t;
 
 typedef int ASGError_t;
 #define ASG_ERROR_NO_ERROR                  0
+#define ASG_ERROR_INSUFFICIENT_ARRAY_SIZE   10
 #define ASG_ERROR_PARAM_NOT_FOUND           50
 #define ASG_ERROR_MISSING_FILE_HANDLER      100
 #define ASG_ERROR_FILE_IO_ERROR             150
@@ -34,6 +35,7 @@ typedef int ASGType_t;
 #define ASG_TYPE_STRUCTURED_VOLUME          1040
 #define ASG_TYPE_TRANSFORM                  1050
 #define ASG_TYPE_SELECT                     1060
+#define ASG_TYPE_CAMERA                     1070
 
 typedef int ASGDataType_t;
 #define ASG_DATA_TYPE_INT8                  0
@@ -140,6 +142,7 @@ typedef struct {
     struct { uint32_t r0,r1,r2,r3; } value;
 } ASGParam;
 
+
 /* ========================================================
  * ASGObject
  * ========================================================*/
@@ -149,7 +152,7 @@ typedef _ASGImpl *ASGImpl;
 
 typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry, *ASGMaterial,
     *ASGSurface, *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform,
-    *ASGSelect;
+    *ASGSelect, *ASGCamera;
 
 
 /* ========================================================
@@ -214,6 +217,13 @@ ASGAPI ASGError_t asgSelectSetChildVisible(ASGSelect select, int childID,
                                            ASGBool_t visible);
 ASGAPI ASGError_t asgSelectGetChildVisible(ASGSelect select, int childID,
                                            ASGBool_t*visible);
+
+// Camera
+ASGAPI ASGCamera asgNewCamera(const char* cameraType);
+ASGAPI ASGError_t asgCameraGetType(ASGCamera camera, const char** cameraType);
+ASGAPI ASGError_t asgCameraSetParam(ASGCamera camera, ASGParam param);
+ASGAPI ASGError_t asgCameraGetParam(ASGCamera camera, const char* paramName,
+                                    ASGParam* param);
 
 /*! Construct materials
   Materials intentionally are simple collections of @see ASGParam's; the

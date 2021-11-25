@@ -28,65 +28,66 @@
 
 struct TypeInfo {
     ASGDataType_t type;
+    ANARIDataType anariType;
     size_t size;
 };
 
 static const TypeInfo g_typeInfo[] = {
-    { ASG_DATA_TYPE_INT8,                        1  },
-    { ASG_DATA_TYPE_INT8_VEC1,                   1  },
-    { ASG_DATA_TYPE_INT8_VEC2,                   2  },
-    { ASG_DATA_TYPE_INT8_VEC3,                   3  },
-    { ASG_DATA_TYPE_INT8_VEC4,                   4  },
+    { ASG_DATA_TYPE_INT8,        ANARI_INT8,           1  },
+    { ASG_DATA_TYPE_INT8_VEC1,   ANARI_INT8,           1  },
+    { ASG_DATA_TYPE_INT8_VEC2,   ANARI_INT8_VEC2,      2  },
+    { ASG_DATA_TYPE_INT8_VEC3,   ANARI_INT8_VEC3,      3  },
+    { ASG_DATA_TYPE_INT8_VEC4,   ANARI_INT8_VEC4,      4  },
 
-    { ASG_DATA_TYPE_INT16,                       2  },
-    { ASG_DATA_TYPE_INT16_VEC1,                  2  },
-    { ASG_DATA_TYPE_INT16_VEC2,                  4  },
-    { ASG_DATA_TYPE_INT16_VEC3,                  6  },
-    { ASG_DATA_TYPE_INT16_VEC4,                  8  },
+    { ASG_DATA_TYPE_INT16,       ANARI_INT16,          2  },
+    { ASG_DATA_TYPE_INT16_VEC1,  ANARI_INT16,          2  },
+    { ASG_DATA_TYPE_INT16_VEC2,  ANARI_INT16_VEC2,     4  },
+    { ASG_DATA_TYPE_INT16_VEC3,  ANARI_INT16_VEC3,     6  },
+    { ASG_DATA_TYPE_INT16_VEC4,  ANARI_INT16_VEC4,     8  },
 
-    { ASG_DATA_TYPE_INT32,                       4  },
-    { ASG_DATA_TYPE_INT32_VEC1,                  4  },
-    { ASG_DATA_TYPE_INT32_VEC2,                  8  },
-    { ASG_DATA_TYPE_INT32_VEC3,                 12  },
-    { ASG_DATA_TYPE_INT32_VEC4,                 16  },
+    { ASG_DATA_TYPE_INT32,       ANARI_INT32,          4  },
+    { ASG_DATA_TYPE_INT32_VEC1,  ANARI_INT32,          4  },
+    { ASG_DATA_TYPE_INT32_VEC2,  ANARI_INT32_VEC2,     8  },
+    { ASG_DATA_TYPE_INT32_VEC3,  ANARI_INT32_VEC3,    12  },
+    { ASG_DATA_TYPE_INT32_VEC4,  ANARI_INT32_VEC4,    16  },
 
-    { ASG_DATA_TYPE_INT64,                       8  },
-    { ASG_DATA_TYPE_INT64_VEC1,                  8  },
-    { ASG_DATA_TYPE_INT64_VEC2,                 16  },
-    { ASG_DATA_TYPE_INT64_VEC3,                 24  },
-    { ASG_DATA_TYPE_INT64_VEC4,                 32  },
+    { ASG_DATA_TYPE_INT64,       ANARI_INT64,          8  },
+    { ASG_DATA_TYPE_INT64_VEC1,  ANARI_INT64,          8  },
+    { ASG_DATA_TYPE_INT64_VEC2,  ANARI_INT64_VEC2,    16  },
+    { ASG_DATA_TYPE_INT64_VEC3,  ANARI_INT64_VEC3,    24  },
+    { ASG_DATA_TYPE_INT64_VEC4,  ANARI_INT64_VEC4,    32  },
 
-    { ASG_DATA_TYPE_UINT8,                       1  },
-    { ASG_DATA_TYPE_UINT8_VEC1,                  1  },
-    { ASG_DATA_TYPE_UINT8_VEC2,                  2  },
-    { ASG_DATA_TYPE_UINT8_VEC3,                  3  },
-    { ASG_DATA_TYPE_UINT8_VEC4,                  4  },
+    { ASG_DATA_TYPE_UINT8,       ANARI_UINT8,          1  },
+    { ASG_DATA_TYPE_UINT8_VEC1,  ANARI_UINT8,          1  },
+    { ASG_DATA_TYPE_UINT8_VEC2,  ANARI_UINT8_VEC2,     2  },
+    { ASG_DATA_TYPE_UINT8_VEC3,  ANARI_UINT8_VEC3,     3  },
+    { ASG_DATA_TYPE_UINT8_VEC4,  ANARI_UINT8_VEC4,     4  },
 
-    { ASG_DATA_TYPE_UINT16,                      2  },
-    { ASG_DATA_TYPE_UINT16_VEC1,                 2  },
-    { ASG_DATA_TYPE_UINT16_VEC2,                 4  },
-    { ASG_DATA_TYPE_UINT16_VEC3,                 6  },
-    { ASG_DATA_TYPE_UINT16_VEC4,                 8  },
+    { ASG_DATA_TYPE_UINT16,      ANARI_UINT16,         2  },
+    { ASG_DATA_TYPE_UINT16_VEC1, ANARI_UINT16,         2  },
+    { ASG_DATA_TYPE_UINT16_VEC2, ANARI_UINT16_VEC2,    4  },
+    { ASG_DATA_TYPE_UINT16_VEC3, ANARI_UINT16_VEC3,    6  },
+    { ASG_DATA_TYPE_UINT16_VEC4, ANARI_UINT16_VEC4,    8  },
 
-    { ASG_DATA_TYPE_UINT32,                      4  },
-    { ASG_DATA_TYPE_UINT32_VEC1,                 4  },
-    { ASG_DATA_TYPE_UINT32_VEC2,                 8  },
-    { ASG_DATA_TYPE_UINT32_VEC3,                12  },
-    { ASG_DATA_TYPE_UINT32_VEC4,                16  },
+    { ASG_DATA_TYPE_UINT32,      ANARI_UINT32,         4  },
+    { ASG_DATA_TYPE_UINT32_VEC1, ANARI_UINT32,         4  },
+    { ASG_DATA_TYPE_UINT32_VEC2, ANARI_UINT32_VEC2,    8  },
+    { ASG_DATA_TYPE_UINT32_VEC3, ANARI_UINT32_VEC3,   12  },
+    { ASG_DATA_TYPE_UINT32_VEC4, ANARI_UINT32_VEC4,   16  },
 
-    { ASG_DATA_TYPE_UINT64,                      8  },
-    { ASG_DATA_TYPE_UINT64_VEC1,                 8  },
-    { ASG_DATA_TYPE_UINT64_VEC2,                16  },
-    { ASG_DATA_TYPE_UINT64_VEC3,                24  },
-    { ASG_DATA_TYPE_UINT64_VEC4,                32  },
+    { ASG_DATA_TYPE_UINT64,      ANARI_UINT64,         8  },
+    { ASG_DATA_TYPE_UINT64_VEC1, ANARI_UINT64,         8  },
+    { ASG_DATA_TYPE_UINT64_VEC2, ANARI_UINT64_VEC2,   16  },
+    { ASG_DATA_TYPE_UINT64_VEC3, ANARI_UINT64_VEC3,   24  },
+    { ASG_DATA_TYPE_UINT64_VEC4, ANARI_UINT64_VEC4,   32  },
 
-    { ASG_DATA_TYPE_FLOAT32,                     4  },
-    { ASG_DATA_TYPE_FLOAT32_VEC1,                4  },
-    { ASG_DATA_TYPE_FLOAT32_VEC2,                8  },
-    { ASG_DATA_TYPE_FLOAT32_VEC3,               12  },
-    { ASG_DATA_TYPE_FLOAT32_VEC4,               16  },
+    { ASG_DATA_TYPE_FLOAT32,      ANARI_FLOAT32,       4  },
+    { ASG_DATA_TYPE_FLOAT32_VEC1, ANARI_FLOAT32,       4  },
+    { ASG_DATA_TYPE_FLOAT32_VEC2, ANARI_FLOAT32_VEC2,  8  },
+    { ASG_DATA_TYPE_FLOAT32_VEC3, ANARI_FLOAT32_VEC3, 12  },
+    { ASG_DATA_TYPE_FLOAT32_VEC4, ANARI_FLOAT32_VEC4, 16  },
 
-    { ASG_DATA_TYPE_HANDLE,         sizeof(void*)   },
+    { ASG_DATA_TYPE_HANDLE, ANARI_OBJECT /*TODO!!*/,  sizeof(void*)   },
 };
 
 size_t asgSizeOfDataType(ASGDataType_t type)
@@ -212,6 +213,46 @@ ASGError_t asgParamGetValue(ASGParam param, void* mem)
     std::memcpy(mem,&param.value,asgSizeOfDataType(param.type));
     return ASG_ERROR_NO_ERROR;
 }
+
+// ========================================================
+// Params - classes that support params inherit from this!
+// ========================================================
+
+struct Params {
+    std::vector<ASGParam> params;
+
+    void setParam(ASGParam param)
+    {
+        auto it = std::find_if(params.begin(),params.end(),
+                               [param](ASGParam p) {
+                                    size_t n=std::max(strlen(param.name),strlen(p.name));
+                                    return strncmp(param.name,p.name,n)==0;
+                               });
+
+        if (it == params.end()) {
+            params.push_back(param);
+        } else {
+            *it = param;
+        }
+    };
+
+    bool getParam(const char* paramName, ASGParam* param)
+    {
+        auto it = std::find_if(params.begin(),params.end(),
+                               [paramName](ASGParam p) {
+                                    size_t n=std::max(strlen(paramName),strlen(p.name));
+                                    return strncmp(paramName,p.name,n)==0;
+                               });
+
+        if (it != params.end()) {
+            ASGParam p = *it;
+            std::memcpy(param,&p,sizeof(ASGParam));
+            return true;
+        } else {
+            return false;
+        }
+    }
+};
 
 // ========================================================
 // Ref-counted objects
@@ -439,12 +480,51 @@ ASGError_t asgSelectGetChildVisible(ASGSelect select, int childID, ASGBool_t* vi
 }
 
 // ========================================================
+// Camera
+// ========================================================
+
+struct Camera : Params {
+    std::string type;
+};
+
+ASGCamera asgNewCamera(const char* cameraType)
+{
+    ASGCamera camera = (ASGCamera)asgNewObject();
+    camera->type = ASG_TYPE_CAMERA;
+    camera->impl = (Camera*)calloc(1,sizeof(Camera));
+    ((Camera*)camera->impl)->type = cameraType;
+    return camera;
+}
+
+ASGError_t asgCameraGetType(ASGCamera camera, const char** cameraType)
+{
+    *cameraType = ((Camera*)camera->impl)->type.c_str();
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgCameraSetParam(ASGCamera camera, ASGParam param)
+{
+    ((Camera*)camera->impl)->setParam(param);
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgCameraGetParam(ASGCamera camera, const char* paramName, ASGParam* param)
+{
+    bool found = ((Params*)camera->impl)->getParam(paramName,param);
+
+    if (found)
+        return ASG_ERROR_NO_ERROR;
+    else
+        return ASG_ERROR_PARAM_NOT_FOUND;
+}
+
+// ========================================================
 // Material
 // ========================================================
 
-struct Material {
+struct Material : Params {
     std::string type;
-    std::vector<ASGParam> params;
     // Exclusively used by ANARI build visitors
     ANARIMaterial anariMaterial = NULL;
 };
@@ -466,18 +546,7 @@ ASGError_t asgMaterialGetType(ASGMaterial material, const char** materialType)
 
 ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param)
 {
-    auto it = std::find_if(((Material*)material->impl)->params.begin(),
-                           ((Material*)material->impl)->params.end(),
-                           [param](ASGParam p) {
-                                size_t n=std::max(strlen(param.name),strlen(p.name));
-                                return strncmp(param.name,p.name,n)==0;
-                           });
-
-    if (it == ((Material*)material->impl)->params.end()) {
-        ((Material*)material->impl)->params.push_back(param);
-    } else {
-        *it = param;
-    }
+    ((Params*)material->impl)->setParam(param);
 
     return ASG_ERROR_NO_ERROR;
 }
@@ -485,20 +554,12 @@ ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param)
 ASGError_t asgMaterialGetParam(ASGMaterial material, const char* paramName,
                                ASGParam* param)
 {
-    auto it = std::find_if(((Material*)material->impl)->params.begin(),
-                           ((Material*)material->impl)->params.end(),
-                           [paramName](ASGParam p) {
-                                size_t n=std::max(strlen(paramName),strlen(p.name));
-                                return strncmp(paramName,p.name,n)==0;
-                           });
+    bool found = ((Params*)material->impl)->getParam(paramName,param);
 
-    if (it != ((Material*)material->impl)->params.end()) {
-        ASGParam p = *it;
-        std::memcpy(param,&p,sizeof(ASGParam));
+    if (found)
         return ASG_ERROR_NO_ERROR;
-    }
-
-    return ASG_ERROR_PARAM_NOT_FOUND;
+    else
+        return ASG_ERROR_PARAM_NOT_FOUND;
 }
 
 // ========================================================
