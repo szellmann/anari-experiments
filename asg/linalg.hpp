@@ -624,6 +624,34 @@ namespace asg
 
     //--- Mat3f -------------------------------------------
 
+    ASG_FUNC inline Mat3f makeRotation(Vec3f const& axis, float angle)
+    {
+        Vec3f v = normalize(axis);
+        float s = sinf(angle);
+        float c = cosf(angle);
+
+        return Mat3f{
+            { v.x*v.x*(1.f-c)+c, v.x*v.y*(1.f-c)+s*v.z, v.x*v.z*(1.f-c)-s*v.y },
+            { v.y*v.x*(1.f-c)-s*v.z, v.y*v.y*(1.f-c)+c, v.y*v.z*(1.f-c)+s*v.x },
+            { v.x*v.x*(1.f-c)+s*v.y, v.z*v.y*(1.f-c)-s*v.x, v.z*v.z*(1.f-c)+c }
+        };
+    }
+
+    ASG_FUNC inline Mat3f operator*(Mat3f const& a, Mat3f const& b)
+    {
+        return Mat3f{
+            { a.col0.x*b.col0.x + a.col1.x*b.col0.y + a.col2.x*b.col0.z,
+              a.col0.y*b.col0.x + a.col1.y*b.col0.y + a.col2.y*b.col0.z,
+              a.col0.z*b.col0.x + a.col1.z*b.col0.y + a.col2.z*b.col0.z },
+            { a.col0.x*b.col1.x + a.col1.x*b.col1.y + a.col2.x*b.col1.z,
+              a.col0.y*b.col1.x + a.col1.y*b.col1.y + a.col2.y*b.col1.z,
+              a.col0.z*b.col1.x + a.col1.z*b.col1.y + a.col2.z*b.col1.z },
+            { a.col0.x*b.col2.x + a.col1.x*b.col2.y + a.col2.x*b.col2.z,
+              a.col0.y*b.col2.x + a.col1.y*b.col2.y + a.col2.y*b.col2.z,
+              a.col0.z*b.col2.x + a.col1.z*b.col2.y + a.col2.z*b.col2.z }
+        };
+    }
+
     ASG_FUNC inline Vec3f operator*(Mat3f const& a, Vec3f const& b)
     {
         return { 

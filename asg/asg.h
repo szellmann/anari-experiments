@@ -250,9 +250,12 @@ ASGAPI ASGGeometry asgSurfaceGetGeometry(ASGSurface surf, ASGGeometry* geom);
 ASGAPI ASGMaterial asgSurfaceGetMaterial(ASGSurface surf, ASGMaterial* mat);
 
 // Transform
-ASGAPI ASGTransform asgNewTransform(float matrix[12], ASGMatrixFormat_t format
+ASGAPI ASGTransform asgNewTransform(float initialMatrix[12], ASGMatrixFormat_t format
                                     ASG_DFLT_PARAM(ASG_MATRIX_FORMAT_COL_MAJOR));
 ASGAPI ASGError_t asgTransformGetMatrix(ASGTransform trans, float* matrix[12]);
+ASGAPI ASGError_t asgTransformRotate(ASGTransform trans, float axis[3],
+                                     float angleInRadians);
+ASGAPI ASGError_t asgTransformTranslate(ASGTransform trans, float xyz[3]);
 
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,

@@ -647,18 +647,37 @@ struct Transform {
     ANARIInstance anariInstance = NULL;
 };
 
-ASGTransform asgNewTransform(float matrix[12], ASGMatrixFormat_t format)
+ASGTransform asgNewTransform(float initialMatrix[12], ASGMatrixFormat_t format)
 {
     ASGTransform trans = (ASGTransform)asgNewObject();
     trans->type = ASG_TYPE_TRANSFORM;
     trans->impl = (Transform*)calloc(1,sizeof(Transform));
-    std::memcpy(((Transform*)trans->impl)->matrix,matrix,12*sizeof(float));
+    std::memcpy(((Transform*)trans->impl)->matrix,initialMatrix,12*sizeof(float));
     return trans;
 }
 
 ASGError_t asgTransformGetMatrix(ASGTransform trans, float* matrix[12])
 {
     std::memcpy(*matrix,((Transform*)trans->impl)->matrix,12*sizeof(float));
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgTransformRotate(ASGTransform trans, float axis[3], float angleInRadians)
+{
+    asg::Mat3f rot = asg::makeRotation({axis[0],axis[1],axis[2]},angleInRadians);
+    asg::Mat3f current;
+    std::memcpy((void*)&current,((Transform*)trans->impl)->matrix,9*sizeof(float));
+    asg::Mat3f newMatrix = current * rot;
+    std::memcpy(((Transform*)trans->impl)->matrix,(const void*)&newMatrix,
+                9*sizeof(float));
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgTransformTranslate(ASGTransform trans, float xyz[3])
+{
+    ((Transform*)trans->impl)->matrix[ 9] += xyz[0];
+    ((Transform*)trans->impl)->matrix[10] += xyz[1];
+    ((Transform*)trans->impl)->matrix[11] += xyz[2];
     return ASG_ERROR_NO_ERROR;
 }
 
