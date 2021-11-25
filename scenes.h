@@ -451,4 +451,101 @@ struct Model : Scene
     bool rebuildANARIWorld = false;
 };
 
+// Load scene w/ assimp, ground plane, cameras
+struct FilmStudio : Scene
+{
+    FilmStudio(ANARIDevice device, ANARIWorld wrld, const char* fileName)
+        : Scene(device,wrld)
+    {
+        bbox.invalidate();
+
+        root = asgNewObject();
+
+        ASGObject model = asgNewObject();
+
+        // Load from file
+        ASG_SAFE_CALL(asgLoadASSIMP(model,fileName,0));
+
+        // Compute bounding box
+        ASG_SAFE_CALL(asgComputeBounds(model,&bbox.min.x,&bbox.min.y,&bbox.min.z,
+                                       &bbox.max.x,&bbox.max.y,&bbox.max.z,0));
+
+        // Add a ground plane that's slightly bigger
+        float size = visionaray::max_element(bbox.size());
+        size *= 1.5f;
+        float size2 = size*.5f;
+        visionaray::vec3f center = bbox.center();
+        bbox.min = visionaray::vec3f(center.x-size2,bbox.min.y,center.z-size2);
+        bbox.max = visionaray::vec3f(center.x+size2,bbox.max.y,center.z+size2);
+
+        static float groundPlaneVertex[] = {bbox.min.x,bbox.min.y,bbox.min.z,
+                                            bbox.max.x,bbox.min.y,bbox.min.z,
+                                            bbox.max.x,bbox.min.y,bbox.max.z,
+                                            bbox.min.x,bbox.min.y,bbox.max.z};
+
+        static uint32_t groundPlaneIndex[] = {0,1,2, 0,2,3};
+
+        ASGTriangleGeometry groundPlaneGeom = asgNewTriangleGeometry(groundPlaneVertex,
+                                                                     NULL,NULL,4,
+                                                                     groundPlaneIndex,
+                                                                     2,NULL);
+
+        ASGSurface groundPlane = asgNewSurface(groundPlaneGeom,NULL);
+
+        float matrix[] = {1.f,0.f,0.f,
+                          0.f,1.f,0.f,
+                          0.f,0.f,1.f,
+                          0.f,0.f,0.f};
+        modelTransform = asgNewTransform(matrix);
+        ASG_SAFE_CALL(asgObjectAddChild(modelTransform,model));
+        ASG_SAFE_CALL(asgObjectAddChild(root,groundPlane));
+        ASG_SAFE_CALL(asgObjectAddChild(root,modelTransform));
+
+        // Build up ANARI world
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                         ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
+
+        anariCommit(device,world);
+    }
+
+    virtual void beforeRenderFrame()
+    {
+        float axis[3] = { 0,1,0 };
+        asgTransformRotate(modelTransform,axis,.02f);
+
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                         ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
+        resetFrame = true;
+    }
+
+    virtual bool needFrameReset()
+    {
+        if (resetFrame) {
+            resetFrame = false;
+            return true;
+        }
+
+        return false;
+    }
+
+    virtual visionaray::aabb getBounds()
+    {
+        return bbox;
+    }
+
+    virtual void renderUI()
+    {
+        ImGui::Begin("Materials");
+        ImGui::End();
+    }
+
+    visionaray::aabb bbox;
+
+    bool resetFrame = false;
+
+    ASGTransform modelTransform;
+    ASGTransform camTransform1;
+    ASGCamera cam1;
+};
+
 

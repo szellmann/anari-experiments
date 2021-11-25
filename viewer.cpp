@@ -159,7 +159,7 @@ struct Viewer : visionaray::viewer_glut
             else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
                 scene = new VolumeScene(device,world,fileName.c_str());
             else
-                scene = new Model(device,world,fileName.c_str());
+                scene = new FilmStudio(device,world,fileName.c_str());
 
             // Setup renderer
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);
