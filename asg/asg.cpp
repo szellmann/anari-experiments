@@ -1343,15 +1343,25 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                 assert(anari->instances.empty());
 
-                ANARIGroup anariGroup = anariNewGroup(anari->device);
-                setANARIEntities(anariGroup,*anari);
-                anariCommit(anari->device,anariGroup);
+                bool notEmpty = anari->surfaces.size() || anari->volumes.size()
+                                    || anari->lights.size();
+
+                ANARIGroup anariGroup = nullptr;
+
+                if (notEmpty) {
+                    anariGroup = anariNewGroup(anari->device);
+                    setANARIEntities(anariGroup,*anari);
+                    anariCommit(anari->device,anariGroup);
+                }
 
 
                 anari->instances = std::move(instances);
                 anari->surfaces = std::move(surfaces);
                 anari->volumes = std::move(volumes);
                 anari->lights = std::move(lights);
+
+                if (!notEmpty)
+                    break;
 
                 if (trans->anariInstance == nullptr)
                     trans->anariInstance = anariNewInstance(anari->device);
