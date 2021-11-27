@@ -656,9 +656,15 @@ ASGTransform asgNewTransform(float initialMatrix[12], ASGMatrixFormat_t format)
     return trans;
 }
 
-ASGError_t asgTransformGetMatrix(ASGTransform trans, float* matrix[12])
+ASGError_t asgTransformSetMatrix(ASGTransform trans, float matrix[12])
 {
-    std::memcpy(*matrix,((Transform*)trans->impl)->matrix,12*sizeof(float));
+    std::memcpy(((Transform*)trans->impl)->matrix,(const void*)matrix,12*sizeof(float));
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgTransformGetMatrix(ASGTransform trans, float matrix[12])
+{
+    std::memcpy(matrix,((Transform*)trans->impl)->matrix,12*sizeof(float));
     return ASG_ERROR_NO_ERROR;
 }
 

@@ -97,7 +97,7 @@ struct Viewer : visionaray::viewer_glut
 
         anari.scene->afterRenderFrame();
 
-        anari.scene->renderUI();
+        anari.scene->renderUI(cam);
 
         anari.scene->afterRenderUI();
 
@@ -123,10 +123,21 @@ struct Viewer : visionaray::viewer_glut
         viewer_glut::on_resize(w,h);
     }
 
+    void on_mouse_down(const visionaray::mouse_event& event) {
+        if (!anari.scene->handleMouseDown(event))
+            viewer_glut::on_mouse_down(event);
+    }
+
+    void on_mouse_up(const visionaray::mouse_event& event) {
+        if (!anari.scene->handleMouseUp(event))
+            viewer_glut::on_mouse_up(event);
+    }
+
     void on_mouse_move(const visionaray::mouse_event& event) {
         if (event.buttons() != visionaray::mouse::button::NoButton)
             resetANARICamera();
-        viewer_glut::on_mouse_move(event);
+        if (!anari.scene->handleMouseMove(event))
+            viewer_glut::on_mouse_move(event);
     }
 
     struct {
@@ -159,7 +170,7 @@ struct Viewer : visionaray::viewer_glut
             else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
                 scene = new VolumeScene(device,world,fileName.c_str());
             else
-                scene = new FilmStudio(device,world,fileName.c_str());
+                scene = new Model(device,world,fileName.c_str());
 
             // Setup renderer
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);
@@ -179,6 +190,8 @@ struct Viewer : visionaray::viewer_glut
                 }
             }
             renderer = anariNewRenderer(device, "default");
+            //int aoSamples = 0;
+            //anariSetParameter(device, renderer, "aoSamples", ANARI_INT32, &aoSamples);
             frame = anariNewFrame(device);
             anariSetParameter(device, frame, "world", ANARI_WORLD, &world);
             anariCommit(device, frame);

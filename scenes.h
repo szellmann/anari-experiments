@@ -1,8 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <memory>
 #include <vector>
 #include <visionaray/math/math.h>
+#include <visionaray/pinhole_camera.h>
+#include <common/manip/rotate_manipulator.h>
+#include <common/manip/translate_manipulator.h>
 #include <vkt/InputStream.hpp>
 #include <vkt/LookupTable.hpp>
 #include <vkt/Resample.hpp>
@@ -39,12 +43,27 @@ struct Scene
     {
     }
 
-    virtual void renderUI()
+    virtual void renderUI(visionaray::pinhole_camera const&)
     {
     }
 
     virtual void afterRenderUI()
     {
+    }
+
+    virtual bool handleMouseDown(visionaray::mouse_event const&)
+    {
+        return false;
+    }
+
+    virtual bool handleMouseUp(visionaray::mouse_event const&)
+    {
+        return false;
+    }
+
+    virtual bool handleMouseMove(visionaray::mouse_event const&)
+    {
+        return false;
     }
 
     virtual bool needFrameReset()
@@ -151,7 +170,7 @@ struct SelectTest : Scene
         rebuildANARIWorld = false;
     }
 
-    void renderUI()
+    void renderUI(visionaray::pinhole_camera const&)
     {
         ASGBool_t redBoxVisible, yellowBoxVisible, greenBoxVisible;
         ASG_SAFE_CALL(asgSelectGetChildVisible(root,0,&redBoxVisible));
@@ -286,7 +305,7 @@ struct VolumeScene : Scene
         }
     }
 
-    void renderUI()
+    void renderUI(visionaray::pinhole_camera const&)
     {
         ImGui::Begin("Volume");
         tfe.drawImmediate();
@@ -396,7 +415,7 @@ struct Model : Scene
         rebuildANARIWorld = false;
     }
 
-    virtual void renderUI()
+    virtual void renderUI(visionaray::pinhole_camera const&)
     {
         ImGui::Begin("Materials");
 
@@ -457,6 +476,8 @@ struct FilmStudio : Scene
     FilmStudio(ANARIDevice device, ANARIWorld wrld, const char* fileName)
         : Scene(device,wrld)
     {
+        texture = GLuint(-1);
+
         bbox.invalidate();
 
         root = asgNewObject();
@@ -501,21 +522,217 @@ struct FilmStudio : Scene
         ASG_SAFE_CALL(asgObjectAddChild(root,groundPlane));
         ASG_SAFE_CALL(asgObjectAddChild(root,modelTransform));
 
+        visionaray::vec3f camPos = bbox.max - bbox.size()*.3f;
+        camTransform1 = asgNewTransform(matrix);
+        ASG_SAFE_CALL(asgTransformTranslate(camTransform1,camPos.data()));
+        ASG_SAFE_CALL(asgObjectAddChild(root,camTransform1));
+
+        static float vertex[] = {-.5f,-.3f,-.3f,
+                                  .5f,-.3f,-.3f,
+                                  .5f, .3f,-.3f,
+                                 -.5f, .3f,-.3f,
+                                  .5f,-.3f, .3f,
+                                 -.5f,-.3f, .3f,
+                                 -.5f, .3f, .3f,
+                                  .5f, .3f, .3f};
+
+        static uint32_t index[] = {0,1,2, 0,2,3, 4,5,6, 4,6,7,
+                                   1,4,7, 1,7,2, 5,0,3, 5,3,6,
+                                   5,4,1, 5,1,0, 3,2,7, 3,7,6};
+
+        ASGTriangleGeometry boxGeom = asgNewTriangleGeometry(vertex,NULL,NULL,8,
+                                                             index,12,NULL);
+        // ASGSurface boxSurf = asgNewSurface(boxGeom,NULL);
+        // ASG_SAFE_CALL(asgObjectAddChild(camTransform1,boxSurf));
+
+        // Movable camera
+        cam1 = asgNewCamera("perspective");
+        float pos[] = { 0.f, 0.f, 0.f };
+        ASG_SAFE_CALL(asgCameraSetParam(cam1,asgParam3fv("position",pos)));
+        float dir[] = { -1.f, 0.f, 0.f };
+        ASG_SAFE_CALL(asgCameraSetParam(cam1,asgParam3fv("direction",dir)));
+        float up[] = { 0.f, 1.f, 0.f };
+        ASG_SAFE_CALL(asgCameraSetParam(cam1,asgParam3fv("up",up)));
+        ASG_SAFE_CALL(asgObjectAddChild(camTransform1,cam1));
+
         // Build up ANARI world
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                          ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
         anariCommit(device,world);
+
+        // Init cam matrix
+        float m[12];
+        ASG_SAFE_CALL(asgTransformGetMatrix(camTransform1,m));
+        camMat4(0,0)=m[0]; camMat4(0,1)=m[1]; camMat4(0,2)=m[2];
+        camMat4(1,0)=m[3]; camMat4(1,1)=m[4]; camMat4(1,2)=m[5];
+        camMat4(2,0)=m[6]; camMat4(2,1)=m[7]; camMat4(2,2)=m[8];
+        camMat4(0,3)=m[9]; camMat4(1,3)=m[10]; camMat4(2,3)=m[11];
     }
 
     virtual void beforeRenderFrame()
     {
         float axis[3] = { 0,1,0 };
-        asgTransformRotate(modelTransform,axis,.02f);
+        asgTransformRotate(modelTransform,axis,.002f);
 
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                          ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
+
+        anariCommit(device,world);
+
         resetFrame = true;
+    }
+
+    virtual void renderUI(visionaray::pinhole_camera const& cam)
+    {
+        unsigned width = 320, height = 240;
+
+        struct Data {
+            ANARIDevice device;
+            ASGCamera cam;
+            ANARICamera anariCamera;
+            float aspect;
+            std::vector<visionaray::mat4x3> transStack;
+        };
+        Data data;
+        data.device = device;
+        data.cam = cam1;
+        data.anariCamera = anariNewCamera(device,"perspective");
+        data.aspect = width/(float)height;
+
+        ASGVisitor visitor = asgCreateVisitor(
+            [](ASGVisitor self, ASGObject obj, void* userData)
+            {
+                Data* data = (Data*)userData;
+                ASGType_t t;
+                asgGetType(obj,&t);
+
+                if (obj==data->cam) {
+                    float position[3] {0.f,0.f,0.f};
+                    float direction[3] {0.f,0.f,0.f};
+                    float up[3] {0.f,0.f,0.f};
+                    ASGParam positionParam, directionParam, upParam;
+                    ASG_SAFE_CALL(asgCameraGetParam(obj,"position",&positionParam));
+                    ASG_SAFE_CALL(asgParamGetValue(positionParam,position));
+                    ASG_SAFE_CALL(asgCameraGetParam(obj,"direction",&directionParam));
+                    ASG_SAFE_CALL(asgParamGetValue(directionParam,direction));
+                    ASG_SAFE_CALL(asgCameraGetParam(obj,"up",&upParam));
+                    ASG_SAFE_CALL(asgParamGetValue(upParam,up));
+
+                    for (size_t i=0; i<data->transStack.size(); ++i) {
+                        //visionaray::vec3f pPos = (visionaray::vec3f(position) * data->transStack[i]).xyz();
+                        visionaray::vec3f pPos = visionaray::vec3f(position) + data->transStack[i].col3;
+                        position[0] = pPos[0]; position[1] = pPos[1]; position[2] = pPos[2];
+                        visionaray::vec3f vDir = data->transStack[i] * visionaray::vec4f(visionaray::vec3f(direction),0.f);
+                        direction[0] = vDir.x; direction[1] = vDir[1]; direction[2] = vDir[2];
+                        visionaray::vec3f vUp = data->transStack[i] * visionaray::vec4f(visionaray::vec3f(up),0.f);
+                        up[0] = vUp.x; up[1] = vUp[1]; up[2] = vUp[2];
+                    }
+
+                    // for (int i=0; i<3; ++i) std::cout << position[i] << ' ';
+                    // std::cout << '\n';
+
+                    // for (int i=0; i<3; ++i) std::cout << direction[i] << ' ';
+                    // std::cout << '\n';
+
+                    // for (int i=0; i<3; ++i) std::cout << up[i] << ' ';
+                    // std::cout << '\n';
+                    // std::cout << '\n';
+
+                    anariSetParameter(data->device, data->anariCamera, "aspect", ANARI_FLOAT32, &data->aspect);
+                    anariSetParameter(data->device, data->anariCamera, "position", ANARI_FLOAT32_VEC3, position);
+                    anariSetParameter(data->device, data->anariCamera, "direction", ANARI_FLOAT32_VEC3, direction);
+                    anariSetParameter(data->device, data->anariCamera, "up", ANARI_FLOAT32_VEC3, up);
+                    anariCommit(data->device,data->anariCamera);
+
+                } else if (t==ASG_TYPE_TRANSFORM) {
+                    visionaray::mat4x3 m4x3;
+                    float* d = m4x3.data();
+                    ASG_SAFE_CALL(asgTransformGetMatrix(obj,m4x3.data()));
+                    data->transStack.push_back(m4x3);
+                }
+                ASG_SAFE_CALL(asgVisitorApply(self,obj));
+            },
+            &data,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN
+        );
+        ASG_SAFE_CALL(asgVisitorApply(visitor,root));
+
+        printSceneGraph(root,true);
+
+        if (renderer == nullptr) {
+            renderer = anariNewRenderer(device,"default");
+            anariCommit(device,renderer);
+        }
+
+        if (frame == nullptr) {
+            frame = anariNewFrame(device);
+            anariSetParameter(device,frame,"world",ANARI_WORLD,&world);
+            unsigned imgSize[2] = { width, height };
+            anariSetParameter(device,frame,"size",ANARI_UINT32_VEC2,imgSize);
+            anariSetParameter(device,frame,"renderer",ANARI_RENDERER,&renderer);
+            anariCommit(device,frame);
+        }
+
+        if (cameraChanged) {
+            anariSetParameter(device,frame,"camera",ANARI_CAMERA,&data.anariCamera);
+            anariCommit(device,frame);
+        }
+        anariRenderFrame(device,frame);
+        anariFrameReady(device,frame,ANARI_WAIT);
+        const uint32_t *fbPointer = (uint32_t *)anariMapFrame(device, frame, "color");
+        ImGui::Begin("Cam1");
+
+        if (texture == GLuint(-1))
+        {
+            glGenTextures(1, &texture);
+            glBindTexture(GL_TEXTURE_2D, texture);
+        }
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
+
+        ImGui::ImageButton(
+            (void*)(intptr_t)texture,
+            ImVec2(width,height),
+            ImVec2(0, 1),
+            ImVec2(1, 0),
+            0 // frame size = 0
+            );
+        anariUnmapFrame(device, frame, "color");
+        ImGui::End();
+        if (rotManip == nullptr) {
+            rotManip = std::make_shared<visionaray::rotate_manipulator>(
+                cam,
+                camMat4,
+                visionaray::vec3f(bbox.size().z*.1f),
+                visionaray::mouse::Left,
+                3
+            );
+
+            rotManip->set_active(true);
+        }
+
+        if (transManip == nullptr) {
+            transManip = std::make_shared<visionaray::translate_manipulator>(
+                cam,
+                camMat4,
+                visionaray::vec3f(bbox.size().z*.1f),
+                visionaray::mouse::Left,
+                3
+            );
+
+            //transManip->set_active(true);
+        }
+
+        if (rotManip->active())
+             rotManip->render();
+
+        if (transManip->active())
+            transManip->render();
+        // ImGui::Begin("Materials");
+        // ImGui::End();
     }
 
     virtual bool needFrameReset()
@@ -528,24 +745,96 @@ struct FilmStudio : Scene
         return false;
     }
 
+    virtual bool handleMouseDown(visionaray::mouse_event const& event)
+    {
+        if (rotManip && rotManip->active()) {
+            if (rotManip->handle_mouse_down(event)) {
+                return true;
+            }
+        }
+
+        if (transManip && transManip->active()) {
+            if (transManip->handle_mouse_down(event)) {
+                return true;
+            }
+        }
+
+        return Scene::handleMouseDown(event);
+    }
+
+    virtual bool handleMouseUp(visionaray::mouse_event const& event)
+    {
+        if (rotManip && rotManip->active()) {
+            if (rotManip->handle_mouse_up(event)) {
+                return true;
+            }
+        }
+
+        if (transManip && transManip->active()) {
+            if (transManip->handle_mouse_up(event)) {
+                return true;
+            }
+        }
+
+        return Scene::handleMouseUp(event);
+    }
+
+    virtual bool handleMouseMove(visionaray::mouse_event const& event)
+    {
+        float m[12];
+        m[0]=camMat4(0,0); m[1]=camMat4(1,0); m[2]=camMat4(2,0);
+        m[3]=camMat4(0,1); m[4]=camMat4(1,1); m[5]=camMat4(2,1);
+        m[6]=camMat4(0,2); m[7]=camMat4(1,2); m[8]=camMat4(2,2);
+        m[9]=camMat4(0,3); m[10]=camMat4(1,3); m[11]=camMat4(2,3);
+
+        if (rotManip && rotManip->active()) {
+            if (rotManip->handle_mouse_move(event)) {
+                ASG_SAFE_CALL(asgTransformSetMatrix(camTransform1,m));
+                ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                                 ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
+                cameraChanged = true;
+                return true;
+            }
+        }
+
+        if (transManip && transManip->active()) {
+            if (transManip->handle_mouse_move(event)) {
+                ASG_SAFE_CALL(asgTransformSetMatrix(camTransform1,m));
+                ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                                 ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
+                cameraChanged = true;
+                return true;
+            }
+        }
+
+        cameraChanged = false;
+
+        return Scene::handleMouseMove(event);
+    }
+
     virtual visionaray::aabb getBounds()
     {
         return bbox;
     }
 
-    virtual void renderUI()
-    {
-        ImGui::Begin("Materials");
-        ImGui::End();
-    }
-
     visionaray::aabb bbox;
 
+    bool cameraChanged = true;
+
     bool resetFrame = false;
+
+    GLuint texture;
+
+    ANARIRenderer renderer = nullptr;
+    ANARIFrame frame = nullptr;
 
     ASGTransform modelTransform;
     ASGTransform camTransform1;
     ASGCamera cam1;
+
+    std::shared_ptr<visionaray::rotate_manipulator> rotManip = nullptr;
+    std::shared_ptr<visionaray::translate_manipulator> transManip = nullptr;
+    visionaray::mat4 camMat4 = visionaray::mat4::identity();
 };
 
 
