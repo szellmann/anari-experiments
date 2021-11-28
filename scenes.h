@@ -522,7 +522,7 @@ struct FilmStudio : Scene
         ASG_SAFE_CALL(asgObjectAddChild(root,groundPlane));
         ASG_SAFE_CALL(asgObjectAddChild(root,modelTransform));
 
-        visionaray::vec3f camPos = bbox.max - bbox.size()*.3f;
+        visionaray::vec3f camPos = bbox.max - bbox.size()*.1f;
         camTransform1 = asgNewTransform(matrix);
         ASG_SAFE_CALL(asgTransformTranslate(camTransform1,camPos.data()));
         ASG_SAFE_CALL(asgObjectAddChild(root,camTransform1));
@@ -564,10 +564,7 @@ struct FilmStudio : Scene
         // Init cam matrix
         float m[12];
         ASG_SAFE_CALL(asgTransformGetMatrix(camTransform1,m));
-        camMat4(0,0)=m[0]; camMat4(0,1)=m[1]; camMat4(0,2)=m[2];
-        camMat4(1,0)=m[3]; camMat4(1,1)=m[4]; camMat4(1,2)=m[5];
-        camMat4(2,0)=m[6]; camMat4(2,1)=m[7]; camMat4(2,2)=m[8];
-        camMat4(0,3)=m[9]; camMat4(1,3)=m[10]; camMat4(2,3)=m[11];
+        camMat4 = visionaray::mat4(visionaray::mat4x3(m));
     }
 
     virtual void beforeRenderFrame()
@@ -620,8 +617,7 @@ struct FilmStudio : Scene
                     ASG_SAFE_CALL(asgParamGetValue(upParam,up));
 
                     for (size_t i=0; i<data->transStack.size(); ++i) {
-                        //visionaray::vec3f pPos = (visionaray::vec3f(position) * data->transStack[i]).xyz();
-                        visionaray::vec3f pPos = visionaray::vec3f(position) + data->transStack[i].col3;
+                        visionaray::vec3f pPos = (data->transStack[i] * visionaray::vec4f(visionaray::vec3f(position),1.f));
                         position[0] = pPos[0]; position[1] = pPos[1]; position[2] = pPos[2];
                         visionaray::vec3f vDir = data->transStack[i] * visionaray::vec4f(visionaray::vec3f(direction),0.f);
                         direction[0] = vDir.x; direction[1] = vDir[1]; direction[2] = vDir[2];
@@ -650,14 +646,17 @@ struct FilmStudio : Scene
                     float* d = m4x3.data();
                     ASG_SAFE_CALL(asgTransformGetMatrix(obj,m4x3.data()));
                     data->transStack.push_back(m4x3);
+                    ASG_SAFE_CALL(asgVisitorApply(self,obj));
+                    data->transStack.pop_back();
+                } else {
+                    ASG_SAFE_CALL(asgVisitorApply(self,obj));
                 }
-                ASG_SAFE_CALL(asgVisitorApply(self,obj));
             },
             &data,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN
         );
         ASG_SAFE_CALL(asgVisitorApply(visitor,root));
 
-        printSceneGraph(root,true);
+        // printSceneGraph(root,true);
 
         if (renderer == nullptr) {
             renderer = anariNewRenderer(device,"default");
@@ -781,15 +780,16 @@ struct FilmStudio : Scene
 
     virtual bool handleMouseMove(visionaray::mouse_event const& event)
     {
-        float m[12];
-        m[0]=camMat4(0,0); m[1]=camMat4(1,0); m[2]=camMat4(2,0);
-        m[3]=camMat4(0,1); m[4]=camMat4(1,1); m[5]=camMat4(2,1);
-        m[6]=camMat4(0,2); m[7]=camMat4(1,2); m[8]=camMat4(2,2);
-        m[9]=camMat4(0,3); m[10]=camMat4(1,3); m[11]=camMat4(2,3);
+        //float m[12];
+        visionaray::mat4x3 camMat4x3;
+        camMat4x3.col0 = camMat4.col0.xyz();
+        camMat4x3.col1 = camMat4.col1.xyz();
+        camMat4x3.col2 = camMat4.col2.xyz();
+        camMat4x3.col3 = camMat4.col3.xyz();
 
         if (rotManip && rotManip->active()) {
             if (rotManip->handle_mouse_move(event)) {
-                ASG_SAFE_CALL(asgTransformSetMatrix(camTransform1,m));
+                ASG_SAFE_CALL(asgTransformSetMatrix(camTransform1,camMat4x3.data()));
                 ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                                  ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
                 cameraChanged = true;
@@ -799,7 +799,7 @@ struct FilmStudio : Scene
 
         if (transManip && transManip->active()) {
             if (transManip->handle_mouse_move(event)) {
-                ASG_SAFE_CALL(asgTransformSetMatrix(camTransform1,m));
+                ASG_SAFE_CALL(asgTransformSetMatrix(camTransform1,camMat4x3.data()));
                 ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                                  ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
                 cameraChanged = true;
