@@ -5,6 +5,7 @@
 #include "device.hpp"
 #include "frame.hpp"
 #include "geometry.hpp"
+#include "group.hpp"
 #include "instance.hpp"
 #include "logging.hpp"
 #include "material.hpp"
@@ -145,7 +146,7 @@ namespace generic {
 
     ANARIGroup Device::newGroup()
     {
-        return nullptr;
+        return (ANARIGroup)RegisterResource(std::make_unique<Group>());
     }
 
     ANARIInstance Device::newInstance()

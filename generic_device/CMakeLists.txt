@@ -21,6 +21,7 @@ add_library(${PROJECT_NAME}
     device.cpp
     frame.cpp
     geometry.cpp
+    group.cpp
     instance.cpp
     logging.cpp
     material.cpp
