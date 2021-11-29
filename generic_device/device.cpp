@@ -5,6 +5,7 @@
 #include "device.hpp"
 #include "frame.hpp"
 #include "geometry.hpp"
+#include "instance.hpp"
 #include "logging.hpp"
 #include "material.hpp"
 #include "renderer.hpp"
@@ -149,7 +150,7 @@ namespace generic {
 
     ANARIInstance Device::newInstance()
     {
-        return nullptr;
+        return (ANARIInstance)RegisterResource(std::make_unique<Instance>());
     }
 
     //--- Top-level Worlds --------------------------------
