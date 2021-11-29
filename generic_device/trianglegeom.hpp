@@ -1,14 +1,14 @@
 #pragma once
 
-#include "spatialfield.hpp"
+#include "geometry.hpp"
 
 namespace generic {
 
-    class StructuredRegular : public SpatialField
+    class TriangleGeom : public Geometry
     {
     public:
-        StructuredRegular();
-       ~StructuredRegular();
+        TriangleGeom();
+       ~TriangleGeom();
 
         void commit();
 
@@ -19,11 +19,6 @@ namespace generic {
         void setParameter(const char* name,
                           ANARIDataType type,
                           const void* mem);
-
-        ANARIArray3D data = nullptr;
-        float origin[3] = {0,0,0};
-        float spacing[3] = {1,1,1};
-        const char* filter = "linear";
 
     };
 

@@ -4,9 +4,12 @@
 #include "camera.hpp"
 #include "device.hpp"
 #include "frame.hpp"
+#include "geometry.hpp"
 #include "logging.hpp"
+#include "material.hpp"
 #include "renderer.hpp"
 #include "spatialfield.hpp"
+#include "surface.hpp"
 #include "volume.hpp"
 #include "world.hpp"
 
@@ -107,7 +110,7 @@ namespace generic {
 
     ANARIGeometry Device::newGeometry(const char* type)
     {
-        return nullptr;
+        return (ANARIGeometry)RegisterResource(createGeometry(type));
     }
 
     ANARISpatialField Device::newSpatialField(const char* type)
@@ -117,7 +120,7 @@ namespace generic {
 
     ANARISurface Device::newSurface()
     {
-        return nullptr;
+        return (ANARISurface)RegisterResource(std::make_unique<Surface>());
     }
 
     ANARIVolume Device::newVolume(const char* type)
@@ -129,7 +132,7 @@ namespace generic {
 
     ANARIMaterial Device::newMaterial(const char* material_type)
     {
-        return nullptr;
+        return (ANARIMaterial)RegisterResource(createMaterial(material_type));
     }
 
     ANARISampler Device::newSampler(const char* type)

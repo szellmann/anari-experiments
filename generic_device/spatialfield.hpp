@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include "object.hpp"
 #include "resource.hpp"
 

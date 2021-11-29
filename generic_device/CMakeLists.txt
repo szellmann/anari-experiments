@@ -20,13 +20,18 @@ add_library(${PROJECT_NAME}
     camera.cpp
     device.cpp
     frame.cpp
+    geometry.cpp
     logging.cpp
+    material.cpp
+    matte.cpp
     pathtracer.cpp
     perspectivecamera.cpp
     renderer.cpp
     resource.cpp
     spatialfield.cpp
+    surface.cpp
     structuredregular.cpp
+    trianglegeom.cpp
     volume.cpp
     world.cpp
 )

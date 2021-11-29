@@ -466,6 +466,10 @@ namespace generic {
             renderer.cam.set_viewport(0,0,frame.size[0],frame.size[1]);
         }
 
+        void commit(Matte& mat)
+        {
+        }
+
         void commit(Camera& cam)
         {
             vec3f eye(cam.position);

@@ -1,14 +1,14 @@
 #pragma once
 
-#include "spatialfield.hpp"
+#include "material.hpp"
 
 namespace generic {
 
-    class StructuredRegular : public SpatialField
+    class Matte : public Material
     {
     public:
-        StructuredRegular();
-       ~StructuredRegular();
+        Matte();
+       ~Matte();
 
         void commit();
 
@@ -20,11 +20,7 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
-        ANARIArray3D data = nullptr;
-        float origin[3] = {0,0,0};
-        float spacing[3] = {1,1,1};
-        const char* filter = "linear";
-
+        float color[3] = {.8f,.8f,.8f};
     };
 
 } // generic

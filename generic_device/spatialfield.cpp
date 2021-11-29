@@ -1,6 +1,5 @@
 #include <string.h>
 #include <type_traits>
-#include "backend.hpp"
 #include "logging.hpp"
 #include "spatialfield.hpp"
 #include "structuredregular.hpp"
@@ -49,7 +48,7 @@ namespace generic {
         if (strncmp(subtype,"structuredRegular",17)==0)
             return std::make_unique<StructuredRegular>();
         else {
-            LOG(logging::Level::Error) << "Renderer subtype unavailable: " << subtype;
+            LOG(logging::Level::Error) << "SpatialField subtype unavailable: " << subtype;
             return std::make_unique<SpatialField>();
         }
     }

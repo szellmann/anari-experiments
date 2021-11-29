@@ -780,7 +780,6 @@ struct FilmStudio : Scene
 
     virtual bool handleMouseMove(visionaray::mouse_event const& event)
     {
-        //float m[12];
         visionaray::mat4x3 camMat4x3;
         camMat4x3.col0 = camMat4.col0.xyz();
         camMat4x3.col1 = camMat4.col1.xyz();

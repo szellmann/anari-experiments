@@ -5,11 +5,11 @@
 
 namespace generic {
 
-    class World : public Object
+    class Surface : public Object
     {
     public:
-        World();
-       ~World();
+        Surface();
+       ~Surface();
 
         ResourceHandle getResourceHandle();
 
@@ -23,13 +23,11 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
-        ANARIArray1D instance = nullptr;
-        ANARIArray1D surface = nullptr;
-        ANARIArray1D volume = nullptr;
-        ANARIArray1D light = nullptr;
+        ANARIGeometry geometry = nullptr;
+        ANARIMaterial material = nullptr;
 
     private:
-        ANARIWorld resourceHandle;
+        ANARISurface resourceHandle = nullptr;
     };
 
 } // generic
