@@ -21,6 +21,9 @@ namespace generic {
 
     void Surface::commit()
     {
+        if (geometry == nullptr)
+            LOG(logging::Level::Error) << "Surface error: geometry not set but is a "
+                << "required parameter";
     }
 
     void Surface::release()

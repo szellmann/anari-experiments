@@ -20,6 +20,14 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        ANARIArray1D vertex_position = nullptr;
+        ANARIArray1D vertex_normal = nullptr;
+        ANARIArray1D vertex_color = nullptr;
+        ANARIArray1D vertex_attribute0 = nullptr;
+        ANARIArray1D vertex_attribute1 = nullptr;
+        ANARIArray1D vertex_attribute2 = nullptr;
+        ANARIArray1D vertex_attribute3 = nullptr;
+        ANARIArray1D primitive_index = nullptr;
     };
 
 } // generic

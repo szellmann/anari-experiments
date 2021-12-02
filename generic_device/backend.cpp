@@ -1,9 +1,15 @@
+#include <algorithm>
+#include <functional>
 #include <iostream>
 #include <thread>
 #include <visionaray/math/math.h>
+#include <visionaray/bvh.h>
 #include <visionaray/texture/texture.h>
 #include <visionaray/aligned_vector.h>
 #include <visionaray/cpu_buffer_rt.h>
+#include <visionaray/generic_material.h>
+#include <visionaray/kernels.h>
+#include <visionaray/material.h>
 #include <visionaray/phase_function.h>
 #include <visionaray/random_generator.h>
 #include <visionaray/sampling.h>
@@ -218,6 +224,21 @@ namespace generic {
             ANARIArray1D handleA = nullptr;
         };
 
+        typedef index_bvh<basic_triangle<3,float>> TriangleBVH;
+
+        struct Mesh
+        {
+            TriangleBVH bvh;
+            ANARIGeometry handle = nullptr;
+            unsigned geomID = unsigned(-1);
+        };
+
+        struct Material
+        {
+            ANARIMaterial handle = nullptr;
+            unsigned matID = unsigned(-1);
+        };
+
         struct Renderer
         {
             Algorithm algorithm;
@@ -226,6 +247,13 @@ namespace generic {
             vec4f backgroundColor;
             tiled_sched<ray> sched{std::thread::hardware_concurrency()};
             aligned_vector<StructuredVolume> structuredVolumes;
+            std::vector<Mesh> meshes;
+            std::vector<Material> materials;
+            struct {
+                bool hasChanged = false;
+                aligned_vector<TriangleBVH::bvh_ref> bvhRefs;
+                aligned_vector<generic_material<matte<float>>> materials;
+            } surfaces;
             unsigned accumID=0;
 
             void renderFrame()
@@ -241,7 +269,7 @@ namespace generic {
 
                 if (algorithm==Algorithm::Pathtracing) {
 
-                    if (1) { // single volume only
+                    if (structuredVolumes.size()==1) { // single volume only
                         StructuredVolume& volume = structuredVolumes[0];
 
                         float heightf = (float)renderTarget.height();
@@ -305,6 +333,19 @@ namespace generic {
                             result.color = bounce ? vec4f(L, 1.f) : backgroundColor;
                             return result;
                         }, sparams);
+                    } else if (!surfaces.bvhRefs.empty()) {
+                        auto kparams = make_kernel_params(
+                            surfaces.bvhRefs.begin(),
+                            surfaces.bvhRefs.end(),
+                            surfaces.materials.begin(),
+                            10,
+                            1e-5f,
+                            backgroundColor,
+                            vec4f{1.f,1.f,1.f,1.f}
+                        );
+                        pathtracing::kernel<decltype(kparams)> kernel;
+                        kernel.params = kparams;
+                        sched.frame(kernel,sparams);
                     }
                 } else if (algorithm==Algorithm::AmbientOcclusion) {
 
@@ -406,6 +447,48 @@ namespace generic {
 
         Renderer renderer;
 
+        enum class ExecutionOrder {
+            Object = 9999, // catch error messages first
+            StructuredRegular = 6,
+            TriangleGeom = 6,
+            Matte = 6,
+            Volume = 5,
+            Surface = 5,
+            World = 4,
+            Camera = 3,
+            PerspectiveCamera = 2,
+            Renderer = 1,
+            AO = 1,
+            Pathtracer = 1,
+            Frame = 0,
+        };
+
+        typedef std::function<void()> CommitFunc;
+
+        struct Commit {
+            CommitFunc func;
+            ExecutionOrder order;
+        };
+
+        std::vector<Commit> outstandingCommits;
+
+        static void flushCommitBuffer() {
+            std::sort(outstandingCommits.begin(),outstandingCommits.end(),
+                      [](const Commit& a, const Commit& b)
+                      {
+                          return a.order > b.order;
+                      });
+
+            for (auto commit : outstandingCommits) {
+                commit.func();
+            }
+
+            outstandingCommits.clear();
+        }
+
+        void enqueueCommit(CommitFunc func, ExecutionOrder order) {
+            outstandingCommits.push_back({func,order});
+        }
     } // backend
 
     //--- API ---------------------------------------------
@@ -413,23 +496,174 @@ namespace generic {
 
         void commit(Object& obj)
         {
-            LOG(logging::Level::Warning) << "Backend: no commit() implementation found";
+            enqueueCommit([]() {
+                LOG(logging::Level::Warning) << "Backend: no commit() implementation found";
+            }, ExecutionOrder::Object);
         }
 
         void commit(World& world)
         {
-            if (world.volume != nullptr) {
-                Array1D* volumes = (Array1D*)GetResource(world.volume);
+            enqueueCommit([]() {
+                if (renderer.surfaces.hasChanged) {
+                    renderer.surfaces.bvhRefs.clear();
+                    renderer.surfaces.materials.clear();
 
-                // TODO: count the actual _structured_ volumes, resize after!
-                renderer.structuredVolumes.resize(volumes->numItems[0]);
+                    for (unsigned i=0; i<renderer.meshes.size(); ++i) {
+                        renderer.surfaces.bvhRefs.push_back(renderer.meshes[i].bvh.ref());
+                    }
 
-                for (uint64_t i = 0; i < volumes->numItems[0]; ++i) {
-                    ANARIVolume vol = ((ANARIVolume*)(volumes->data))[i];
-                    Volume* volume = (Volume*)GetResource(vol);
-                    renderer.structuredVolumes[i].reset(*volume);
+                    for (unsigned i=0; i<renderer.materials.size(); ++i) {
+                        matte<float> mat;
+                        mat.ca() = from_rgb(vec3f{.8f,.8f,.8f});
+                        mat.cd() = from_rgb(vec3f{.8f,.8f,.8f});
+                        mat.ka() = 1.f;
+                        mat.kd() = 1.f;
+                        renderer.surfaces.materials.push_back(mat);
+                    }
+
+                    renderer.surfaces.hasChanged = false;
                 }
-            }
+
+                // TODO: same for volumes?
+            }, ExecutionOrder::World);
+        }
+
+        void commit(Camera& cam)
+        {
+            enqueueCommit([&cam]() {
+                vec3f eye(cam.position);
+                vec3f dir(cam.direction);
+                vec3f center = eye+dir;
+                vec3f up(cam.up);
+                if (eye!=renderer.cam.eye() || center!=renderer.cam.center() || up!=renderer.cam.up()) {
+                    renderer.cam.look_at(eye,center,up);
+                    renderer.cam.set_lens_radius(cam.apertureRadius);
+                    renderer.cam.set_focal_distance(cam.focusDistance);
+                    renderer.accumID = 0;
+                }
+            }, ExecutionOrder::Camera);
+        }
+
+        void commit(PerspectiveCamera& cam)
+        {
+            enqueueCommit([&cam]() {
+                renderer.cam.perspective(cam.fovy,cam.aspect,.001f,1000.f);
+            }, ExecutionOrder::PerspectiveCamera);
+        }
+
+        void commit(Frame& frame)
+        {
+            enqueueCommit([&frame]() {
+                pixel_format color
+                    = frame.color==ANARI_UFIXED8_VEC4 || ANARI_UFIXED8_RGBA_SRGB
+                        ? PF_RGBA8 : PF_RGBA32F;
+
+                pixel_format depth
+                    = frame.color==ANARI_FLOAT32 ? PF_DEPTH32F : PF_UNSPECIFIED;
+
+                bool sRGB = frame.color==ANARI_UFIXED8_RGBA_SRGB;
+
+                renderer.renderTarget.reset(frame.size[0],frame.size[1],color,depth,sRGB);
+
+                renderer.cam.set_viewport(0,0,frame.size[0],frame.size[1]);
+            }, ExecutionOrder::Frame);
+        }
+
+        void commit(TriangleGeom& geom)
+        {
+            enqueueCommit([&geom]() {
+                auto it = std::find_if(renderer.meshes.begin(),renderer.meshes.end(),
+                                       [&geom](const Mesh& mesh) {
+                                           return mesh.handle != nullptr
+                                               && mesh.handle == geom.getResourceHandle();
+                                       });
+
+                if (it == renderer.meshes.end()) {
+                    renderer.meshes.emplace_back();
+                    it = renderer.meshes.end()-1;
+                }
+
+                unsigned geomID = std::distance(it,renderer.meshes.begin());
+
+                it->handle = (ANARIGeometry)geom.getResourceHandle();
+                it->geomID = geomID;
+
+                aligned_vector<basic_triangle<3,float>> triangles;
+
+                if (geom.primitive_index != nullptr) {
+                    Array1D* vertex = (Array1D*)GetResource(geom.vertex_position);
+                    Array1D* index = (Array1D*)GetResource(geom.primitive_index);
+
+                    vec3f* vertices = (vec3f*)vertex->data;
+                    vec3ui* indices = (vec3ui*)index->data;
+
+                    triangles.resize(index->numItems[0]);
+
+                    for (uint32_t i=0; i<index->numItems[0]; ++i) {
+                        vec3f v1 = vertices[indices[i].x];
+                        vec3f v2 = vertices[indices[i].y];
+                        vec3f v3 = vertices[indices[i].z];
+
+                        triangles[i].prim_id = i;
+                        triangles[i].geom_id = geomID;
+                        triangles[i].v1 = v1;
+                        triangles[i].e1 = v2-v1;
+                        triangles[i].e2 = v3-v1;
+                    }
+
+                    binned_sah_builder builder;
+                    builder.enable_spatial_splits(true);
+
+                    it->bvh = builder.build(TriangleBVH{},triangles.data(),triangles.size());
+                } else {
+                    assert(0 && "not implemented yet!!");
+                }
+
+                renderer.surfaces.hasChanged = true;
+            }, ExecutionOrder::TriangleGeom);
+        }
+
+        void commit(Matte& mat)
+        {
+            enqueueCommit([&mat]() {
+                auto it = std::find_if(renderer.materials.begin(),renderer.materials.end(),
+                                       [&mat](const Material& material) {
+                                           return material.handle != nullptr
+                                               && material.handle == mat.getResourceHandle();
+                                       });
+
+                if (it == renderer.materials.end()) {
+                    renderer.materials.emplace_back();
+                    it = renderer.materials.end()-1;
+                }
+
+                it->handle = (ANARIMaterial)mat.getResourceHandle();
+                it->matID = std::distance(it,renderer.materials.begin());
+
+                renderer.surfaces.hasChanged = true;
+            }, ExecutionOrder::Matte);
+        }
+
+        void commit(Surface& surf)
+        {
+            enqueueCommit([&surf]() {
+                assert(surf.geometry != nullptr);
+
+                if (surf.material == nullptr) {
+                    // TODO: this might be too many materials, always adding the dflt. one
+                    auto it = std::find_if(renderer.meshes.begin(),renderer.meshes.end(),
+                                           [&surf](const Mesh& mesh) {
+                                               return mesh.handle == surf.geometry;
+                                           });
+                    renderer.materials.resize(it->geomID+1);
+
+                    // Mark as dflt. material
+                    renderer.materials[it->geomID].handle = nullptr;
+                    renderer.materials[it->geomID].matID = unsigned(-1);
+                }
+
+                renderer.surfaces.hasChanged = true;
+            }, ExecutionOrder::Surface);
         }
 
         void commit(StructuredRegular& sr)
@@ -438,70 +672,44 @@ namespace generic {
 
         void commit(Volume& vol)
         {
-            // only effects the backend if world was already committed,
-            for (size_t i = 0; i < renderer.structuredVolumes.size(); ++i) {
-                if (renderer.structuredVolumes[i].handle != nullptr
-                    && renderer.structuredVolumes[i].handle == vol.getResourceHandle()) {
-                    renderer.structuredVolumes[i].reset(vol);
-                    break;
+            enqueueCommit([&vol]() {
+                auto it = std::find_if(renderer.structuredVolumes.begin(),
+                                       renderer.structuredVolumes.end(),
+                                       [&vol](const StructuredVolume& sv) {
+                                           return sv.handle != nullptr
+                                               && sv.handle == vol.getResourceHandle();
+                                       });
+
+                if (it == renderer.structuredVolumes.end()) {
+                    renderer.structuredVolumes.emplace_back();
+                    renderer.structuredVolumes.back().reset(vol);
+                } else {
+                    it->reset(vol);
                 }
-            }
 
-            renderer.accumID = 0;
-        }
-
-        void commit(Frame& frame)
-        {
-            pixel_format color
-                = frame.color==ANARI_UFIXED8_VEC4 || ANARI_UFIXED8_RGBA_SRGB
-                    ? PF_RGBA8 : PF_RGBA32F;
-
-            pixel_format depth
-                = frame.color==ANARI_FLOAT32 ? PF_DEPTH32F : PF_UNSPECIFIED;
-
-            bool sRGB = frame.color==ANARI_UFIXED8_RGBA_SRGB;
-
-            renderer.renderTarget.reset(frame.size[0],frame.size[1],color,depth,sRGB);
-
-            renderer.cam.set_viewport(0,0,frame.size[0],frame.size[1]);
-        }
-
-        void commit(Matte& mat)
-        {
-        }
-
-        void commit(Camera& cam)
-        {
-            vec3f eye(cam.position);
-            vec3f dir(cam.direction);
-            vec3f center = eye+dir;
-            vec3f up(cam.up);
-            if (eye!=renderer.cam.eye() || center!=renderer.cam.center() || up!=renderer.cam.up()) {
-                renderer.cam.look_at(eye,center,up);
-                renderer.cam.set_lens_radius(cam.apertureRadius);
-                renderer.cam.set_focal_distance(cam.focusDistance);
                 renderer.accumID = 0;
-            }
-        }
-
-        void commit(PerspectiveCamera& cam)
-        {
-            renderer.cam.perspective(cam.fovy,cam.aspect,.001f,1000.f);
+            }, ExecutionOrder::Volume);
         }
 
         void commit(::generic::Renderer& rend)
         {
-            renderer.backgroundColor = vec4f(rend.backgroundColor);
+            enqueueCommit([&rend]() {
+                renderer.backgroundColor = vec4f(rend.backgroundColor);
+            }, ExecutionOrder::Renderer);
         }
 
         void commit(Pathtracer& pt)
         {
-            renderer.algorithm = Algorithm::Pathtracing;
+            enqueueCommit([&pt]() {
+                renderer.algorithm = Algorithm::Pathtracing;
+            }, ExecutionOrder::Pathtracer);
         }
 
         void commit(AO& ao)
         {
-            renderer.algorithm = Algorithm::AmbientOcclusion;
+            enqueueCommit([&ao]() {
+                renderer.algorithm = Algorithm::AmbientOcclusion;
+            }, ExecutionOrder::AO);
         }
 
         void* map(Frame& frame)
@@ -511,6 +719,8 @@ namespace generic {
 
         void renderFrame(Frame& frame)
         {
+            flushCommitBuffer();
+
             frame.renderFuture = std::async([]() {
                 renderer.renderFrame();
             });
