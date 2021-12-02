@@ -225,6 +225,7 @@ namespace generic {
         };
 
         typedef index_bvh<basic_triangle<3,float>> TriangleBVH;
+        typedef index_bvh<typename TriangleBVH::bvh_inst> TriangleTLAS;
 
         struct Mesh
         {
@@ -251,7 +252,8 @@ namespace generic {
             std::vector<Material> materials;
             struct {
                 bool hasChanged = false;
-                aligned_vector<TriangleBVH::bvh_ref> bvhRefs;
+                aligned_vector<TriangleBVH::bvh_inst> bvhInsts;
+                TriangleTLAS tlas;
                 aligned_vector<generic_material<matte<float>>> materials;
             } surfaces;
             unsigned accumID=0;
@@ -333,10 +335,10 @@ namespace generic {
                             result.color = bounce ? vec4f(L, 1.f) : backgroundColor;
                             return result;
                         }, sparams);
-                    } else if (!surfaces.bvhRefs.empty()) {
+                    } else if (!surfaces.bvhInsts.empty()) {
                         auto kparams = make_kernel_params(
-                            surfaces.bvhRefs.begin(),
-                            surfaces.bvhRefs.end(),
+                            &surfaces.tlas,
+                            &surfaces.tlas+1,
                             surfaces.materials.begin(),
                             10,
                             1e-5f,
@@ -505,12 +507,18 @@ namespace generic {
         {
             enqueueCommit([]() {
                 if (renderer.surfaces.hasChanged) {
-                    renderer.surfaces.bvhRefs.clear();
+                    renderer.surfaces.bvhInsts.clear();
                     renderer.surfaces.materials.clear();
 
                     for (unsigned i=0; i<renderer.meshes.size(); ++i) {
-                        renderer.surfaces.bvhRefs.push_back(renderer.meshes[i].bvh.ref());
+                        renderer.surfaces.bvhInsts.push_back(renderer.meshes[i].bvh.inst({mat3x3::identity(),vec3f(0.f)}));
                     }
+
+                    lbvh_builder builder;
+
+                    renderer.surfaces.tlas = builder.build(TriangleTLAS{},
+                                                           renderer.surfaces.bvhInsts.data(),
+                                                           renderer.surfaces.bvhInsts.size());
 
                     for (unsigned i=0; i<renderer.materials.size(); ++i) {
                         matte<float> mat;
@@ -578,12 +586,15 @@ namespace generic {
                                                && mesh.handle == geom.getResourceHandle();
                                        });
 
+                unsigned geomID(-1);
+
                 if (it == renderer.meshes.end()) {
                     renderer.meshes.emplace_back();
                     it = renderer.meshes.end()-1;
+                    geomID = renderer.meshes.size()-1;
+                } else {
+                    geomID = std::distance(it,renderer.meshes.begin());
                 }
-
-                unsigned geomID = std::distance(it,renderer.meshes.begin());
 
                 it->handle = (ANARIGeometry)geom.getResourceHandle();
                 it->geomID = geomID;
@@ -632,10 +643,14 @@ namespace generic {
                                                && material.handle == mat.getResourceHandle();
                                        });
 
-                if (it == renderer.materials.end()) {
+                // Problem here is that really, materials are identified by a combination
+                // geomID _and_ matID. So we'd have to check on commit(Surface) if this is
+                // a new _combination_, and possibly insert a new material and set geomIDs
+                // accordingly..
+                //if (it == renderer.materials.end()) {
                     renderer.materials.emplace_back();
                     it = renderer.materials.end()-1;
-                }
+                //}
 
                 it->handle = (ANARIMaterial)mat.getResourceHandle();
                 it->matID = std::distance(it,renderer.materials.begin());
