@@ -1,5 +1,6 @@
 #include <string.h>
 #include <type_traits>
+#include "backend.hpp"
 #include "logging.hpp"
 #include "surface.hpp"
 
@@ -24,6 +25,8 @@ namespace generic {
         if (geometry == nullptr)
             LOG(logging::Level::Error) << "Surface error: geometry not set but is a "
                 << "required parameter";
+        else
+            backend::commit(*this);
     }
 
     void Surface::release()

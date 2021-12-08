@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <thread>
 #include <visionaray/math/math.h>
 #include <visionaray/bvh.h>
@@ -236,8 +237,10 @@ namespace generic {
 
         struct Material
         {
+            using SP = std::shared_ptr<Material>;
+
+            vec3f color{.8f,.8f,.8f};
             ANARIMaterial handle = nullptr;
-            unsigned matID = unsigned(-1);
         };
 
         struct Renderer
@@ -249,7 +252,8 @@ namespace generic {
             tiled_sched<ray> sched{std::thread::hardware_concurrency()};
             aligned_vector<StructuredVolume> structuredVolumes;
             std::vector<Mesh> meshes;
-            std::vector<Material> materials;
+            std::vector<Material::SP> materials;
+            std::map<unsigned,unsigned> instID2matID;
             struct {
                 bool hasChanged = false;
                 aligned_vector<TriangleBVH::bvh_inst> bvhInsts;
@@ -444,6 +448,12 @@ namespace generic {
                     }
                 }
             }
+
+            void createDefaultMaterial()
+            {
+                Material::SP dflt = std::make_shared<Material>();
+                materials.push_back(dflt);
+            }
         };
 
 
@@ -507,12 +517,7 @@ namespace generic {
         {
             enqueueCommit([]() {
                 if (renderer.surfaces.hasChanged) {
-                    renderer.surfaces.bvhInsts.clear();
                     renderer.surfaces.materials.clear();
-
-                    for (unsigned i=0; i<renderer.meshes.size(); ++i) {
-                        renderer.surfaces.bvhInsts.push_back(renderer.meshes[i].bvh.inst({mat3x3::identity(),vec3f(0.f)}));
-                    }
 
                     lbvh_builder builder;
 
@@ -520,13 +525,25 @@ namespace generic {
                                                            renderer.surfaces.bvhInsts.data(),
                                                            renderer.surfaces.bvhInsts.size());
 
-                    for (unsigned i=0; i<renderer.materials.size(); ++i) {
+                    for (auto it = renderer.instID2matID.begin();
+                              it != renderer.instID2matID.end();
+                              ++it) {
+                        unsigned instID = it->first;
+                        unsigned matID = it->second;
+
+                        if (instID >= renderer.surfaces.materials.size())
+                            renderer.surfaces.materials.resize(instID+1);
+
+                        assert(renderer.materials.size()>matID);
+                        Material::SP m = renderer.materials[matID];
+
                         matte<float> mat;
-                        mat.ca() = from_rgb(vec3f{.8f,.8f,.8f});
-                        mat.cd() = from_rgb(vec3f{.8f,.8f,.8f});
+                        mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
+                        mat.cd() = from_rgb(m->color);
                         mat.ka() = 1.f;
                         mat.kd() = 1.f;
-                        renderer.surfaces.materials.push_back(mat);
+
+                        renderer.surfaces.materials[instID] = mat;
                     }
 
                     renderer.surfaces.hasChanged = false;
@@ -637,25 +654,28 @@ namespace generic {
         void commit(Matte& mat)
         {
             enqueueCommit([&mat]() {
+                if (renderer.materials.empty()) {
+                    renderer.createDefaultMaterial();
+                }
+
                 auto it = std::find_if(renderer.materials.begin(),renderer.materials.end(),
-                                       [&mat](const Material& material) {
-                                           return material.handle != nullptr
-                                               && material.handle == mat.getResourceHandle();
+                                       [&mat](const Material::SP& material) {
+                                           return material->handle != nullptr
+                                               && material->handle == mat.getResourceHandle();
                                        });
 
-                // Problem here is that really, materials are identified by a combination
-                // geomID _and_ matID. So we'd have to check on commit(Surface) if this is
-                // a new _combination_, and possibly insert a new material and set geomIDs
-                // accordingly..
-                //if (it == renderer.materials.end()) {
-                    renderer.materials.emplace_back();
-                    it = renderer.materials.end()-1;
-                //}
-
-                it->handle = (ANARIMaterial)mat.getResourceHandle();
-                it->matID = std::distance(it,renderer.materials.begin());
+                if (it == renderer.materials.end()) {
+                    Material::SP m = std::make_shared<Material>();
+                    m->handle = (ANARIMaterial)mat.getResourceHandle();
+                    m->color = vec3f{mat.color};
+                    renderer.materials.push_back(m);
+                } else {
+                    Material::SP m = *it;
+                    m->color = vec3f{mat.color};
+                }
 
                 renderer.surfaces.hasChanged = true;
+                renderer.accumID = 0;
             }, ExecutionOrder::Matte);
         }
 
@@ -664,20 +684,42 @@ namespace generic {
             enqueueCommit([&surf]() {
                 assert(surf.geometry != nullptr);
 
-                if (surf.material == nullptr) {
-                    // TODO: this might be too many materials, always adding the dflt. one
-                    auto it = std::find_if(renderer.meshes.begin(),renderer.meshes.end(),
-                                           [&surf](const Mesh& mesh) {
-                                               return mesh.handle == surf.geometry;
-                                           });
-                    renderer.materials.resize(it->geomID+1);
+                auto it = std::find_if(renderer.meshes.begin(),renderer.meshes.end(),
+                                       [&surf](const Mesh& mesh) {
+                                           return mesh.handle == surf.geometry;
+                                       });
 
-                    // Mark as dflt. material
-                    renderer.materials[it->geomID].handle = nullptr;
-                    renderer.materials[it->geomID].matID = unsigned(-1);
+                static int instID = 0;
+                renderer.surfaces.bvhInsts.push_back((*it).bvh.inst({mat3x3::identity(),vec3f(0.f)}));
+                renderer.surfaces.bvhInsts.back().set_inst_id(instID);
+
+                unsigned matID(-1);
+                if (surf.material == nullptr) {
+                    if (renderer.materials.empty()) {
+                        renderer.createDefaultMaterial();
+                    }
+                    matID = 0;
+                } else {
+                    auto mit = std::find_if(renderer.materials.begin(),renderer.materials.end(),
+                                            [&surf](const Material::SP& m) {
+                                                return m->handle == surf.material;
+                                            });
+                    if (mit != renderer.materials.end()) {
+                        matID = (unsigned)(mit-renderer.materials.begin());
+                    }
                 }
 
+                if (matID == unsigned(-1)) {
+                    LOG(logging::Level::Warning) << "Backend: material wasn't found, using default one";
+                    matID = 0;
+                }
+
+                renderer.instID2matID.insert({instID,matID});
+
+                instID++;
+
                 renderer.surfaces.hasChanged = true;
+                renderer.accumID = 0;
             }, ExecutionOrder::Surface);
         }
 
