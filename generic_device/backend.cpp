@@ -670,8 +670,7 @@ namespace generic {
                     m->color = vec3f{mat.color};
                     renderer.materials.push_back(m);
                 } else {
-                    Material::SP m = *it;
-                    m->color = vec3f{mat.color};
+                    (*it)->color = vec3f{mat.color};
                 }
 
                 renderer.surfaces.hasChanged = true;

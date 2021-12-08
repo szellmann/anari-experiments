@@ -7,6 +7,7 @@
 namespace generic {
 
     Material::Material()
+        : resourceHandle(new std::remove_pointer_t<ANARIMaterial>)
     {
     }
 
