@@ -514,7 +514,7 @@ namespace generic {
     //--- API ---------------------------------------------
     namespace backend {
 
-        void commit(Object& obj)
+        void commit(generic::Object& obj)
         {
             enqueueCommit([]() {
                 LOG(logging::Level::Warning) << "Backend: no commit() implementation found";
@@ -561,7 +561,7 @@ namespace generic {
             }, ExecutionOrder::World);
         }
 
-        void commit(Camera& cam)
+        void commit(generic::Camera& cam)
         {
             enqueueCommit([&cam]() {
                 vec3f eye(cam.position);
@@ -577,7 +577,7 @@ namespace generic {
             }, ExecutionOrder::Camera);
         }
 
-        void commit(PerspectiveCamera& cam)
+        void commit(generic::PerspectiveCamera& cam)
         {
             enqueueCommit([&cam]() {
                 frame.cam.perspective(cam.fovy,cam.aspect,.001f,1000.f);
@@ -602,7 +602,7 @@ namespace generic {
             }, ExecutionOrder::Frame);
         }
 
-        void commit(TriangleGeom& geom)
+        void commit(generic::TriangleGeom& geom)
         {
             enqueueCommit([&geom]() {
                 auto it = std::find_if(backend::world.meshes.begin(),backend::world.meshes.end(),
@@ -659,7 +659,7 @@ namespace generic {
             }, ExecutionOrder::TriangleGeom);
         }
 
-        void commit(Matte& mat)
+        void commit(generic::Matte& mat)
         {
             enqueueCommit([&mat]() {
                 if (backend::world.materials.empty()) {
@@ -686,7 +686,7 @@ namespace generic {
             }, ExecutionOrder::Matte);
         }
 
-        void commit(Surface& surf)
+        void commit(generic::Surface& surf)
         {
             enqueueCommit([&surf]() {
                 assert(surf.geometry != nullptr);
@@ -730,11 +730,11 @@ namespace generic {
             }, ExecutionOrder::Surface);
         }
 
-        void commit(StructuredRegular& sr)
+        void commit(generic::StructuredRegular& sr)
         {
         }
 
-        void commit(Volume& vol)
+        void commit(generic::Volume& vol)
         {
             enqueueCommit([&vol]() {
                 auto it = std::find_if(backend::world.structuredVolumes.begin(),
@@ -755,21 +755,21 @@ namespace generic {
             }, ExecutionOrder::Volume);
         }
 
-        void commit(::generic::Renderer& rend)
+        void commit(generic::Renderer& rend)
         {
             enqueueCommit([&rend]() {
                 renderer.backgroundColor = vec4f(rend.backgroundColor);
             }, ExecutionOrder::Renderer);
         }
 
-        void commit(Pathtracer& pt)
+        void commit(generic::Pathtracer& pt)
         {
             enqueueCommit([&pt]() {
                 renderer.algorithm = Algorithm::Pathtracing;
             }, ExecutionOrder::Pathtracer);
         }
 
-        void commit(AO& ao)
+        void commit(generic::AO& ao)
         {
             enqueueCommit([&ao]() {
                 renderer.algorithm = Algorithm::AmbientOcclusion;

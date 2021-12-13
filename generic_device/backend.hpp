@@ -17,35 +17,35 @@ namespace generic {
     namespace backend {
 
         // Default implementation, generates an error message
-        void commit(Object& obj);
+        void commit(generic::Object& obj);
 
-        void commit(World& world);
+        void commit(generic::World& world);
 
-        void commit(Camera& cam);
+        void commit(generic::Camera& cam);
 
-        void commit(PerspectiveCamera& cam);
+        void commit(generic::PerspectiveCamera& cam);
 
-        void commit(Frame& frame);
+        void commit(generic::Frame& frame);
 
-        void commit(TriangleGeom& geom);
+        void commit(generic::TriangleGeom& geom);
 
-        void commit(Matte& mat);
+        void commit(generic::Matte& mat);
 
-        void commit(Surface& surf);
+        void commit(generic::Surface& surf);
 
-        void commit(StructuredRegular& sr);
+        void commit(generic::StructuredRegular& sr);
 
-        void commit(Volume& vol);
+        void commit(generic::Volume& vol);
 
-        void commit(Renderer& rend);
+        void commit(generic::Renderer& rend);
 
-        void commit(AO& ao);
+        void commit(generic::AO& ao);
 
-        void commit(Pathtracer& pt);
+        void commit(generic::Pathtracer& pt);
 
-        void* map(Frame& frame);
-        void renderFrame(Frame& frame);
-        int wait(Frame& frame, ANARIWaitMask m);
+        void* map(generic::Frame& frame);
+        void renderFrame(generic::Frame& frame);
+        int wait(generic::Frame& frame, ANARIWaitMask m);
 
     } // backend
 } // generic
