@@ -230,8 +230,10 @@ namespace generic {
         typedef index_bvh<basic_triangle<3,float>> TriangleBVH;
         typedef index_bvh<typename TriangleBVH::bvh_inst> TriangleTLAS;
 
-        struct Mesh
+        struct TriangleGeom
         {
+            using SP = std::shared_ptr<TriangleGeom>;
+
             TriangleBVH bvh;
             ANARIGeometry handle = nullptr;
             unsigned geomID = unsigned(-1);
@@ -250,8 +252,6 @@ namespace generic {
             using SP = std::shared_ptr<World>;
 
             aligned_vector<StructuredVolume> structuredVolumes;
-            std::vector<Mesh> meshes;
-            std::vector<Material::SP> materials;
             std::map<unsigned,unsigned> instID2matID;
             struct {
                 bool hasChanged = false;
@@ -259,12 +259,6 @@ namespace generic {
                 TriangleTLAS tlas;
                 aligned_vector<generic_material<matte<float>>> materials;
             } surfaces;
-
-            void createDefaultMaterial()
-            {
-                Material::SP dflt = std::make_shared<Material>();
-                materials.push_back(dflt);
-            }
         };
 
         struct Renderer
@@ -462,10 +456,18 @@ namespace generic {
             }
         };
 
+        std::vector<TriangleGeom::SP> triangleGeoms;
+        std::vector<Material::SP> materials;
 
         Renderer renderer;
         Frame frame;
         World world;
+
+        void createDefaultMaterial()
+        {
+            Material::SP dflt = std::make_shared<Material>();
+            materials.push_back(dflt);
+        }
 
         enum class ExecutionOrder {
             Object = 9999, // catch error messages first
@@ -542,8 +544,8 @@ namespace generic {
                         if (instID >= backend::world.surfaces.materials.size())
                             backend::world.surfaces.materials.resize(instID+1);
 
-                        assert(backend::world.materials.size()>matID);
-                        Material::SP m = backend::world.materials[matID];
+                        assert(backend::materials.size()>matID);
+                        Material::SP m = backend::materials[matID];
 
                         matte<float> mat;
                         mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
@@ -605,24 +607,24 @@ namespace generic {
         void commit(generic::TriangleGeom& geom)
         {
             enqueueCommit([&geom]() {
-                auto it = std::find_if(backend::world.meshes.begin(),backend::world.meshes.end(),
-                                       [&geom](const Mesh& mesh) {
-                                           return mesh.handle != nullptr
-                                               && mesh.handle == geom.getResourceHandle();
+                auto it = std::find_if(backend::triangleGeoms.begin(),backend::triangleGeoms.end(),
+                                       [&geom](const TriangleGeom::SP& tg) {
+                                           return tg->handle != nullptr
+                                               && tg->handle == geom.getResourceHandle();
                                        });
 
                 unsigned geomID(-1);
 
-                if (it == backend::world.meshes.end()) {
-                    backend::world.meshes.emplace_back();
-                    it = backend::world.meshes.end()-1;
-                    geomID = backend::world.meshes.size()-1;
+                if (it == backend::triangleGeoms.end()) {
+                    backend::triangleGeoms.push_back(std::make_shared<TriangleGeom>());
+                    it = backend::triangleGeoms.end()-1;
+                    geomID = backend::triangleGeoms.size()-1;
                 } else {
-                    geomID = std::distance(it,backend::world.meshes.begin());
+                    geomID = std::distance(it,backend::triangleGeoms.begin());
                 }
 
-                it->handle = (ANARIGeometry)geom.getResourceHandle();
-                it->geomID = geomID;
+                (*it)->handle = (ANARIGeometry)geom.getResourceHandle();
+                (*it)->geomID = geomID;
 
                 aligned_vector<basic_triangle<3,float>> triangles;
 
@@ -650,7 +652,7 @@ namespace generic {
                     binned_sah_builder builder;
                     builder.enable_spatial_splits(true);
 
-                    it->bvh = builder.build(TriangleBVH{},triangles.data(),triangles.size());
+                    (*it)->bvh = builder.build(TriangleBVH{},triangles.data(),triangles.size());
                 } else {
                     assert(0 && "not implemented yet!!");
                 }
@@ -662,21 +664,21 @@ namespace generic {
         void commit(generic::Matte& mat)
         {
             enqueueCommit([&mat]() {
-                if (backend::world.materials.empty()) {
-                    backend::world.createDefaultMaterial();
+                if (backend::materials.empty()) {
+                    backend::createDefaultMaterial();
                 }
 
-                auto it = std::find_if(backend::world.materials.begin(),backend::world.materials.end(),
+                auto it = std::find_if(backend::materials.begin(),backend::materials.end(),
                                        [&mat](const Material::SP& material) {
                                            return material->handle != nullptr
                                                && material->handle == mat.getResourceHandle();
                                        });
 
-                if (it == backend::world.materials.end()) {
+                if (it == backend::materials.end()) {
                     Material::SP m = std::make_shared<Material>();
                     m->handle = (ANARIMaterial)mat.getResourceHandle();
                     m->color = vec3f{mat.color};
-                    backend::world.materials.push_back(m);
+                    backend::materials.push_back(m);
                 } else {
                     (*it)->color = vec3f{mat.color};
                 }
@@ -691,28 +693,28 @@ namespace generic {
             enqueueCommit([&surf]() {
                 assert(surf.geometry != nullptr);
 
-                auto it = std::find_if(backend::world.meshes.begin(),backend::world.meshes.end(),
-                                       [&surf](const Mesh& mesh) {
-                                           return mesh.handle == surf.geometry;
+                auto it = std::find_if(backend::triangleGeoms.begin(),backend::triangleGeoms.end(),
+                                       [&surf](const TriangleGeom::SP& tg) {
+                                           return tg->handle == surf.geometry;
                                        });
 
                 static int instID = 0;
-                backend::world.surfaces.bvhInsts.push_back((*it).bvh.inst({mat3x3::identity(),vec3f(0.f)}));
+                backend::world.surfaces.bvhInsts.push_back((*it)->bvh.inst({mat3x3::identity(),vec3f(0.f)}));
                 backend::world.surfaces.bvhInsts.back().set_inst_id(instID);
 
                 unsigned matID(-1);
                 if (surf.material == nullptr) {
-                    if (backend::world.materials.empty()) {
-                        backend::world.createDefaultMaterial();
+                    if (backend::materials.empty()) {
+                        backend::createDefaultMaterial();
                     }
                     matID = 0;
                 } else {
-                    auto mit = std::find_if(backend::world.materials.begin(),backend::world.materials.end(),
+                    auto mit = std::find_if(backend::materials.begin(),backend::materials.end(),
                                             [&surf](const Material::SP& m) {
                                                 return m->handle == surf.material;
                                             });
-                    if (mit != backend::world.materials.end()) {
-                        matID = (unsigned)(mit-backend::world.materials.begin());
+                    if (mit != backend::materials.end()) {
+                        matID = (unsigned)(mit-backend::materials.begin());
                     }
                 }
 
