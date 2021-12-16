@@ -66,6 +66,24 @@ namespace generic {
         }
     }
 
+    int Frame::getProperty(const char* name,
+                           ANARIDataType type,
+                           void* mem,
+                           uint64_t size,
+                           uint32_t waitMask)
+    {
+        if (strncmp(name,"duration",8)==0 && type==ANARI_FLOAT32) {
+            if (renderFuture.valid()) {
+                if (waitMask & ANARI_WAIT)
+                    renderFuture.wait();
+                memcpy(mem,&duration,sizeof(duration));
+                return 1;
+            }
+        }
+
+        return Object::getProperty(name,type,mem,size,waitMask);
+    }
+
 } // generic
 
 

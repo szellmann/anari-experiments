@@ -28,6 +28,12 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        int getProperty(const char* name,
+                        ANARIDataType type,
+                        void* mem,
+                        uint64_t size,
+                        uint32_t waitMask);
+
         ANARIWorld world = nullptr;
         ANARICamera camera = nullptr;
         ANARIRenderer renderer = nullptr;
@@ -36,6 +42,9 @@ namespace generic {
         ANARIDataType depth;
 
         std::future<void> renderFuture;
+
+        // last duration for rendering
+        float duration = 0.f;
 
     private:
         ANARIFrame resourceHandle = nullptr;

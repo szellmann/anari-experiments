@@ -787,8 +787,11 @@ namespace generic {
         {
             flushCommitBuffer();
 
-            frame.renderFuture = std::async([]() {
+            frame.renderFuture = std::async([&frame]() {
+                auto start = std::chrono::steady_clock::now();
                 renderer.renderFrame(backend::frame,backend::world);
+                auto end = std::chrono::steady_clock::now();
+                frame.duration = std::chrono::duration<float>(end - start).count();
             });
         }
 

@@ -216,7 +216,13 @@ namespace generic {
                             uint64_t size,
                             ANARIWaitMask mask)
     {
-        return 0;
+        Object* obj = (Object*)GetResource(object);
+        if (obj == nullptr) {
+            LOG(logging::Level::Error) << "ANARIDevice error: querying prpertion on object: " << name;
+            return 0;
+        } else {
+            return obj->getProperty(name,type,mem,size,mask);
+        }
     }
 
     //--- FrameBuffer Manipulation ------------------------
