@@ -247,18 +247,28 @@ namespace generic {
             ANARIMaterial handle = nullptr;
         };
 
+        struct Surface
+        {
+            using SP = std::shared_ptr<Surface>;
+
+            TriangleBVH::bvh_inst bvhInst;
+            Material::SP material = nullptr;
+
+            ANARISurface handle = nullptr;
+        };
+
         struct World
         {
             using SP = std::shared_ptr<World>;
 
             aligned_vector<StructuredVolume> structuredVolumes;
-            std::map<unsigned,unsigned> instID2matID;
             struct {
-                bool hasChanged = false;
-                aligned_vector<TriangleBVH::bvh_inst> bvhInsts;
                 TriangleTLAS tlas;
+                aligned_vector<TriangleBVH::bvh_inst> bvhInsts;
                 aligned_vector<generic_material<matte<float>>> materials;
-            } surfaces;
+            } surfaceImpl;
+
+            ANARIWorld handle = nullptr;
         };
 
         struct Renderer
@@ -345,11 +355,11 @@ namespace generic {
                             result.color = bounce ? vec4f(L, 1.f) : backgroundColor;
                             return result;
                         }, sparams);
-                    } else if (!world.surfaces.bvhInsts.empty()) {
+                    } else if (!world.surfaceImpl.bvhInsts.empty()) {
                         auto kparams = make_kernel_params(
-                            &world.surfaces.tlas,
-                            &world.surfaces.tlas+1,
-                            world.surfaces.materials.begin(),
+                            &world.surfaceImpl.tlas,
+                            &world.surfaceImpl.tlas+1,
+                            world.surfaceImpl.materials.begin(),
                             10,
                             1e-5f,
                             backgroundColor,
@@ -458,6 +468,7 @@ namespace generic {
 
         std::vector<TriangleGeom::SP> triangleGeoms;
         std::vector<Material::SP> materials;
+        std::vector<Surface::SP> surfaces;
 
         Renderer renderer;
         Frame frame;
@@ -525,27 +536,57 @@ namespace generic {
 
         void commit(generic::World& world)
         {
-            enqueueCommit([]() {
-                if (backend::world.surfaces.hasChanged) {
-                    backend::world.surfaces.materials.clear();
+            enqueueCommit([&world]() {
+                if (world.surface != nullptr) { // TODO: should check if there were any changes at all
+                    Array1D* surfaces = (Array1D*)GetResource(world.surface);
+
+                    backend::world.surfaceImpl.bvhInsts.clear();
+                    backend::world.surfaceImpl.materials.clear();
+
+                    unsigned defaultMatID = 0;
+                    std::vector<Material::SP> mats;
+                    mats.push_back(backend::materials[defaultMatID]);
+
+                    for (uint32_t i=0; i<surfaces->numItems[0]; ++i) {
+                        ANARISurface surf = ((ANARISurface*)(surfaces->data))[i];
+                        auto sit = std::find_if(backend::surfaces.begin(),backend::surfaces.end(),
+                                                [surf](const Surface::SP& srf) {
+                                                    return srf->handle == surf;
+                                                });
+
+                        assert(sit != backend::surfaces.end());
+
+                        unsigned instID = 0;
+
+                        if ((*sit)->material != nullptr) {
+                            ANARIMaterial m = (*sit)->material->handle;
+
+                            auto mit = std::find_if(mats.begin(),mats.end(),
+                                                    [m](const Material::SP& mat) {
+                                                        return mat->handle == m;
+                                                    });
+
+                            if (mit != mats.end()) {
+                                instID = mit-mats.begin();
+                            } else {
+                                instID = (unsigned)mats.size();
+                                mats.push_back((*sit)->material);
+                            }
+                        }
+
+                        TriangleBVH::bvh_inst inst = (*sit)->bvhInst;
+                        inst.set_inst_id(instID);
+                        backend::world.surfaceImpl.bvhInsts.push_back(inst);
+                    }
 
                     lbvh_builder builder;
 
-                    backend::world.surfaces.tlas = builder.build(TriangleTLAS{},
-                                                                 backend::world.surfaces.bvhInsts.data(),
-                                                                 backend::world.surfaces.bvhInsts.size());
+                    backend::world.surfaceImpl.tlas = builder.build(TriangleTLAS{},
+                                                                    backend::world.surfaceImpl.bvhInsts.data(),
+                                                                    backend::world.surfaceImpl.bvhInsts.size());
 
-                    for (auto it = backend::world.instID2matID.begin();
-                              it != backend::world.instID2matID.end();
-                              ++it) {
-                        unsigned instID = it->first;
-                        unsigned matID = it->second;
-
-                        if (instID >= backend::world.surfaces.materials.size())
-                            backend::world.surfaces.materials.resize(instID+1);
-
-                        assert(backend::materials.size()>matID);
-                        Material::SP m = backend::materials[matID];
+                    for (size_t i=0; i<mats.size(); ++i) {
+                        Material::SP m = mats[i];
 
                         matte<float> mat;
                         mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
@@ -553,10 +594,8 @@ namespace generic {
                         mat.ka() = 1.f;
                         mat.kd() = 1.f;
 
-                        backend::world.surfaces.materials[instID] = mat;
+                        backend::world.surfaceImpl.materials.push_back(mat);
                     }
-
-                    backend::world.surfaces.hasChanged = false;
                 }
 
                 // TODO: same for volumes?
@@ -656,8 +695,6 @@ namespace generic {
                 } else {
                     assert(0 && "not implemented yet!!");
                 }
-
-                backend::world.surfaces.hasChanged = true;
             }, ExecutionOrder::TriangleGeom);
         }
 
@@ -683,7 +720,6 @@ namespace generic {
                     (*it)->color = vec3f{mat.color};
                 }
 
-                backend::world.surfaces.hasChanged = true;
                 renderer.accumID = 0;
             }, ExecutionOrder::Matte);
         }
@@ -691,43 +727,40 @@ namespace generic {
         void commit(generic::Surface& surf)
         {
             enqueueCommit([&surf]() {
-                assert(surf.geometry != nullptr);
-
-                auto it = std::find_if(backend::triangleGeoms.begin(),backend::triangleGeoms.end(),
-                                       [&surf](const TriangleGeom::SP& tg) {
-                                           return tg->handle == surf.geometry;
+                auto it = std::find_if(backend::surfaces.begin(),backend::surfaces.end(),
+                                       [&surf](const Surface::SP& srf) {
+                                           return srf->handle == surf.getResourceHandle();
                                        });
 
-                static int instID = 0;
-                backend::world.surfaces.bvhInsts.push_back((*it)->bvh.inst({mat3x3::identity(),vec3f(0.f)}));
-                backend::world.surfaces.bvhInsts.back().set_inst_id(instID);
+                if (it == backend::surfaces.end()) {
+                    backend::surfaces.push_back(std::make_shared<Surface>());
+                    it = backend::surfaces.end()-1;
+                }
 
-                unsigned matID(-1);
-                if (surf.material == nullptr) {
-                    if (backend::materials.empty()) {
-                        backend::createDefaultMaterial();
-                    }
-                    matID = 0;
-                } else {
+                (*it)->handle = (ANARISurface)surf.getResourceHandle();
+
+                assert(surf.geometry != nullptr);
+
+                auto git = std::find_if(backend::triangleGeoms.begin(),backend::triangleGeoms.end(),
+                                        [&surf](const TriangleGeom::SP& tg) {
+                                            return tg->handle == surf.geometry;
+                                        });
+
+                assert(git != backend::triangleGeoms.end());
+
+                (*it)->bvhInst = (*git)->bvh.inst({mat3x3::identity(),vec3f(0.f)});
+
+                if (surf.material != nullptr) {
                     auto mit = std::find_if(backend::materials.begin(),backend::materials.end(),
-                                            [&surf](const Material::SP& m) {
-                                                return m->handle == surf.material;
+                                            [&surf](const Material::SP& mat) {
+                                                return mat->handle == surf.material;
                                             });
-                    if (mit != backend::materials.end()) {
-                        matID = (unsigned)(mit-backend::materials.begin());
-                    }
+
+                    assert(mit != backend::materials.end());
+
+                    (*it)->material = *mit;
                 }
 
-                if (matID == unsigned(-1)) {
-                    LOG(logging::Level::Warning) << "Backend: material wasn't found, using default one";
-                    matID = 0;
-                }
-
-                backend::world.instID2matID.insert({instID,matID});
-
-                instID++;
-
-                backend::world.surfaces.hasChanged = true;
                 renderer.accumID = 0;
             }, ExecutionOrder::Surface);
         }
