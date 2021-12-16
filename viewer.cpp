@@ -79,13 +79,14 @@ struct Viewer : visionaray::viewer_glut
     void on_display() {
 
         float duration = 0.f;
-        anariGetProperty(anari.device, anari.frame, "duration", ANARI_FLOAT32, &duration, sizeof(duration), ANARI_NO_WAIT);
-        std::stringstream str;
-        str << std::setprecision(2);
-        str << std::fixed;
-        str << 1.f/duration << " FPS";
-        std::string fpsStr = str.str();
-        set_window_title(fpsStr.c_str());
+        if (anariGetProperty(anari.device, anari.frame, "duration", ANARI_FLOAT32, &duration, sizeof(duration), ANARI_NO_WAIT)) {
+            std::stringstream str;
+            str << std::setprecision(2);
+            str << std::fixed;
+            str << 1.f/duration << " FPS";
+            std::string fpsStr = str.str();
+            set_window_title(fpsStr.c_str());
+        }
 
         anari.scene->beforeRenderFrame();
 
