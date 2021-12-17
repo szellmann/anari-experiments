@@ -1366,9 +1366,6 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anari->volumes = std::move(volumes);
                 anari->lights = std::move(lights);
 
-                if (!notEmpty)
-                    break;
-
                 if (trans->anariInstance == nullptr)
                     trans->anariInstance = anariNewInstance(anari->device);
 
