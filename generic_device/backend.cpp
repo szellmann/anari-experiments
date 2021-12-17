@@ -102,58 +102,13 @@ namespace generic {
             }
         };
 
-        struct StructuredVolume
+        struct StructuredVolumeRef
         {
-            StructuredVolume() = default;
+            texture_ref<float, 3> texture3f;
+            texture_ref<vec4f, 1> textureRGBA;
 
-            void reset(Volume& volume)
-            {
-                handle = (ANARIVolume)volume.getResourceHandle();
-
-                ANARISpatialField f = volume.field;
-                StructuredRegular* sr = (StructuredRegular*)GetResource(f);
-                ANARIArray3D d = sr->data;
-                if (d != handle3f) { // new volume data!
-                    Array3D* data = (Array3D*)GetResource(d);
-
-                    storage3f = texture<float, 3>((unsigned)data->numItems[0],
-                                                  (unsigned)data->numItems[1],
-                                                  (unsigned)data->numItems[2]);
-                    storage3f.reset((const float*)data->data);
-                    storage3f.set_filter_mode(Linear);
-                    storage3f.set_address_mode(Clamp);
-
-                    texture3f = texture_ref<float, 3>(storage3f);
-
-                    bbox = aabb({0.f,0.f,0.f},{(float)data->numItems[0],(float)data->numItems[1],(float)data->numItems[2]});
-
-                    handle3f = d;
-                }
-
-                ANARIArray1D color = volume.color;
-                ANARIArray1D opacity = volume.opacity;
-
-                if (color != handleRGB || opacity != handleA) { // TF changed
-                    Array1D* rgb = (Array1D*)GetResource(color);
-                    Array1D* a = (Array1D*)GetResource(opacity);
-
-                    aligned_vector<vec4f> rgba(rgb->numItems[0]);
-                    for (uint64_t i = 0; i < rgb->numItems[0]; ++i) {
-                        vec4f val(((vec3f*)rgb->data)[i],((float*)a->data)[i]);
-                        rgba[i] = val;
-                    }
-
-                    storageRGBA = texture<vec4f, 1>(rgb->numItems[0]);
-                    storageRGBA.reset(rgba.data());
-                    storageRGBA.set_filter_mode(Linear);
-                    storageRGBA.set_address_mode(Clamp);
-
-                    textureRGBA = texture_ref<vec4f, 1>(storageRGBA);
-
-                    handleRGB = color;
-                    handleA = opacity;
-                }
-            }
+            aabb bbox;
+            float mu_ = 1.f;
 
             VSNRAY_FUNC
             vec3 albedo(vec3 const& pos)
@@ -212,14 +167,65 @@ namespace generic {
                              +tex3D(texture3f,vec3f(texCoord.x,texCoord.y,texCoord.z+delta.z))
                              -tex3D(texture3f,vec3f(texCoord.x,texCoord.y,texCoord.z-delta.z)));
             }
+        };
+
+        struct StructuredVolume
+        {
+            using SP = std::shared_ptr<StructuredVolume>;
+
+            void reset(generic::Volume& volume)
+            {
+                handle = (ANARIVolume)volume.getResourceHandle();
+
+                ANARISpatialField f = volume.field;
+                StructuredRegular* sr = (StructuredRegular*)GetResource(f);
+                ANARIArray3D d = sr->data;
+                if (d != handle3f) { // new volume data!
+                    Array3D* data = (Array3D*)GetResource(d);
+
+                    storage3f = texture<float, 3>((unsigned)data->numItems[0],
+                                                  (unsigned)data->numItems[1],
+                                                  (unsigned)data->numItems[2]);
+                    storage3f.reset((const float*)data->data);
+                    storage3f.set_filter_mode(Linear);
+                    storage3f.set_address_mode(Clamp);
+
+                    ref.texture3f = texture_ref<float, 3>(storage3f);
+
+                    ref.bbox = aabb({0.f,0.f,0.f},{(float)data->numItems[0],(float)data->numItems[1],(float)data->numItems[2]});
+
+                    handle3f = d;
+                }
+
+                ANARIArray1D color = volume.color;
+                ANARIArray1D opacity = volume.opacity;
+
+                if (color != handleRGB || opacity != handleA) { // TF changed
+                    Array1D* rgb = (Array1D*)GetResource(color);
+                    Array1D* a = (Array1D*)GetResource(opacity);
+
+                    aligned_vector<vec4f> rgba(rgb->numItems[0]);
+                    for (uint64_t i = 0; i < rgb->numItems[0]; ++i) {
+                        vec4f val(((vec3f*)rgb->data)[i],((float*)a->data)[i]);
+                        rgba[i] = val;
+                    }
+
+                    storageRGBA = texture<vec4f, 1>(rgb->numItems[0]);
+                    storageRGBA.reset(rgba.data());
+                    storageRGBA.set_filter_mode(Linear);
+                    storageRGBA.set_address_mode(Clamp);
+
+                    ref.textureRGBA = texture_ref<vec4f, 1>(storageRGBA);
+
+                    handleRGB = color;
+                    handleA = opacity;
+                }
+            }
 
             texture<float, 3> storage3f;
-            texture_ref<float, 3> texture3f;
             texture<vec4f, 1> storageRGBA;
-            texture_ref<vec4f, 1> textureRGBA;
 
-            aabb bbox;
-            float mu_ = 1.f;
+            StructuredVolumeRef ref;
 
             ANARIVolume handle = nullptr;
             ANARIArray3D handle3f = nullptr;
@@ -261,12 +267,15 @@ namespace generic {
         {
             using SP = std::shared_ptr<World>;
 
-            aligned_vector<StructuredVolume> structuredVolumes;
             struct {
                 TriangleTLAS tlas;
                 aligned_vector<TriangleBVH::bvh_inst> bvhInsts;
                 aligned_vector<generic_material<matte<float>>> materials;
             } surfaceImpl;
+
+            struct {
+                aligned_vector<StructuredVolumeRef*> structuredVolumes;
+            } volumeImpl;
 
             ANARIWorld handle = nullptr;
         };
@@ -291,8 +300,8 @@ namespace generic {
 
                 if (algorithm==Algorithm::Pathtracing) {
 
-                    if (world.structuredVolumes.size()==1) { // single volume only
-                        StructuredVolume& volume = world.structuredVolumes[0];
+                    if (world.volumeImpl.structuredVolumes.size()==1) { // single volume only
+                        StructuredVolumeRef& volume = *world.volumeImpl.structuredVolumes[0];
 
                         float heightf = (float)frame.height();
 
@@ -372,7 +381,7 @@ namespace generic {
                 } else if (algorithm==Algorithm::AmbientOcclusion) {
 
                     if (1) { // single volume only
-                        StructuredVolume& volume = world.structuredVolumes[0];
+                        StructuredVolumeRef& volume = *world.volumeImpl.structuredVolumes[0];
 
                         float dt = 2.f;
                         vec3f gradientDelta = 1.f/volume.bbox.size();
@@ -469,6 +478,7 @@ namespace generic {
         std::vector<TriangleGeom::SP> triangleGeoms;
         std::vector<Material::SP> materials;
         std::vector<Surface::SP> surfaces;
+        std::vector<StructuredVolume::SP> structuredVolumes;
 
         Renderer renderer;
         Frame frame;
@@ -537,6 +547,7 @@ namespace generic {
         void commit(generic::World& world)
         {
             enqueueCommit([&world]() {
+                // Surfaces
                 if (world.surface != nullptr) { // TODO: should check if there were any changes at all
                     Array1D* surfaces = (Array1D*)GetResource(world.surface);
 
@@ -598,7 +609,25 @@ namespace generic {
                     }
                 }
 
-                // TODO: same for volumes?
+                // Volumes
+                if (world.volume != nullptr) { // TODO: should check if there were any changes at all
+                    Array1D* volumes = (Array1D*)GetResource(world.volume);
+
+                    backend::world.volumeImpl.structuredVolumes.clear();
+
+                    for (uint32_t i=0; i<volumes->numItems[0]; ++i) {
+                        ANARIVolume vol = ((ANARIVolume*)(volumes->data))[i];
+                        auto vit = std::find_if(backend::structuredVolumes.begin(),backend::structuredVolumes.end(),
+                                                [vol](const StructuredVolume::SP& sv) {
+                                                    return sv->handle == vol;
+                                                });
+
+                        assert(vit != backend::structuredVolumes.end());
+
+                        backend::world.volumeImpl.structuredVolumes.push_back(&(*vit)->ref);
+                    }
+                }
+
             }, ExecutionOrder::World);
         }
 
@@ -772,19 +801,20 @@ namespace generic {
         void commit(generic::Volume& vol)
         {
             enqueueCommit([&vol]() {
-                auto it = std::find_if(backend::world.structuredVolumes.begin(),
-                                       backend::world.structuredVolumes.end(),
-                                       [&vol](const StructuredVolume& sv) {
-                                           return sv.handle != nullptr
-                                               && sv.handle == vol.getResourceHandle();
+                auto it = std::find_if(backend::structuredVolumes.begin(),
+                                       backend::structuredVolumes.end(),
+                                       [&vol](const StructuredVolume::SP& sv) {
+                                           return sv->handle != nullptr
+                                               && sv->handle == vol.getResourceHandle();
                                        });
 
-                if (it == backend::world.structuredVolumes.end()) {
-                    backend::world.structuredVolumes.emplace_back();
-                    backend::world.structuredVolumes.back().reset(vol);
-                } else {
-                    it->reset(vol);
+                if (it == backend::structuredVolumes.end()) {
+                    backend::structuredVolumes.push_back(std::make_shared<StructuredVolume>());
+                    it = backend::structuredVolumes.end()-1;
                 }
+
+                (*it)->handle = (ANARIVolume)vol.getResourceHandle();
+                (*it)->reset(vol);
 
                 renderer.accumID = 0;
             }, ExecutionOrder::Volume);
