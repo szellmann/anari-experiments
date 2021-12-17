@@ -80,8 +80,6 @@ namespace generic {
             void* colorPtr = nullptr;
             void* depthPtr = nullptr;
 
-            thin_lens_camera cam;
-
             void reset(int width, int height, pixel_format color, pixel_format depth, bool srgb)
             {
                 resize(width,height);
@@ -100,6 +98,14 @@ namespace generic {
 
                 sRGB = srgb;
             }
+        };
+
+        struct Camera
+        {
+            using SP = std::shared_ptr<Camera>;
+
+            thin_lens_camera impl;
+            ANARICamera handle = nullptr;
         };
 
         struct StructuredVolumeRef
@@ -287,7 +293,7 @@ namespace generic {
             tiled_sched<ray> sched{std::thread::hardware_concurrency()};
             unsigned accumID=0;
 
-            void renderFrame(Frame& frame, World& world)
+            void renderFrame(Frame& frame, thin_lens_camera& cam, World& world)
             {
                 static unsigned frame_num = 0;
                 pixel_sampler::basic_jittered_blend_type<float> blend_params;
@@ -296,7 +302,7 @@ namespace generic {
                 //float alpha = 1.f / 1.f;
                 blend_params.sfactor = alpha;
                 blend_params.dfactor = 1.f - alpha;
-                auto sparams = make_sched_params(blend_params,frame.cam,frame);
+                auto sparams = make_sched_params(blend_params,cam,frame);
 
                 if (algorithm==Algorithm::Pathtracing) {
 
@@ -481,6 +487,7 @@ namespace generic {
         std::vector<StructuredVolume::SP> structuredVolumes;
 
         Renderer renderer;
+        std::vector<Camera::SP> cameras;
         Frame frame;
         World world;
 
@@ -634,14 +641,26 @@ namespace generic {
         void commit(generic::Camera& cam)
         {
             enqueueCommit([&cam]() {
+                auto it = std::find_if(backend::cameras.begin(),backend::cameras.end(),
+                                       [&cam](const Camera::SP& c) {
+                                           return c->handle == cam.getResourceHandle();
+                                       });
+
+                if (it == backend::cameras.end()) {
+                    Camera::SP c = std::make_shared<Camera>();
+                    c->handle = (ANARICamera)cam.getResourceHandle();
+                    backend::cameras.push_back(c);
+                    it = backend::cameras.end()-1;
+                }
+
                 vec3f eye(cam.position);
                 vec3f dir(cam.direction);
                 vec3f center = eye+dir;
                 vec3f up(cam.up);
-                if (eye!=frame.cam.eye() || center!=frame.cam.center() || up!=frame.cam.up()) {
-                    frame.cam.look_at(eye,center,up);
-                    frame.cam.set_lens_radius(cam.apertureRadius);
-                    frame.cam.set_focal_distance(cam.focusDistance);
+                if (eye!=(*it)->impl.eye() || center!=(*it)->impl.center() || up!=(*it)->impl.up()) {
+                    (*it)->impl.look_at(eye,center,up);
+                    (*it)->impl.set_lens_radius(cam.apertureRadius);
+                    (*it)->impl.set_focal_distance(cam.focusDistance);
                     renderer.accumID = 0;
                 }
             }, ExecutionOrder::Camera);
@@ -650,7 +669,19 @@ namespace generic {
         void commit(generic::PerspectiveCamera& cam)
         {
             enqueueCommit([&cam]() {
-                frame.cam.perspective(cam.fovy,cam.aspect,.001f,1000.f);
+                auto it = std::find_if(backend::cameras.begin(),backend::cameras.end(),
+                                       [&cam](const Camera::SP& c) {
+                                           return c->handle == cam.getResourceHandle();
+                                       });
+
+                if (it == backend::cameras.end()) {
+                    Camera::SP c = std::make_shared<Camera>();
+                    c->handle = (ANARICamera)cam.getResourceHandle();
+                    backend::cameras.push_back(c);
+                    it = backend::cameras.end()-1;
+                }
+
+                (*it)->impl.perspective(cam.fovy,cam.aspect,.001f,1000.f);
             }, ExecutionOrder::PerspectiveCamera);
         }
 
@@ -668,7 +699,15 @@ namespace generic {
 
                 backend::frame.reset(frame.size[0],frame.size[1],color,depth,sRGB);
 
-                backend::frame.cam.set_viewport(0,0,frame.size[0],frame.size[1]);
+                // Also resize camera viewport
+                auto cit = std::find_if(backend::cameras.begin(),backend::cameras.end(),
+                                        [&frame](const Camera::SP& c) {
+                                            return c->handle == frame.camera;
+                                        });
+
+                assert(cit != backend::cameras.end());
+
+                (*cit)->impl.set_viewport(0,0,frame.size[0],frame.size[1]);
             }, ExecutionOrder::Frame);
         }
 
@@ -851,8 +890,15 @@ namespace generic {
             flushCommitBuffer();
 
             frame.renderFuture = std::async([&frame]() {
+                auto cit = std::find_if(backend::cameras.begin(),backend::cameras.end(),
+                                        [&frame](const Camera::SP& c) {
+                                            return c->handle == frame.camera;
+                                        });
+
+                assert(cit != backend::cameras.end());
+
                 auto start = std::chrono::steady_clock::now();
-                renderer.renderFrame(backend::frame,backend::world);
+                renderer.renderFrame(backend::frame,(*cit)->impl,backend::world);
                 auto end = std::chrono::steady_clock::now();
                 frame.duration = std::chrono::duration<float>(end - start).count();
             });
