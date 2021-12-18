@@ -493,7 +493,7 @@ namespace generic {
         Renderer renderer;
         std::vector<Camera::SP> cameras;
         std::vector<Frame::SP> frames;
-        World world;
+        std::vector<World::SP> worlds;
 
         void createDefaultMaterial()
         {
@@ -558,12 +558,25 @@ namespace generic {
         void commit(generic::World& world)
         {
             enqueueCommit([&world]() {
+                auto it = std::find_if(backend::worlds.begin(),
+                                       backend::worlds.end(),
+                                       [&world](const World::SP& wrld) {
+                                           return wrld->handle == world.getResourceHandle();
+                                       });
+
+                if (it == backend::worlds.end()) {
+                    World::SP wrld = std::make_shared<World>();
+                    wrld->handle = (ANARIWorld)world.getResourceHandle();
+                    backend::worlds.push_back(wrld);
+                    it = backend::worlds.end()-1;
+                }
+
                 // Surfaces
                 if (world.surface != nullptr) { // TODO: should check if there were any changes at all
                     Array1D* surfaces = (Array1D*)GetResource(world.surface);
 
-                    backend::world.surfaceImpl.bvhInsts.clear();
-                    backend::world.surfaceImpl.materials.clear();
+                    (*it)->surfaceImpl.bvhInsts.clear();
+                    (*it)->surfaceImpl.materials.clear();
 
                     unsigned defaultMatID = 0;
                     std::vector<Material::SP> mats;
@@ -598,14 +611,14 @@ namespace generic {
 
                         TriangleBVH::bvh_inst inst = (*sit)->bvhInst;
                         inst.set_inst_id(instID);
-                        backend::world.surfaceImpl.bvhInsts.push_back(inst);
+                        (*it)->surfaceImpl.bvhInsts.push_back(inst);
                     }
 
                     lbvh_builder builder;
 
-                    backend::world.surfaceImpl.tlas = builder.build(TriangleTLAS{},
-                                                                    backend::world.surfaceImpl.bvhInsts.data(),
-                                                                    backend::world.surfaceImpl.bvhInsts.size());
+                    (*it)->surfaceImpl.tlas = builder.build(TriangleTLAS{},
+                                                            (*it)->surfaceImpl.bvhInsts.data(),
+                                                            (*it)->surfaceImpl.bvhInsts.size());
 
                     for (size_t i=0; i<mats.size(); ++i) {
                         Material::SP m = mats[i];
@@ -616,7 +629,7 @@ namespace generic {
                         mat.ka() = 1.f;
                         mat.kd() = 1.f;
 
-                        backend::world.surfaceImpl.materials.push_back(mat);
+                        (*it)->surfaceImpl.materials.push_back(mat);
                     }
                 }
 
@@ -624,7 +637,7 @@ namespace generic {
                 if (world.volume != nullptr) { // TODO: should check if there were any changes at all
                     Array1D* volumes = (Array1D*)GetResource(world.volume);
 
-                    backend::world.volumeImpl.structuredVolumes.clear();
+                    (*it)->volumeImpl.structuredVolumes.clear();
 
                     for (uint32_t i=0; i<volumes->numItems[0]; ++i) {
                         ANARIVolume vol = ((ANARIVolume*)(volumes->data))[i];
@@ -635,7 +648,7 @@ namespace generic {
 
                         assert(vit != backend::structuredVolumes.end());
 
-                        backend::world.volumeImpl.structuredVolumes.push_back(&(*vit)->ref);
+                        (*it)->volumeImpl.structuredVolumes.push_back(&(*vit)->ref);
                     }
                 }
 
@@ -913,22 +926,28 @@ namespace generic {
             flushCommitBuffer();
 
             frame.renderFuture = std::async([&frame]() {
-                auto it = std::find_if(backend::frames.begin(),backend::frames.end(),
-                                       [&frame](const Frame::SP& f) {
-                                           return f->handle == frame.getResourceHandle();
-                                       });
-
-                assert(it != backend::frames.end());
+                auto fit = std::find_if(backend::frames.begin(),backend::frames.end(),
+                                        [&frame](const Frame::SP& f) {
+                                            return f->handle == frame.getResourceHandle();
+                                        });
 
                 auto cit = std::find_if(backend::cameras.begin(),backend::cameras.end(),
                                         [&frame](const Camera::SP& c) {
                                             return c->handle == frame.camera;
                                         });
 
+                auto wit = std::find_if(backend::worlds.begin(),
+                                        backend::worlds.end(),
+                                        [&frame](const World::SP& wrld) {
+                                            return wrld->handle == frame.world;
+                                        });
+
+                assert(fit != backend::frames.end());
                 assert(cit != backend::cameras.end());
+                assert(wit != backend::worlds.end());
 
                 auto start = std::chrono::steady_clock::now();
-                renderer.renderFrame(**it,(*cit)->impl,backend::world);
+                renderer.renderFrame(**fit,(*cit)->impl,**wit);
                 auto end = std::chrono::steady_clock::now();
                 frame.duration = std::chrono::duration<float>(end - start).count();
             });
