@@ -29,6 +29,8 @@ namespace generic {
 
         struct Frame : render_target
         {
+            using SP = std::shared_ptr<Frame>;
+
             auto ref() { return accumBuffer.ref(); }
 
             void clear_color_buffer(const vec4f& color = vec4f(0.f))
@@ -71,15 +73,6 @@ namespace generic {
                 render_target::resize(w,h);accumBuffer.resize(w,h);
             }
 
-            thread_pool pool{std::thread::hardware_concurrency()};
-
-            cpu_buffer_rt<PF_RGBA32F, PF_DEPTH32F> accumBuffer;
-
-            bool sRGB = false;
-
-            void* colorPtr = nullptr;
-            void* depthPtr = nullptr;
-
             void reset(int width, int height, pixel_format color, pixel_format depth, bool srgb)
             {
                 resize(width,height);
@@ -98,6 +91,17 @@ namespace generic {
 
                 sRGB = srgb;
             }
+
+            thread_pool pool{std::thread::hardware_concurrency()};
+
+            cpu_buffer_rt<PF_RGBA32F, PF_DEPTH32F> accumBuffer;
+
+            bool sRGB = false;
+
+            void* colorPtr = nullptr;
+            void* depthPtr = nullptr;
+
+            ANARIFrame handle = nullptr;
         };
 
         struct Camera
@@ -488,7 +492,7 @@ namespace generic {
 
         Renderer renderer;
         std::vector<Camera::SP> cameras;
-        Frame frame;
+        std::vector<Frame::SP> frames;
         World world;
 
         void createDefaultMaterial()
@@ -688,6 +692,18 @@ namespace generic {
         void commit(generic::Frame& frame)
         {
             enqueueCommit([&frame]() {
+                auto it = std::find_if(backend::frames.begin(),backend::frames.end(),
+                                       [&frame](const Frame::SP& f) {
+                                           return f->handle == frame.getResourceHandle();
+                                       });
+
+                if (it == backend::frames.end()) {
+                    Frame::SP f = std::make_shared<Frame>();
+                    f->handle = (ANARIFrame)frame.getResourceHandle();
+                    backend::frames.push_back(f);
+                    it = backend::frames.end()-1;
+                }
+
                 pixel_format color
                     = frame.color==ANARI_UFIXED8_VEC4 || ANARI_UFIXED8_RGBA_SRGB
                         ? PF_RGBA8 : PF_RGBA32F;
@@ -697,7 +713,7 @@ namespace generic {
 
                 bool sRGB = frame.color==ANARI_UFIXED8_RGBA_SRGB;
 
-                backend::frame.reset(frame.size[0],frame.size[1],color,depth,sRGB);
+                (*it)->reset(frame.size[0],frame.size[1],color,depth,sRGB);
 
                 // Also resize camera viewport
                 auto cit = std::find_if(backend::cameras.begin(),backend::cameras.end(),
@@ -882,7 +898,14 @@ namespace generic {
 
         void* map(generic::Frame& frame)
         {
-            return backend::frame.colorPtr;
+            auto it = std::find_if(backend::frames.begin(),backend::frames.end(),
+                                   [&frame](const Frame::SP& f) {
+                                       return f->handle == frame.getResourceHandle();
+                                   });
+
+            assert(it != backend::frames.end());
+
+            return (*it)->colorPtr;
         }
 
         void renderFrame(generic::Frame& frame)
@@ -890,6 +913,13 @@ namespace generic {
             flushCommitBuffer();
 
             frame.renderFuture = std::async([&frame]() {
+                auto it = std::find_if(backend::frames.begin(),backend::frames.end(),
+                                       [&frame](const Frame::SP& f) {
+                                           return f->handle == frame.getResourceHandle();
+                                       });
+
+                assert(it != backend::frames.end());
+
                 auto cit = std::find_if(backend::cameras.begin(),backend::cameras.end(),
                                         [&frame](const Camera::SP& c) {
                                             return c->handle == frame.camera;
@@ -898,7 +928,7 @@ namespace generic {
                 assert(cit != backend::cameras.end());
 
                 auto start = std::chrono::steady_clock::now();
-                renderer.renderFrame(backend::frame,(*cit)->impl,backend::world);
+                renderer.renderFrame(**it,(*cit)->impl,backend::world);
                 auto end = std::chrono::steady_clock::now();
                 frame.duration = std::chrono::duration<float>(end - start).count();
             });
