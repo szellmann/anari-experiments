@@ -101,6 +101,7 @@ namespace generic {
             void* colorPtr = nullptr;
             void* depthPtr = nullptr;
 
+            bool updated = false;
             ANARIFrame handle = nullptr;
         };
 
@@ -109,6 +110,7 @@ namespace generic {
             using SP = std::shared_ptr<Camera>;
 
             thin_lens_camera impl;
+            bool updated = false;
             ANARICamera handle = nullptr;
         };
 
@@ -292,11 +294,6 @@ namespace generic {
 
         struct Renderer
         {
-            Algorithm algorithm;
-            vec4f backgroundColor;
-            tiled_sched<ray> sched{std::thread::hardware_concurrency()};
-            unsigned accumID=0;
-
             void renderFrame(Frame& frame, thin_lens_camera& cam, World& world)
             {
                 static unsigned frame_num = 0;
@@ -483,6 +480,14 @@ namespace generic {
                     }
                 }
             }
+
+            Algorithm algorithm;
+            vec4f backgroundColor;
+            tiled_sched<ray> sched{std::thread::hardware_concurrency()};
+            unsigned accumID=0;
+
+            bool updated = false;
+            ANARIRenderer handle = nullptr;
         };
 
         std::vector<TriangleGeom::SP> triangleGeoms;
@@ -678,7 +683,7 @@ namespace generic {
                     (*it)->impl.look_at(eye,center,up);
                     (*it)->impl.set_lens_radius(cam.apertureRadius);
                     (*it)->impl.set_focal_distance(cam.focusDistance);
-                    renderer.accumID = 0;
+                    (*it)->updated = true;
                 }
             }, ExecutionOrder::Camera);
         }
@@ -699,6 +704,7 @@ namespace generic {
                 }
 
                 (*it)->impl.perspective(cam.fovy,cam.aspect,.001f,1000.f);
+                (*it)->updated = true;
             }, ExecutionOrder::PerspectiveCamera);
         }
 
@@ -737,6 +743,9 @@ namespace generic {
                 assert(cit != backend::cameras.end());
 
                 (*cit)->impl.set_viewport(0,0,frame.size[0],frame.size[1]);
+
+                // Mark updated
+                (*it)->updated = true;
             }, ExecutionOrder::Frame);
         }
 
@@ -816,8 +825,6 @@ namespace generic {
                 } else {
                     (*it)->color = vec3f{mat.color};
                 }
-
-                renderer.accumID = 0;
             }, ExecutionOrder::Matte);
         }
 
@@ -857,8 +864,6 @@ namespace generic {
 
                     (*it)->material = *mit;
                 }
-
-                renderer.accumID = 0;
             }, ExecutionOrder::Surface);
         }
 
@@ -883,8 +888,6 @@ namespace generic {
 
                 (*it)->handle = (ANARIVolume)vol.getResourceHandle();
                 (*it)->reset(vol);
-
-                renderer.accumID = 0;
             }, ExecutionOrder::Volume);
         }
 
@@ -892,6 +895,7 @@ namespace generic {
         {
             enqueueCommit([&rend]() {
                 renderer.backgroundColor = vec4f(rend.backgroundColor);
+                renderer.updated = true;
             }, ExecutionOrder::Renderer);
         }
 
@@ -899,6 +903,7 @@ namespace generic {
         {
             enqueueCommit([&pt]() {
                 renderer.algorithm = Algorithm::Pathtracing;
+                renderer.updated = true;
             }, ExecutionOrder::Pathtracer);
         }
 
@@ -906,6 +911,7 @@ namespace generic {
         {
             enqueueCommit([&ao]() {
                 renderer.algorithm = Algorithm::AmbientOcclusion;
+                renderer.updated = true;
             }, ExecutionOrder::AO);
         }
 
@@ -947,6 +953,10 @@ namespace generic {
                 assert(wit != backend::worlds.end());
 
                 auto start = std::chrono::steady_clock::now();
+                if (renderer.updated || (*fit)->updated || (*cit)->updated) {
+                    renderer.accumID = 0;
+                    renderer.updated = (*fit)->updated = (*cit)->updated = false;
+                }
                 renderer.renderFrame(**fit,(*cit)->impl,**wit);
                 auto end = std::chrono::steady_clock::now();
                 frame.duration = std::chrono::duration<float>(end - start).count();
