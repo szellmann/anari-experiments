@@ -294,6 +294,8 @@ namespace generic {
 
         struct Renderer
         {
+            using SP = std::shared_ptr<Renderer>;
+
             void renderFrame(Frame& frame, thin_lens_camera& cam, World& world)
             {
                 static unsigned frame_num = 0;
@@ -495,7 +497,7 @@ namespace generic {
         std::vector<Surface::SP> surfaces;
         std::vector<StructuredVolume::SP> structuredVolumes;
 
-        Renderer renderer;
+        std::vector<Renderer::SP> renderers;
         std::vector<Camera::SP> cameras;
         std::vector<Frame::SP> frames;
         std::vector<World::SP> worlds;
@@ -894,24 +896,60 @@ namespace generic {
         void commit(generic::Renderer& rend)
         {
             enqueueCommit([&rend]() {
-                renderer.backgroundColor = vec4f(rend.backgroundColor);
-                renderer.updated = true;
+                auto it = std::find_if(backend::renderers.begin(),
+                                       backend::renderers.end(),
+                                       [&rend](const Renderer::SP& r) {
+                                           return r->handle == rend.getResourceHandle();
+                                       });
+
+                if (it == backend::renderers.end()) {
+                    backend::renderers.push_back(std::make_shared<Renderer>());
+                    it = backend::renderers.end()-1;
+                    (*it)->handle = (ANARIRenderer)rend.getResourceHandle();
+                }
+
+                (*it)->backgroundColor = vec4f(rend.backgroundColor);
+                (*it)->updated = true;
             }, ExecutionOrder::Renderer);
         }
 
         void commit(generic::Pathtracer& pt)
         {
             enqueueCommit([&pt]() {
-                renderer.algorithm = Algorithm::Pathtracing;
-                renderer.updated = true;
+                auto it = std::find_if(backend::renderers.begin(),
+                                       backend::renderers.end(),
+                                       [&pt](const Renderer::SP& r) {
+                                           return r->handle == pt.getResourceHandle();
+                                       });
+
+                if (it == backend::renderers.end()) {
+                    backend::renderers.push_back(std::make_shared<Renderer>());
+                    it = backend::renderers.end()-1;
+                    (*it)->handle = (ANARIRenderer)pt.getResourceHandle();
+                }
+
+                (*it)->algorithm = Algorithm::Pathtracing;
+                (*it)->updated = true;
             }, ExecutionOrder::Pathtracer);
         }
 
         void commit(generic::AO& ao)
         {
             enqueueCommit([&ao]() {
-                renderer.algorithm = Algorithm::AmbientOcclusion;
-                renderer.updated = true;
+                auto it = std::find_if(backend::renderers.begin(),
+                                       backend::renderers.end(),
+                                       [&ao](const Renderer::SP& r) {
+                                           return r->handle == ao.getResourceHandle();
+                                       });
+
+                if (it == backend::renderers.end()) {
+                    backend::renderers.push_back(std::make_shared<Renderer>());
+                    it = backend::renderers.end()-1;
+                    (*it)->handle = (ANARIRenderer)ao.getResourceHandle();
+                }
+
+                (*it)->algorithm = Algorithm::AmbientOcclusion;
+                (*it)->updated = true;
             }, ExecutionOrder::AO);
         }
 
@@ -937,6 +975,11 @@ namespace generic {
                                             return f->handle == frame.getResourceHandle();
                                         });
 
+                auto rit = std::find_if(backend::renderers.begin(),backend::renderers.end(),
+                                        [&frame](const Renderer::SP& r) {
+                                            return r->handle == frame.renderer;
+                                        });
+
                 auto cit = std::find_if(backend::cameras.begin(),backend::cameras.end(),
                                         [&frame](const Camera::SP& c) {
                                             return c->handle == frame.camera;
@@ -949,15 +992,16 @@ namespace generic {
                                         });
 
                 assert(fit != backend::frames.end());
+                assert(rit != backend::renderers.end());
                 assert(cit != backend::cameras.end());
                 assert(wit != backend::worlds.end());
 
                 auto start = std::chrono::steady_clock::now();
-                if (renderer.updated || (*fit)->updated || (*cit)->updated) {
-                    renderer.accumID = 0;
-                    renderer.updated = (*fit)->updated = (*cit)->updated = false;
+                if ((*fit)->updated || (*rit)->updated || (*cit)->updated) {
+                    (*rit)->accumID = 0;
+                    (*fit)->updated = (*rit)->updated = (*cit)->updated = false;
                 }
-                renderer.renderFrame(**fit,(*cit)->impl,**wit);
+                (*rit)->renderFrame(**fit,(*cit)->impl,**wit);
                 auto end = std::chrono::steady_clock::now();
                 frame.duration = std::chrono::duration<float>(end - start).count();
             });
