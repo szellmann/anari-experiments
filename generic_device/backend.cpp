@@ -8,13 +8,16 @@
 #include <visionaray/texture/texture.h>
 #include <visionaray/aligned_vector.h>
 #include <visionaray/cpu_buffer_rt.h>
+#include <visionaray/generic_light.h>
 #include <visionaray/generic_material.h>
 #include <visionaray/kernels.h>
 #include <visionaray/material.h>
 #include <visionaray/phase_function.h>
+#include <visionaray/point_light.h>
 #include <visionaray/random_generator.h>
 #include <visionaray/sampling.h>
 #include <visionaray/scheduler.h>
+#include <visionaray/spot_light.h>
 #include <visionaray/thin_lens_camera.h>
 #include "array.hpp"
 #include "backend.hpp"
@@ -112,6 +115,19 @@ namespace generic {
             thin_lens_camera impl;
             bool updated = false;
             ANARICamera handle = nullptr;
+        };
+
+        struct Light
+        {
+            using SP = std::shared_ptr<Light>;
+
+            vec3f color{1.f,1.f,1.f};
+
+            struct {
+                vec3f position{0.f,0.f,0.f};
+            } asPointLight;
+
+            ANARILight handle = nullptr;
         };
 
         struct StructuredVolumeRef
@@ -289,6 +305,10 @@ namespace generic {
                 aligned_vector<StructuredVolumeRef*> structuredVolumes;
             } volumeImpl;
 
+            struct {
+                aligned_vector<generic_light<point_light<float>,spot_light<float>>> lights;
+            } lightImpl;
+
             ANARIWorld handle = nullptr;
         };
 
@@ -374,14 +394,21 @@ namespace generic {
                             return result;
                         }, sparams);
                     } else if (!world.surfaceImpl.bvhInsts.empty()) {
+                        vec4f ambient{0.f,0.f,0.f,0.f};
+
+                        if (world.lightImpl.lights.empty())
+                            ambient = vec4f(1.f,1.f,1.f,1.f);
+
                         auto kparams = make_kernel_params(
                             &world.surfaceImpl.tlas,
                             &world.surfaceImpl.tlas+1,
                             world.surfaceImpl.materials.begin(),
+                            world.lightImpl.lights.begin(),
+                            world.lightImpl.lights.end(),
                             10,
                             1e-5f,
                             backgroundColor,
-                            vec4f{1.f,1.f,1.f,1.f}
+                            ambient
                         );
                         pathtracing::kernel<decltype(kparams)> kernel;
                         kernel.params = kparams;
@@ -496,6 +523,7 @@ namespace generic {
         std::vector<Material::SP> materials;
         std::vector<Surface::SP> surfaces;
         std::vector<StructuredVolume::SP> structuredVolumes;
+        std::vector<Light::SP> lights;
 
         std::vector<Renderer::SP> renderers;
         std::vector<Camera::SP> cameras;
@@ -515,6 +543,8 @@ namespace generic {
             Matte = 6,
             Volume = 5,
             Surface = 5,
+            Light = 5,
+            PointLight = 5,
             World = 4,
             Camera = 3,
             PerspectiveCamera = 2,
@@ -659,6 +689,33 @@ namespace generic {
                     }
                 }
 
+                // Lights
+                if (world.light != nullptr) {
+                    Array1D* lights = (Array1D*)GetResource(world.light);
+
+                    (*it)->lightImpl.lights.clear();
+
+                    for (uint32_t i=0; i<lights->numItems[0]; ++i) {
+                        ANARILight light = ((ANARILight*)(lights->data))[i];
+                        auto lit = std::find_if(backend::lights.begin(),backend::lights.end(),
+                                                [light](const Light::SP& l) {
+                                                    return l->handle == light;
+                                                });
+
+                        assert(lit != backend::lights.end());
+
+                        point_light<float> pl;
+                        // TODO: check if this _is_ a point light!
+                        pl.set_position((*lit)->asPointLight.position);
+                        pl.set_cl((*lit)->color);
+                        pl.set_kl(1.f); // TODO!
+                        pl.set_constant_attenuation(1.f);
+                        pl.set_linear_attenuation(0.f);
+                        pl.set_quadratic_attenuation(0.f);
+                        (*it)->lightImpl.lights.push_back(pl);
+                    }
+                }
+
             }, ExecutionOrder::World);
         }
 
@@ -708,6 +765,44 @@ namespace generic {
                 (*it)->impl.perspective(cam.fovy,cam.aspect,.001f,1000.f);
                 (*it)->updated = true;
             }, ExecutionOrder::PerspectiveCamera);
+        }
+
+        void commit(generic::Light& light)
+        {
+            enqueueCommit([&light]() {
+                auto it = std::find_if(backend::lights.begin(),backend::lights.end(),
+                                       [&light](const Light::SP& l) {
+                                           return l->handle == light.getResourceHandle();
+                                       });
+
+                if (it == backend::lights.end()) {
+                    Light::SP l = std::make_shared<Light>();
+                    l->handle = (ANARILight)light.getResourceHandle();
+                    backend::lights.push_back(l);
+                    it = backend::lights.end()-1;
+                }
+
+                (*it)->color = vec3f(light.color);
+            }, ExecutionOrder::Light);
+        }
+
+        void commit(generic::PointLight& light)
+        {
+            enqueueCommit([&light]() {
+                auto it = std::find_if(backend::lights.begin(),backend::lights.end(),
+                                       [&light](const Light::SP& l) {
+                                           return l->handle == light.getResourceHandle();
+                                       });
+
+                if (it == backend::lights.end()) {
+                    Light::SP l = std::make_shared<Light>();
+                    l->handle = (ANARILight)light.getResourceHandle();
+                    backend::lights.push_back(l);
+                    it = backend::lights.end()-1;
+                }
+
+                (*it)->asPointLight.position = vec3f(light.position);
+            }, ExecutionOrder::PointLight);
         }
 
         void commit(generic::Frame& frame)

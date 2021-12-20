@@ -3,10 +3,12 @@
 #include "ao.hpp"
 #include "camera.hpp"
 #include "frame.hpp"
+#include "light.hpp"
 #include "matte.hpp"
 #include "object.hpp"
 #include "pathtracer.hpp"
 #include "perspectivecamera.hpp"
+#include "pointlight.hpp"
 #include "structuredregular.hpp"
 #include "surface.hpp"
 #include "trianglegeom.hpp"
@@ -24,6 +26,10 @@ namespace generic {
         void commit(generic::Camera& cam);
 
         void commit(generic::PerspectiveCamera& cam);
+
+        void commit(generic::Light& light);
+
+        void commit(generic::PointLight& light);
 
         void commit(generic::Frame& frame);
 

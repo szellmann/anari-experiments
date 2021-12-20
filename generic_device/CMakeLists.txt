@@ -23,11 +23,13 @@ add_library(${PROJECT_NAME}
     geometry.cpp
     group.cpp
     instance.cpp
+    light.cpp
     logging.cpp
     material.cpp
     matte.cpp
     pathtracer.cpp
     perspectivecamera.cpp
+    pointlight.cpp
     renderer.cpp
     resource.cpp
     spatialfield.cpp

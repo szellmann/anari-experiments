@@ -1397,6 +1397,13 @@ void setANARIEntities(GroupNode groupNode, ANARI& anari)
         anariSetParameter(anari.device,groupNode,"volume",ANARI_ARRAY1D,&volumes);
         anariRelease(anari.device,volumes);
     }
+
+    if (anari.lights.size() > 0) {
+        ANARIArray1D lights = anariNewArray1D(anari.device,anari.lights.data(),0,0,
+                                              ANARI_LIGHT,anari.lights.size(),0);
+        anariSetParameter(anari.device,groupNode,"light",ANARI_ARRAY1D,&lights);
+        anariRelease(anari.device,lights);
+    }
 }
 
 static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
@@ -1464,6 +1471,38 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                 if (self->visible)
                     anari->instances.push_back(trans->anariInstance);
+            }
+
+            break;
+        }
+
+        case ASG_TYPE_LIGHT: {
+            Light* light = (Light*)obj->impl;
+
+            if (anari->flags & ASG_BUILD_WORLD_FLAG_LIGHTS) {
+                if (strncmp(light->type.c_str(),"point",5)==0) {
+                    float color[3] {0.f,0.f,0.f};
+                    float position[3] {0.f,0.f,0.f};
+                    ASGParam colorParam, positionParam;
+                    asgLightGetParam(obj,"color",&colorParam);
+                    asgLightGetParam(obj,"position",&positionParam);
+                    asgParamGetValue(colorParam,color);
+                    asgParamGetValue(positionParam,position);
+
+                    anariRelease(anari->device, light->anariLight);
+
+                    light->anariLight = anariNewLight(anari->device,"point");
+
+                    anariSetParameter(anari->device,light->anariLight,"color",
+                                      ANARI_FLOAT32_VEC3,color);
+                    anariSetParameter(anari->device,light->anariLight,"position",
+                                      ANARI_FLOAT32_VEC3,position);
+
+                    anariCommit(anari->device,light->anariLight);
+                }
+
+                if (self->visible)
+                    anari->lights.push_back(light->anariLight);
             }
 
             break;

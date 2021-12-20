@@ -7,6 +7,7 @@
 #include "geometry.hpp"
 #include "group.hpp"
 #include "instance.hpp"
+#include "light.hpp"
 #include "logging.hpp"
 #include "material.hpp"
 #include "renderer.hpp"
@@ -102,7 +103,7 @@ namespace generic {
 
     ANARILight Device::newLight(const char* type)
     {
-        return nullptr;
+        return (ANARILight)RegisterResource(createLight(type));
     }
 
     ANARICamera Device::newCamera(const char* type)
