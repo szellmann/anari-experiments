@@ -563,6 +563,48 @@ ASGError_t asgMaterialGetParam(ASGMaterial material, const char* paramName,
 }
 
 // ========================================================
+// Light
+// ========================================================
+
+struct Light : Params {
+    std::string type;
+    // Exclusively used by ANARI build visitors
+    ANARILight anariLight = NULL;
+};
+
+ASGLight asgNewLight(const char* lightType)
+{
+    ASGLight light = (ASGLight)asgNewObject();
+    light->type = ASG_TYPE_LIGHT;
+    light->impl = (Light*)calloc(1,sizeof(Light));
+    ((Light*)light->impl)->type = lightType;
+    return light;
+}
+
+ASGError_t asgLightGetType(ASGLight light, const char** lightType)
+{
+    *lightType = ((Light*)light->impl)->type.c_str();
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgLightSetParam(ASGLight light, ASGParam param)
+{
+    ((Params*)light->impl)->setParam(param);
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgLightGetParam(ASGLight light, const char* paramName, ASGParam* param)
+{
+    bool found = ((Params*)light->impl)->getParam(paramName,param);
+
+    if (found)
+        return ASG_ERROR_NO_ERROR;
+    else
+        return ASG_ERROR_PARAM_NOT_FOUND;
+}
+
+// ========================================================
 // Geometries
 // ========================================================
 
@@ -998,8 +1040,37 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
         materials.push_back(mat);
         Material* m = (Material*)mat->impl;
     }
+
     assimp::VisitFlags vflags = assimp::FLAG_GEOMETRY | assimp::FLAG_ACCUM_TRANSFORMS;
     assimp::Visit(scene->mRootNode,scene,obj,materials,aiMatrix4x4(),vflags);
+
+    // Add light source underneath root node
+    for (unsigned i=0; i<scene->mNumLights; ++i) {
+        aiLight* assimpLight = scene->mLights[i];
+
+        switch (assimpLight->mType) {
+            case aiLightSource_POINT: {
+                ASGLight light = asgNewLight("");
+
+                float pos[3] = {assimpLight->mPosition.x,
+                                assimpLight->mPosition.y,
+                                assimpLight->mPosition.z};
+                float color[3] = {assimpLight->mColorDiffuse.r,
+                                  assimpLight->mColorDiffuse.g,
+                                  assimpLight->mColorDiffuse.b};
+
+                asgMakePointLight(&light,pos,color);
+
+                asgObjectAddChild(obj,light);
+
+                break;
+            }
+
+            default: {
+                break;
+            }
+        }
+    }
 
     return ASG_ERROR_NO_ERROR;
 #else
@@ -1164,6 +1235,19 @@ ASGError_t asgMakeMatte(ASGMaterial* material, float kd[3], ASGSampler2D mapKD)
 
     asgMaterialSetParam(*material,asgParam3fv("kd",kd));
     asgMaterialSetParam(*material,asgParamSampler2D("mapKD",mapKD));
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgMakePointLight(ASGLight* light, float position[3], float color[3],
+                             float intensity)
+{
+    asgRelease(*light);
+    *light = asgNewLight("point");
+
+    asgLightSetParam(*light,asgParam3fv("position",position));
+    asgLightSetParam(*light,asgParam3fv("color",color));
+    asgLightSetParam(*light,asgParam1f("intensity",intensity));
 
     return ASG_ERROR_NO_ERROR;
 }

@@ -30,12 +30,13 @@ typedef int ASGType_t;
 #define ASG_TYPE_OBJECT                     0
 #define ASG_TYPE_TRIANGLE_GEOMETRY          1000
 #define ASG_TYPE_MATERIAL                   1010
-#define ASG_TYPE_SURFACE                    1020
-#define ASG_TYPE_LOOKUP_TABLE1D             1030
-#define ASG_TYPE_STRUCTURED_VOLUME          1040
-#define ASG_TYPE_TRANSFORM                  1050
-#define ASG_TYPE_SELECT                     1060
-#define ASG_TYPE_CAMERA                     1070
+#define ASG_TYPE_LIGHT                      1020
+#define ASG_TYPE_SURFACE                    1030
+#define ASG_TYPE_LOOKUP_TABLE1D             1040
+#define ASG_TYPE_STRUCTURED_VOLUME          1050
+#define ASG_TYPE_TRANSFORM                  1060
+#define ASG_TYPE_SELECT                     1070
+#define ASG_TYPE_CAMERA                     1080
 
 typedef int ASGDataType_t;
 #define ASG_DATA_TYPE_INT8                  0
@@ -151,8 +152,8 @@ typedef void _ASGImpl;
 typedef _ASGImpl *ASGImpl;
 
 typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry, *ASGMaterial,
-    *ASGSurface, *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform,
-    *ASGSelect, *ASGCamera;
+    *ASGLight, *ASGSurface, *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume,
+    *ASGTransform, *ASGSelect, *ASGCamera;
 
 
 /* ========================================================
@@ -236,6 +237,16 @@ ASGAPI ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param);
 ASGAPI ASGError_t asgMaterialGetParam(ASGMaterial material, const char* paramName,
                                       ASGParam* param);
 
+/*! Construct lights
+  Similar to materials, lights are just collecionts of @see ASGParam's. This
+  allows the user to define more complicated lights such as area lights, HDRI,
+  etc. */
+ASGAPI ASGLight asgNewLight(const char* lightType);
+ASGAPI ASGError_t asgLightGetType(ASGLight light, const char** lightType);
+ASGAPI ASGError_t asgLightSetParam(ASGLight light, ASGParam param);
+ASGAPI ASGError_t asgLightGetParam(ASGLight light, const char* paramName,
+                                   ASGParam* param);
+
 // Geometries
 ASGAPI ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals,
                                                   float* vertexColors,
@@ -294,11 +305,13 @@ ASGAPI ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t fl
 ASGAPI ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName,
                                 uint64_t flags);
 
-// Procedural volumes, builtin materials, RGBA LUTs, etc.
+// Procedural volumes, builtin materials, delta lights, RGBA LUTs, etc.
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);
 ASGAPI ASGError_t asgMakeDefaultLUT1D(ASGLookupTable1D lut, ASGLutID lutID);
 ASGAPI ASGError_t asgMakeMatte(ASGMaterial* material, float kd[3],
                                ASGSampler2D mapKD ASG_DFLT_PARAM(NULL));
+ASGAPI ASGError_t asgMakePointLight(ASGLight* light, float position[3], float color[3],
+                                    float intensity ASG_DFLT_PARAM(1.f));
 
 // Builtin visitors / routines that traverse the whole graph
 
