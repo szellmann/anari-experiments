@@ -902,8 +902,9 @@ namespace assimp {
     VisitFlags FLAG_ACCUM_TRANSFORMS = 2;
 
     void Visit(aiNode* node, const aiScene* scene, ASGObject obj,
-               const std::vector<ASGMaterial>& materials, aiMatrix4x4 accTransform,
-               VisitFlags flags)
+               const std::vector<ASGMaterial>& materials,
+               const std::vector<ASGLight>& lights,
+               aiMatrix4x4 accTransform, VisitFlags flags)
     {
         aiMatrix4x4 transform;
 
@@ -993,15 +994,43 @@ namespace assimp {
                 }
                 transform = aiMatrix4x4(); // identity
             }
-        } else {
-            if (flags & FLAG_ACCUM_TRANSFORMS) {
-                transform = node->mTransformation * accTransform;
+        }
+
+        if (flags & FLAG_ACCUM_TRANSFORMS) {
+            transform = node->mTransformation * accTransform;
+        }
+
+        // Light sources have an associated node with the same name as the
+        // light source (!), whose transform is applied to the light's position
+        auto it = std::find_if(lights.begin(),lights.end(),
+                               [&node](const ASGLight& light) {
+                                   const char* name;
+                                   asgObjectGetName(light,&name);
+                                   return std::string(node->mName.C_Str())
+                                                == std::string(name);
+                               });
+
+        if (it != lights.end()) {
+            if (flags & FLAG_ACCUM_TRANSFORMS) {// flatten
+                float position[3] {0.f,0.f,0.f};
+                ASGParam positionParam;
+                asgLightGetParam(*it,"position",&positionParam);
+
+                aiVector3D v = {position[0],position[1],position[2]};
+                v *= transform;
+                position[0] = v.x;
+                position[1] = v.y;
+                position[2] = v.z;
+
+                // TODO: this only works if there's *one* instance of this light!
+                asgLightSetParam(*it,asgParam3fv("position",position));
+                asgObjectAddChild(obj,*it);
             }
         }
 
         for (unsigned i=0; i<node->mNumChildren; ++i) {
             if (flags & FLAG_ACCUM_TRANSFORMS) // flatten
-                Visit(node->mChildren[i],scene,obj,materials,transform,flags);
+                Visit(node->mChildren[i],scene,obj,materials,lights,transform,flags);
         }
     }
 } // ::assimp
@@ -1038,13 +1067,9 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
         asgMakeMatte(&mat,kd,NULL);
         asgObjectSetName(mat,name.C_Str());
         materials.push_back(mat);
-        Material* m = (Material*)mat->impl;
     }
 
-    assimp::VisitFlags vflags = assimp::FLAG_GEOMETRY | assimp::FLAG_ACCUM_TRANSFORMS;
-    assimp::Visit(scene->mRootNode,scene,obj,materials,aiMatrix4x4(),vflags);
-
-    // Add light source underneath root node
+    std::vector<ASGLight> lights;
     for (unsigned i=0; i<scene->mNumLights; ++i) {
         aiLight* assimpLight = scene->mLights[i];
 
@@ -1059,9 +1084,12 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
                                   assimpLight->mColorDiffuse.g,
                                   assimpLight->mColorDiffuse.b};
 
-                asgMakePointLight(&light,pos,color);
+                aiString name = assimpLight->mName;
 
-                asgObjectAddChild(obj,light);
+                asgMakePointLight(&light,pos,color);
+                asgObjectSetName(light,name.C_Str());
+
+                lights.push_back(light);
 
                 break;
             }
@@ -1071,6 +1099,9 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
             }
         }
     }
+
+    assimp::VisitFlags vflags = assimp::FLAG_GEOMETRY | assimp::FLAG_ACCUM_TRANSFORMS;
+    assimp::Visit(scene->mRootNode,scene,obj,materials,lights,aiMatrix4x4(),vflags);
 
     return ASG_ERROR_NO_ERROR;
 #else
