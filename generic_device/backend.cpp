@@ -20,6 +20,7 @@
 #include <visionaray/spot_light.h>
 #include <visionaray/thin_lens_camera.h>
 #include "array.hpp"
+#include "group.hpp"
 #include "backend.hpp"
 #include "logging.hpp"
 
@@ -285,10 +286,22 @@ namespace generic {
         {
             using SP = std::shared_ptr<Surface>;
 
-            TriangleBVH::bvh_inst bvhInst;
+            TriangleGeom::SP triangleGeom;
             Material::SP material = nullptr;
+            TriangleBVH::bvh_inst bvhInst;
 
             ANARISurface handle = nullptr;
+        };
+
+        struct Instance
+        {
+            using SP = std::shared_ptr<Instance>;
+
+            float transform[12];
+
+            std::vector<Surface::SP> surfaces;
+
+            ANARIInstance handle = nullptr;
         };
 
         struct World
@@ -521,6 +534,7 @@ namespace generic {
 
         std::vector<TriangleGeom::SP> triangleGeoms;
         std::vector<Material::SP> materials;
+        std::vector<Instance::SP> instances;
         std::vector<Surface::SP> surfaces;
         std::vector<StructuredVolume::SP> structuredVolumes;
         std::vector<Light::SP> lights;
@@ -538,13 +552,14 @@ namespace generic {
 
         enum class ExecutionOrder {
             Object = 9999, // catch error messages first
-            StructuredRegular = 6,
-            TriangleGeom = 6,
-            Matte = 6,
-            Volume = 5,
-            Surface = 5,
-            Light = 5,
-            PointLight = 5,
+            StructuredRegular = 7,
+            TriangleGeom = 7,
+            Matte = 7,
+            Volume = 6,
+            Surface = 6,
+            Light = 6,
+            PointLight = 6,
+            Instance = 5,
             World = 4,
             Camera = 3,
             PerspectiveCamera = 2,
@@ -608,18 +623,86 @@ namespace generic {
                     it = backend::worlds.end()-1;
                 }
 
+                (*it)->surfaceImpl.bvhInsts.clear();
+                (*it)->surfaceImpl.materials.clear();
+                (*it)->lightImpl.lights.clear();
+
+                unsigned instID = 0;
+
+                unsigned defaultMatID = 0;
+                std::vector<Material::SP> mats;
+
+
+                // Instances
+                if (world.instance != nullptr) {
+                    Array1D* instances = (Array1D*)GetResource(world.instance);
+
+                    for (uint32_t i=0; i<instances->numItems[0]; ++i) {
+                        ANARIInstance inst = ((ANARIInstance*)(instances->data))[i];
+                        auto iit = std::find_if(backend::instances.begin(),backend::instances.end(),
+                                                [inst](const Instance::SP& i) {
+                                                    return i->handle == inst;
+                                                });
+
+                        assert(iit != backend::instances.end());
+
+                        // Surfaces
+                        for (size_t i=0; i<(*iit)->surfaces.size(); ++i) {
+
+                            if (mats.empty())
+                                mats.push_back(backend::materials[defaultMatID]);
+
+                            if ((*iit)->surfaces[i]->material != nullptr) {
+                                ANARIMaterial m = (*iit)->surfaces[i]->material->handle;
+
+                                auto mit = std::find_if(mats.begin(),mats.end(),
+                                                        [m](const Material::SP& mat) {
+                                                            return mat->handle == m;
+                                                        });
+
+                                if (mit != mats.end()) {
+                                    instID = mit-mats.begin();
+                                } else {
+                                    instID = (unsigned)mats.size();
+                                    mats.push_back((*iit)->surfaces[i]->material);
+                                }
+                            }
+
+                            float* trans = (*iit)->transform;
+
+                            TriangleBVH::bvh_inst inst
+                                = (*iit)->surfaces[i]->triangleGeom->bvh.inst(mat4x3(trans));
+                            inst.set_inst_id(instID);
+                            (*it)->surfaceImpl.bvhInsts.push_back(inst);
+                        }
+
+                        // TODO: Volumes
+
+                        // TODO: Lights
+                    }
+
+                    for (size_t i=0; i<mats.size(); ++i) {
+                        Material::SP m = mats[i];
+
+                        matte<float> mat;
+                        mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
+                        mat.cd() = from_rgb(m->color);
+                        mat.ka() = 1.f;
+                        mat.kd() = 1.f;
+
+                        (*it)->surfaceImpl.materials.push_back(mat);
+                    }
+                }
+
                 // Surfaces
                 if (world.surface != nullptr) { // TODO: should check if there were any changes at all
                     Array1D* surfaces = (Array1D*)GetResource(world.surface);
 
-                    (*it)->surfaceImpl.bvhInsts.clear();
-                    (*it)->surfaceImpl.materials.clear();
-
-                    unsigned defaultMatID = 0;
-                    std::vector<Material::SP> mats;
-                    mats.push_back(backend::materials[defaultMatID]);
-
                     for (uint32_t i=0; i<surfaces->numItems[0]; ++i) {
+
+                        if (mats.empty())
+                            mats.push_back(backend::materials[defaultMatID]);
+
                         ANARISurface surf = ((ANARISurface*)(surfaces->data))[i];
                         auto sit = std::find_if(backend::surfaces.begin(),backend::surfaces.end(),
                                                 [surf](const Surface::SP& srf) {
@@ -627,8 +710,6 @@ namespace generic {
                                                 });
 
                         assert(sit != backend::surfaces.end());
-
-                        unsigned instID = 0;
 
                         if ((*sit)->material != nullptr) {
                             ANARIMaterial m = (*sit)->material->handle;
@@ -670,6 +751,14 @@ namespace generic {
                     }
                 }
 
+                if (!(*it)->surfaceImpl.bvhInsts.empty()) {
+                    lbvh_builder builder;
+
+                    (*it)->surfaceImpl.tlas = builder.build(TriangleTLAS{},
+                                                            (*it)->surfaceImpl.bvhInsts.data(),
+                                                            (*it)->surfaceImpl.bvhInsts.size());
+                }
+
                 // Volumes
                 if (world.volume != nullptr) { // TODO: should check if there were any changes at all
                     Array1D* volumes = (Array1D*)GetResource(world.volume);
@@ -692,8 +781,6 @@ namespace generic {
                 // Lights
                 if (world.light != nullptr) {
                     Array1D* lights = (Array1D*)GetResource(world.light);
-
-                    (*it)->lightImpl.lights.clear();
 
                     for (uint32_t i=0; i<lights->numItems[0]; ++i) {
                         ANARILight light = ((ANARILight*)(lights->data))[i];
@@ -947,6 +1034,8 @@ namespace generic {
                                             return tg->handle == surf.geometry;
                                         });
 
+                (*it)->triangleGeom = *git;
+
                 assert(git != backend::triangleGeoms.end());
 
                 (*it)->bvhInst = (*git)->bvh.inst({mat3x3::identity(),vec3f(0.f)});
@@ -962,6 +1051,49 @@ namespace generic {
                     (*it)->material = *mit;
                 }
             }, ExecutionOrder::Surface);
+        }
+
+        void commit(generic::Instance& inst)
+        {
+            enqueueCommit([&inst]() {
+                auto it = std::find_if(backend::instances.begin(),backend::instances.end(),
+                                       [&inst](const Instance::SP& i) {
+                                           return i->handle == inst.getResourceHandle();
+                                       });
+
+                if (it == backend::instances.end()) {
+                    backend::instances.push_back(std::make_shared<Instance>());
+                    it = backend::instances.end()-1;
+                }
+
+                (*it)->handle = (ANARIInstance)inst.getResourceHandle();
+
+                memcpy((*it)->transform,inst.transform,sizeof((*it)->transform));
+
+                Group* group = (Group*)GetResource(inst.group);
+                std::cout << inst.group << ' ' << group << '\n';
+
+                // Surfaces
+                if (group != nullptr && group->surface != nullptr) {
+                    Array1D* surfaces = (Array1D*)GetResource(group->surface);
+
+                    for (uint32_t i=0; i<surfaces->numItems[0]; ++i) {
+                        ANARISurface surf = ((ANARISurface*)(surfaces->data))[i];
+                        auto sit = std::find_if(backend::surfaces.begin(),backend::surfaces.end(),
+                                                [surf](const Surface::SP& srf) {
+                                                    return srf->handle == surf;
+                                                });
+
+                        assert(sit != backend::surfaces.end());
+
+                        (*it)->surfaces.push_back(*sit);
+                    }
+                }
+
+                // TODO: Volumes
+
+                // TODO: Lights
+            }, ExecutionOrder::Instance);
         }
 
         void commit(generic::StructuredRegular& sr)

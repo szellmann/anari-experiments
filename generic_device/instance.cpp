@@ -1,5 +1,6 @@
 #include <string.h>
 #include <type_traits>
+#include "backend.hpp"
 #include "instance.hpp"
 #include "logging.hpp"
 
@@ -21,6 +22,7 @@ namespace generic {
 
     void Instance::commit()
     {
+        backend::commit(*this);
     }
 
     void Instance::release()

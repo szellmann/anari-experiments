@@ -3,6 +3,7 @@
 #include "ao.hpp"
 #include "camera.hpp"
 #include "frame.hpp"
+#include "instance.hpp"
 #include "light.hpp"
 #include "matte.hpp"
 #include "object.hpp"
@@ -38,6 +39,8 @@ namespace generic {
         void commit(generic::Matte& mat);
 
         void commit(generic::Surface& surf);
+
+        void commit(generic::Instance& inst);
 
         void commit(generic::StructuredRegular& sr);
 
