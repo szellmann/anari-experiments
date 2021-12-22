@@ -1500,7 +1500,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                 anariRelease(anari->device,anariGroup);
 
-                if (self->visible)
+                if (self->visible && notEmpty)
                     anari->instances.push_back(trans->anariInstance);
             }
 
