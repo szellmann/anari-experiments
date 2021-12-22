@@ -919,12 +919,12 @@ namespace assimp {
                     float* vertexNormals = NULL;
                     if (mesh->HasNormals())
                         vertexNormals
-                                = (float*)malloc(mesh->mNumVertices*4*sizeof(float));
+                                = (float*)malloc(mesh->mNumVertices*3*sizeof(float));
 
                     float* vertexColors = NULL;
                     if (mesh->mColors[0] != NULL) // TODO:(?) AI_MAX_NUMBER_OF_COLOR_SETS
                         vertexColors
-                                = (float*)malloc(mesh->mNumVertices*3*sizeof(float));
+                                = (float*)malloc(mesh->mNumVertices*4*sizeof(float));
 
                     for (unsigned j=0; j<mesh->mNumVertices; ++j) {
                         aiVector3D v = mesh->mVertices[j];
