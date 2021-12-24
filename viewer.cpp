@@ -182,6 +182,17 @@ struct Viewer : visionaray::viewer_glut
             else
                 scene = new Model(device,world,fileName.c_str());
 
+            ANARILight light = anariNewLight(device,"directional");
+            visionaray::vec3f direction{0.f,-1.f,0.f};
+            float irradiance = 4.f;
+            anariSetParameter(device, light, "direction", ANARI_FLOAT32_VEC3, &direction);
+            anariSetParameter(device, light, "irradiance", ANARI_FLOAT32, &irradiance);
+            anariCommit(device, light);
+            ANARIArray1D lights = anariNewArray1D(device,&light,0,0,ANARI_LIGHT,1,0);
+            anariSetParameter(device, world, "light", ANARI_ARRAY1D, &lights);
+            anariCommit(device, world);
+            anariRelease(device, light);
+
             // Setup renderer
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);
             if (deviceSubtypes != nullptr) {
