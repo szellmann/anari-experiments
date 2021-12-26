@@ -82,8 +82,14 @@ struct Viewer : visionaray::viewer_glut
 
         visionaray::aabb bbox(visionaray::vec3(bounds),visionaray::vec3(bounds+3));
         visionaray::vec3 pos = cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
-        float intensity = 3.14f*length(bbox.center()-pos)*length(bbox.max-bbox.min);
-        float radius = length(bbox.max-bbox.min)*.1f;
+        float intensity = 1.f;
+        float radius = 0.f;
+        if (anari.deviceSubtype != std::string("generic")) {
+            // particularly, do this for ospray b/c their point light source intensity depends on distance!
+            // OSPRay atm doesn't allow for device subtype introspection
+            intensity = 3.14f*length(bbox.center()-pos)*length(bbox.max-bbox.min);
+            radius = length(bbox.max-bbox.min)*.1f;
+        }
         anariSetParameter(anari.device, anari.headLight, "position", ANARI_FLOAT32_VEC3, pos.data());
         anariSetParameter(anari.device, anari.headLight, "intensity", ANARI_FLOAT32, &intensity);
         anariSetParameter(anari.device, anari.headLight, "radius", ANARI_FLOAT32, &radius);
@@ -179,6 +185,7 @@ struct Viewer : visionaray::viewer_glut
         ANARICamera camera = nullptr;
         ANARIFrame frame = nullptr;
         Scene* scene = nullptr;
+        std::string deviceSubtype;
 
 
 
@@ -210,6 +217,7 @@ struct Viewer : visionaray::viewer_glut
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);
             if (deviceSubtypes != nullptr) {
                 while (const char* dstype = *deviceSubtypes++) {
+                    if (deviceSubtype.empty()) deviceSubtype = std::string(dstype);
                     std::cout << "ANARI_RENDERER subtypes supported:\n";
                     const char** rendererTypes = anariGetObjectSubtypes(library, dstype, ANARI_RENDERER);
                     while (rendererTypes && *rendererTypes) {
