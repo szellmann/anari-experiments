@@ -331,6 +331,8 @@ struct VolumeScene : Scene
         ASG_SAFE_CALL(asgStructuredVolumeSetLookupTable1D(volume,lut));
 
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,ASG_BUILD_WORLD_FLAG_LUTS,0));
+
+        anariCommit(device,world);
     }
 
     bool resetFrame = false;
