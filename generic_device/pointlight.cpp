@@ -40,6 +40,11 @@ namespace generic {
             intensityWasSet = true;
         } else if (strncmp(name,"power",5)==0 && type==ANARI_FLOAT32) {
             memcpy(&power,mem,sizeof(power));
+            powerWasSet = true;
+        } else if (strncmp(name,"radius",6)==0 && type==ANARI_FLOAT32) {
+            memcpy(&radius,mem,sizeof(radius));
+        } else if (strncmp(name,"radiance",8)==0 && type==ANARI_FLOAT32) {
+            memcpy(&radiance,mem,sizeof(radiance));
         } else {
             Light::setParameter(name,type,mem);
         }

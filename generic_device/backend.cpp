@@ -4,6 +4,7 @@
 #include <map>
 #include <thread>
 #include <visionaray/math/math.h>
+#include <visionaray/area_light.h>
 #include <visionaray/bvh.h>
 #include <visionaray/texture/texture.h>
 #include <visionaray/aligned_vector.h>
@@ -126,6 +127,12 @@ namespace generic {
 
             struct {
                 vec3f position{0.f,0.f,0.f};
+                float intensity = 1.f;
+                float power = 1.f;
+                float radius = 0.f;
+                float radiance = 1.f;
+                bool intensityWasSet = false;
+                bool powerWasSet = false;
             } asPointLight;
 
             ANARILight handle = nullptr;
@@ -319,7 +326,8 @@ namespace generic {
             } volumeImpl;
 
             struct {
-                aligned_vector<generic_light<point_light<float>,spot_light<float>>> lights;
+                aligned_vector<generic_light<point_light<float>,spot_light<float>,
+                                             area_light<float,basic_sphere<float>>>> lights;
             } lightImpl;
 
             ANARIWorld handle = nullptr;
@@ -791,15 +799,33 @@ namespace generic {
 
                         assert(lit != backend::lights.end());
 
-                        point_light<float> pl;
                         // TODO: check if this _is_ a point light!
-                        pl.set_position((*lit)->asPointLight.position);
-                        pl.set_cl((*lit)->color);
-                        pl.set_kl(1.f); // TODO!
-                        pl.set_constant_attenuation(1.f);
-                        pl.set_linear_attenuation(0.f);
-                        pl.set_quadratic_attenuation(0.f);
-                        (*it)->lightImpl.lights.push_back(pl);
+                        if ((*lit)->asPointLight.radius > 0.f) {
+                            float intensityScale = (*lit)->asPointLight.radiance;
+                            if ((*lit)->asPointLight.powerWasSet)
+                                intensityScale = (*lit)->asPointLight.power;
+                            if ((*lit)->asPointLight.intensityWasSet)
+                                intensityScale = (*lit)->asPointLight.intensity;
+                            basic_sphere<float> sphere;
+                            sphere.center = (*lit)->asPointLight.position;
+                            sphere.radius = (*lit)->asPointLight.radius;
+                            area_light<float,basic_sphere<float>> al(sphere);
+                            al.set_cl((*lit)->color);
+                            al.set_kl(intensityScale);
+                            (*it)->lightImpl.lights.push_back(al);
+                        } else {
+                            float intensityScale = (*lit)->asPointLight.power;
+                            if ((*lit)->asPointLight.intensityWasSet)
+                                intensityScale = (*lit)->asPointLight.intensity;
+                            point_light<float> pl;
+                            pl.set_position((*lit)->asPointLight.position);
+                            pl.set_cl((*lit)->color);
+                            pl.set_kl(intensityScale);
+                            pl.set_constant_attenuation(1.f);
+                            pl.set_linear_attenuation(0.f);
+                            pl.set_quadratic_attenuation(0.f);
+                            (*it)->lightImpl.lights.push_back(pl);
+                        }
                     }
                 }
 
@@ -889,6 +915,12 @@ namespace generic {
                 }
 
                 (*it)->asPointLight.position = vec3f(light.position);
+                (*it)->asPointLight.intensity = light.intensity;
+                (*it)->asPointLight.power = light.power;
+                (*it)->asPointLight.radius = light.radius;
+                (*it)->asPointLight.radiance = light.radiance;
+                (*it)->asPointLight.intensityWasSet = light.intensityWasSet;
+                (*it)->asPointLight.powerWasSet = light.powerWasSet;
             }, ExecutionOrder::PointLight);
         }
 

@@ -23,10 +23,12 @@ namespace generic {
         float position[3];
         float intensity = 1.f;
         float power = 1.f;
-
-    private:
-        // intensity, if set, takes precidence over power
+        float radius = 0.f;
+        float radiance = 1.f;
+        // intensity, if set, takes precedence over power
         bool intensityWasSet = false;
+        // power, if set, takes precedence over radiance
+        bool powerWasSet = false;
     };
 
 } // generic
