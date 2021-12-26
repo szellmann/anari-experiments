@@ -740,12 +740,6 @@ namespace generic {
                         (*it)->surfaceImpl.bvhInsts.push_back(inst);
                     }
 
-                    lbvh_builder builder;
-
-                    (*it)->surfaceImpl.tlas = builder.build(TriangleTLAS{},
-                                                            (*it)->surfaceImpl.bvhInsts.data(),
-                                                            (*it)->surfaceImpl.bvhInsts.size());
-
                     for (size_t i=0; i<mats.size(); ++i) {
                         Material::SP m = mats[i];
 
