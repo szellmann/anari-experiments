@@ -76,6 +76,19 @@ struct Viewer : visionaray::viewer_glut
         anariCommit(anari.device, anari.camera);
     }
 
+    void resetANARIHeadLight() {
+        float bounds[6];
+        anariGetProperty(anari.device, anari.world, "bounds", ANARI_FLOAT32_BOX3, &bounds, sizeof(bounds), ANARI_WAIT);
+
+        visionaray::aabb bbox(visionaray::vec3(bounds),visionaray::vec3(bounds+3));
+        visionaray::vec3 pos = cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
+        float intensity = 3.14f*length(bbox.center()-pos)*length(bbox.max-bbox.min);
+        anariSetParameter(anari.device, anari.headLight, "position", ANARI_FLOAT32_VEC3, pos.data());
+        anariSetParameter(anari.device, anari.headLight, "intensity", ANARI_FLOAT32, &intensity);
+        anariCommit(anari.device, anari.headLight);
+        anariCommit(anari.device, anari.world);
+    }
+
     void on_display() {
 
         float duration = 0.f;
@@ -129,6 +142,7 @@ struct Viewer : visionaray::viewer_glut
         anariCommit(anari.device, anari.frame);
 
         resetANARICamera();
+        resetANARIHeadLight();
 
         viewer_glut::on_resize(w,h);
     }
@@ -144,8 +158,10 @@ struct Viewer : visionaray::viewer_glut
     }
 
     void on_mouse_move(const visionaray::mouse_event& event) {
-        if (event.buttons() != visionaray::mouse::button::NoButton)
+        if (event.buttons() != visionaray::mouse::button::NoButton) {
             resetANARICamera();
+            resetANARIHeadLight();
+        }
         if (!anari.scene->handleMouseMove(event))
             viewer_glut::on_mouse_move(event);
     }
@@ -157,6 +173,7 @@ struct Viewer : visionaray::viewer_glut
         ANARIDevice device = nullptr;
         ANARIRenderer renderer = nullptr;
         ANARIWorld world = nullptr;
+        ANARILight headLight = nullptr;
         ANARICamera camera = nullptr;
         ANARIFrame frame = nullptr;
         Scene* scene = nullptr;
@@ -182,16 +199,10 @@ struct Viewer : visionaray::viewer_glut
             else
                 scene = new Model(device,world,fileName.c_str());
 
-            ANARILight light = anariNewLight(device,"directional");
-            visionaray::vec3f direction{0.f,-1.f,0.f};
-            float irradiance = 4.f;
-            anariSetParameter(device, light, "direction", ANARI_FLOAT32_VEC3, &direction);
-            anariSetParameter(device, light, "irradiance", ANARI_FLOAT32, &irradiance);
-            anariCommit(device, light);
-            ANARIArray1D lights = anariNewArray1D(device,&light,0,0,ANARI_LIGHT,1,0);
+            headLight = anariNewLight(device,"point");
+            ANARIArray1D lights = anariNewArray1D(device,&headLight,0,0,ANARI_LIGHT,1,0);
             anariSetParameter(device, world, "light", ANARI_ARRAY1D, &lights);
             anariCommit(device, world);
-            anariRelease(device, light);
 
             // Setup renderer
             const char** deviceSubtypes = anariGetDeviceSubtypes(library);
@@ -235,6 +246,7 @@ struct Viewer : visionaray::viewer_glut
             delete scene;
             anariRelease(device,frame);
             anariRelease(device,camera);
+            anariRelease(device,headLight);
             anariRelease(device,world);
             anariRelease(device,renderer);
             anariRelease(device,world);
