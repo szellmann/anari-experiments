@@ -83,8 +83,10 @@ struct Viewer : visionaray::viewer_glut
         visionaray::aabb bbox(visionaray::vec3(bounds),visionaray::vec3(bounds+3));
         visionaray::vec3 pos = cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
         float intensity = 3.14f*length(bbox.center()-pos)*length(bbox.max-bbox.min);
+        float radius = length(bbox.max-bbox.min)*.1f;
         anariSetParameter(anari.device, anari.headLight, "position", ANARI_FLOAT32_VEC3, pos.data());
         anariSetParameter(anari.device, anari.headLight, "intensity", ANARI_FLOAT32, &intensity);
+        anariSetParameter(anari.device, anari.headLight, "radius", ANARI_FLOAT32, &radius);
         anariCommit(anari.device, anari.headLight);
         anariCommit(anari.device, anari.world);
     }
