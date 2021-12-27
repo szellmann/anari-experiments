@@ -76,23 +76,38 @@ struct Viewer : visionaray::viewer_glut
         anariCommit(anari.device, anari.camera);
     }
 
-    void resetANARIHeadLight() {
+    void resetANARIMainLight() {
         float bounds[6];
-        anariGetProperty(anari.device, anari.world, "bounds", ANARI_FLOAT32_BOX3, &bounds, sizeof(bounds), ANARI_WAIT);
+
+        if (anari.deviceSubtype != std::string("generic")) {
+            anariGetProperty(anari.device, anari.world, "bounds", ANARI_FLOAT32_BOX3, &bounds, sizeof(bounds), ANARI_WAIT);
+        } else {
+            // get bounds property not implemented yet!
+            asgComputeBounds(anari.scene->root,&bounds[0],&bounds[1],&bounds[2],
+                             &bounds[3],&bounds[4],&bounds[5]);
+        }
 
         visionaray::aabb bbox(visionaray::vec3(bounds),visionaray::vec3(bounds+3));
-        visionaray::vec3 pos = cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
+        bool fixed = false;
+        visionaray::vec3 pos = fixed ? bbox.max : cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
         float intensity = 1.f;
         float radius = 0.f;
         if (anari.deviceSubtype != std::string("generic")) {
             // particularly, do this for ospray b/c their point light source intensity depends on distance!
             // OSPRay atm doesn't allow for device subtype introspection
-            intensity = 3.14f*length(bbox.center()-pos)*length(bbox.max-bbox.min);
+            intensity = 3.14f*length(bbox.max-bbox.min);
+            radius = length(bbox.max-bbox.min)*.1f;
+        } else {
+            intensity = 10.f*length(bbox.max-bbox.min);
             radius = length(bbox.max-bbox.min)*.1f;
         }
         anariSetParameter(anari.device, anari.headLight, "position", ANARI_FLOAT32_VEC3, pos.data());
         anariSetParameter(anari.device, anari.headLight, "intensity", ANARI_FLOAT32, &intensity);
         anariSetParameter(anari.device, anari.headLight, "radius", ANARI_FLOAT32, &radius);
+        if (radius > 0.f) {
+            bool visible = false;
+            anariSetParameter(anari.device, anari.headLight, "visible", ANARI_BOOL, &visible);
+        }
         anariCommit(anari.device, anari.headLight);
         anariCommit(anari.device, anari.world);
     }
@@ -150,7 +165,7 @@ struct Viewer : visionaray::viewer_glut
         anariCommit(anari.device, anari.frame);
 
         resetANARICamera();
-        resetANARIHeadLight();
+        resetANARIMainLight();
 
         viewer_glut::on_resize(w,h);
     }
@@ -168,7 +183,7 @@ struct Viewer : visionaray::viewer_glut
     void on_mouse_move(const visionaray::mouse_event& event) {
         if (event.buttons() != visionaray::mouse::button::NoButton) {
             resetANARICamera();
-            resetANARIHeadLight();
+            resetANARIMainLight();
         }
         if (!anari.scene->handleMouseMove(event))
             viewer_glut::on_mouse_move(event);

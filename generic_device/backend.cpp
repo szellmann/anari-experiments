@@ -75,7 +75,8 @@ namespace generic {
 
             void resize(int w, int h)
             {
-                render_target::resize(w,h);accumBuffer.resize(w,h);
+                render_target::resize(w,h);
+                accumBuffer.resize(w,h);
             }
 
             void reset(int width, int height, pixel_format color, pixel_format depth, bool srgb)
@@ -99,7 +100,7 @@ namespace generic {
 
             thread_pool pool{std::thread::hardware_concurrency()};
 
-            cpu_buffer_rt<PF_RGBA32F, PF_DEPTH32F> accumBuffer;
+            cpu_buffer_rt<PF_RGBA32F, PF_DEPTH32F, PF_RGBA32F> accumBuffer;
 
             bool sRGB = false;
 
@@ -272,6 +273,95 @@ namespace generic {
         typedef index_bvh<basic_triangle<3,float>> TriangleBVH;
         typedef index_bvh<typename TriangleBVH::bvh_inst> TriangleTLAS;
 
+        typedef index_bvh<basic_sphere<float>> SphereBVH;
+        typedef index_bvh<typename SphereBVH::bvh_inst> SphereTLAS;
+
+        // Primitive type that wraps BVH instances
+        struct TLASes
+        {
+            TriangleTLAS::bvh_ref triangleTLAS;
+            SphereTLAS::bvh_ref sphereTLAS;
+            SphereTLAS::bvh_ref sphericalLightTLAS;
+        };
+
+        typedef generic_material<emissive<float>,matte<float>> GenericMaterial;
+        typedef area_light<float,basic_sphere<float>> SphericalLight;
+        typedef generic_light<point_light<float>,spot_light<float>,SphericalLight> GenericLight;
+
+        typedef kernel_params<
+            unspecified_binding,
+            unspecified_binding,
+            TLASes*,
+            vec3f*, // normals
+            vec2f*, // tex coords
+            GenericMaterial*,
+            vec3f*, // colors
+            std::nullptr_t*, // textures,
+            GenericLight*,
+            ambient_light<float>,
+            ambient_light<float>> KernelParams;
+
+        typedef hit_record_bvh<ray,hit_record_bvh_inst<ray,hit_record<ray,primitive<unsigned>>>> BaseHitRecord;
+
+        enum class BVHType { Triangles, Spheres, SphericalLights, };
+        struct HitRecord : BaseHitRecord
+        {
+            BVHType bvhType;
+        };
+
+        template <typename Cond>
+        void update_if(HitRecord& dst, const HitRecord& src, const Cond& cond)
+        {
+            if (cond) dst.bvhType = src.bvhType;
+            return update_if((BaseHitRecord&)dst,(const BaseHitRecord&)src,cond);
+        }
+
+        inline auto get_surface(const HitRecord& hr, const KernelParams& params)
+        {
+            const TLASes& tlases = params.prims.begin[0];
+
+            vec3f* normals = nullptr;
+
+            BaseHitRecord baseHR = (BaseHitRecord)hr;
+            auto primHR = (hit_record_bvh_inst<ray,hit_record<ray,primitive<unsigned>>>)baseHR;
+
+            vec3f n = get_normal(baseHR,tlases.triangleTLAS);
+
+            int mat_id = hr.inst_id < 0 ? hr.geom_id : hr.inst_id;
+            const auto& material = params.materials[mat_id];
+
+            vec3f texColor(1.f);
+
+            return surface<vec3f,vec3f,GenericMaterial>{n,n,texColor,material};
+        }
+
+        inline HitRecord intersect(ray r, const TLASes& tlases)
+        {
+            HitRecord hr;
+
+            if (tlases.triangleTLAS.num_primitives() > 0) {
+                HitRecord triangleHR;
+                *((BaseHitRecord*)&triangleHR) = closest_hit(r,&tlases.triangleTLAS,&tlases.triangleTLAS+1);
+                triangleHR.bvhType = BVHType::Triangles;
+                hr = triangleHR;
+            }
+
+            if (tlases.sphericalLightTLAS.num_primitives() > 0) {
+                HitRecord sphericalLightHR;
+                *((BaseHitRecord*)&sphericalLightHR) = closest_hit(r,&tlases.sphericalLightTLAS,&tlases.sphericalLightTLAS+1);
+                sphericalLightHR.bvhType = BVHType::SphericalLights;
+                // doesn't work yet when light is visible
+                //update_if(hr,sphericalLightHR,is_closer(sphericalLightHR,hr));
+            }
+
+            return hr;
+        }
+
+        inline auto get_area(const TLASes* tlases, const HitRecord& hr)
+        {
+            return get_area(&tlases[0].triangleTLAS,hr);
+        }
+
         struct TriangleGeom
         {
             using SP = std::shared_ptr<TriangleGeom>;
@@ -316,9 +406,11 @@ namespace generic {
             using SP = std::shared_ptr<World>;
 
             struct {
-                TriangleTLAS tlas;
-                aligned_vector<TriangleBVH::bvh_inst> bvhInsts;
-                aligned_vector<generic_material<matte<float>>> materials;
+                TriangleTLAS triangleTLAS;
+                aligned_vector<TriangleBVH::bvh_inst> triangleBVHInsts;
+                SphereTLAS sphereTLAS;
+                aligned_vector<SphereBVH::bvh_inst> sphereBVHInsts;
+                aligned_vector<GenericMaterial> materials;
             } surfaceImpl;
 
             struct {
@@ -326,8 +418,10 @@ namespace generic {
             } volumeImpl;
 
             struct {
-                aligned_vector<generic_light<point_light<float>,spot_light<float>,
-                                             area_light<float,basic_sphere<float>>>> lights;
+                aligned_vector<GenericLight> lights;
+                SphereTLAS sphereTLAS;
+                SphereBVH sphereBVH;
+                aligned_vector<GenericMaterial> areaLightMaterials; // only emissive
             } lightImpl;
 
             ANARIWorld handle = nullptr;
@@ -414,18 +508,34 @@ namespace generic {
                             result.color = bounce ? vec4f(L, 1.f) : backgroundColor;
                             return result;
                         }, sparams);
-                    } else if (!world.surfaceImpl.bvhInsts.empty()) {
+                    } else if (!world.surfaceImpl.triangleBVHInsts.empty()) {
                         vec4f ambient{0.f,0.f,0.f,0.f};
 
                         if (world.lightImpl.lights.empty())
                             ambient = vec4f(1.f,1.f,1.f,1.f);
 
-                        auto kparams = make_kernel_params(
-                            &world.surfaceImpl.tlas,
-                            &world.surfaceImpl.tlas+1,
-                            world.surfaceImpl.materials.begin(),
-                            world.lightImpl.lights.begin(),
-                            world.lightImpl.lights.end(),
+                        TLASes tlases;
+                        tlases.triangleTLAS = world.surfaceImpl.triangleTLAS.ref();
+                        tlases.sphereTLAS = world.surfaceImpl.sphereTLAS.ref();
+                        tlases.sphericalLightTLAS = world.lightImpl.sphereTLAS.ref();
+
+                        aligned_vector<GenericMaterial> materials(
+                            world.surfaceImpl.materials.size()+world.lightImpl.areaLightMaterials.size());
+
+                        std::copy(world.surfaceImpl.materials.data(),
+                                  world.surfaceImpl.materials.data()+world.surfaceImpl.materials.size(),
+                                  materials.data());
+
+                        std::copy(world.lightImpl.areaLightMaterials.data(),
+                                  world.lightImpl.areaLightMaterials.data()+world.lightImpl.areaLightMaterials.size(),
+                                  materials.data()+world.surfaceImpl.materials.size());
+
+                        KernelParams kparams = make_kernel_params(
+                            &tlases,
+                            &tlases+1,
+                            materials.data(),
+                            world.lightImpl.lights.data(),
+                            world.lightImpl.lights.data()+world.lightImpl.lights.size(),
                             10,
                             1e-5f,
                             backgroundColor,
@@ -631,7 +741,7 @@ namespace generic {
                     it = backend::worlds.end()-1;
                 }
 
-                (*it)->surfaceImpl.bvhInsts.clear();
+                (*it)->surfaceImpl.triangleBVHInsts.clear();
                 (*it)->surfaceImpl.materials.clear();
                 (*it)->lightImpl.lights.clear();
 
@@ -681,7 +791,7 @@ namespace generic {
                             TriangleBVH::bvh_inst inst
                                 = (*iit)->surfaces[i]->triangleGeom->bvh.inst(mat4x3(trans));
                             inst.set_inst_id(instID);
-                            (*it)->surfaceImpl.bvhInsts.push_back(inst);
+                            (*it)->surfaceImpl.triangleBVHInsts.push_back(inst);
                         }
 
                         // TODO: Volumes
@@ -737,7 +847,7 @@ namespace generic {
 
                         TriangleBVH::bvh_inst inst = (*sit)->bvhInst;
                         inst.set_inst_id(instID);
-                        (*it)->surfaceImpl.bvhInsts.push_back(inst);
+                        (*it)->surfaceImpl.triangleBVHInsts.push_back(inst);
                     }
 
                     for (size_t i=0; i<mats.size(); ++i) {
@@ -753,12 +863,20 @@ namespace generic {
                     }
                 }
 
-                if (!(*it)->surfaceImpl.bvhInsts.empty()) {
+                if (!(*it)->surfaceImpl.triangleBVHInsts.empty()) {
                     lbvh_builder builder;
 
-                    (*it)->surfaceImpl.tlas = builder.build(TriangleTLAS{},
-                                                            (*it)->surfaceImpl.bvhInsts.data(),
-                                                            (*it)->surfaceImpl.bvhInsts.size());
+                    (*it)->surfaceImpl.triangleTLAS = builder.build(TriangleTLAS{},
+                                                                    (*it)->surfaceImpl.triangleBVHInsts.data(),
+                                                                    (*it)->surfaceImpl.triangleBVHInsts.size());
+                }
+
+                if (!(*it)->surfaceImpl.sphereBVHInsts.empty()) {
+                    lbvh_builder builder;
+
+                    (*it)->surfaceImpl.sphereTLAS = builder.build(SphereTLAS{},
+                                                                  (*it)->surfaceImpl.sphereBVHInsts.data(),
+                                                                  (*it)->surfaceImpl.sphereBVHInsts.size());
                 }
 
                 // Volumes
@@ -781,8 +899,10 @@ namespace generic {
                 }
 
                 // Lights
-                if (world.light != nullptr) {
+                if (world.light != nullptr) { // TODO: should check if there were any changes at all
                     Array1D* lights = (Array1D*)GetResource(world.light);
+
+                    (*it)->lightImpl.areaLightMaterials.clear();
 
                     for (uint32_t i=0; i<lights->numItems[0]; ++i) {
                         ANARILight light = ((ANARILight*)(lights->data))[i];
@@ -803,10 +923,17 @@ namespace generic {
                             basic_sphere<float> sphere;
                             sphere.center = (*lit)->asPointLight.position;
                             sphere.radius = (*lit)->asPointLight.radius;
-                            area_light<float,basic_sphere<float>> al(sphere);
-                            al.set_cl((*lit)->color);
-                            al.set_kl(intensityScale);
-                            (*it)->lightImpl.lights.push_back(al);
+                            sphere.prim_id = (unsigned)(*it)->lightImpl.lights.size();
+                            sphere.geom_id = (unsigned)(*it)->surfaceImpl.materials.size()+(unsigned)(*it)->lightImpl.lights.size();
+                            SphericalLight sl(sphere);
+                            sl.set_cl((*lit)->color);
+                            sl.set_kl(intensityScale);
+                            (*it)->lightImpl.lights.push_back(sl);
+
+                            emissive<float> mat;
+                            mat.ce() = from_rgb((*lit)->color);
+                            mat.ls() = intensityScale;
+                            (*it)->lightImpl.areaLightMaterials.push_back(mat);
                         } else {
                             float intensityScale = (*lit)->asPointLight.power;
                             if ((*lit)->asPointLight.intensityWasSet)
@@ -820,6 +947,21 @@ namespace generic {
                             pl.set_quadratic_attenuation(0.f);
                             (*it)->lightImpl.lights.push_back(pl);
                         }
+                    }
+                }
+
+                if (!(*it)->lightImpl.lights.empty()) {
+                    lbvh_builder builder;
+                    aligned_vector<basic_sphere<float>> spheres;
+                    for (size_t i=0; i<(*it)->lightImpl.lights.size(); ++i) {
+                        if ((*it)->lightImpl.lights[i].as<SphericalLight>())
+                            spheres.push_back((*it)->lightImpl.lights[i].as<SphericalLight>()->geometry());
+                    }
+
+                    if (!spheres.empty()) {
+                        (*it)->lightImpl.sphereBVH = builder.build(SphereBVH{},spheres.data(),spheres.size());
+                        auto inst = (*it)->lightImpl.sphereBVH.inst({mat3x3::identity(),vec3f(0.f)});
+                        (*it)->lightImpl.sphereTLAS = builder.build(SphereTLAS{},&inst,1);
                     }
                 }
 
