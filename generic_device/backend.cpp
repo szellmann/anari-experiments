@@ -530,6 +530,11 @@ namespace generic {
                                   world.lightImpl.areaLightMaterials.data()+world.lightImpl.areaLightMaterials.size(),
                                   materials.data()+world.surfaceImpl.materials.size());
 
+                        aabb bounds = tlases.triangleTLAS.node(0).get_bounds();
+                        // TODO: combine with sphere bounds
+
+                        vec3f diagonal = bounds.max-bounds.min;
+                        float epsilon = std::max(1e-3f, length(diagonal)*1e-5f);
                         KernelParams kparams = make_kernel_params(
                             &tlases,
                             &tlases+1,
@@ -537,7 +542,7 @@ namespace generic {
                             world.lightImpl.lights.data(),
                             world.lightImpl.lights.data()+world.lightImpl.lights.size(),
                             10,
-                            1e-5f,
+                            epsilon,
                             backgroundColor,
                             ambient
                         );
