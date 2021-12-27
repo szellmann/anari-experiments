@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <random>
 #include <vector>
 #include <visionaray/math/math.h>
 #include <visionaray/pinhole_camera.h>
@@ -206,6 +207,62 @@ struct SelectTest : Scene
     }
 
     bool rebuildANARIWorld = false;
+};
+
+struct SphereTest : Scene
+{
+    SphereTest(ANARIDevice dev, ANARIWorld wrld)
+        : Scene(dev,wrld)
+    {
+        root = asgNewObject();
+
+        uint32_t numSpheres = 10000;
+
+        std::vector<float> positions(numSpheres*3);
+        std::vector<float> radii(numSpheres);
+        std::vector<uint32_t> indices(numSpheres);
+
+        std::default_random_engine rnd;
+        std::uniform_real_distribution<float> pos(-1.0f, 1.0f);
+        std::uniform_real_distribution<float> rad(.005f, .01f);
+
+        for (uint32_t i=0; i<numSpheres; ++i) {
+            positions[i*3] = pos(rnd);
+            positions[i*3+1] = pos(rnd);
+            positions[i*3+2] = pos(rnd);
+            radii[i] = rad(rnd);
+            indices[i] = i;
+        }
+
+        // w/ indices
+        // ASGSphereGeometry sphereGeom = asgNewSphereGeometry(positions.data(),radii.data(),
+        //                                                     NULL,numSpheres,
+        //                                                     indices.data(),
+        //                                                     (uint32_t)indices.size());
+
+        // w/o indices
+        ASGSphereGeometry sphereGeom = asgNewSphereGeometry(positions.data(),radii.data(),
+                                                            NULL,numSpheres,NULL,0);
+
+        ASGSurface spheres = asgNewSurface(sphereGeom,NULL);
+        ASG_SAFE_CALL(asgObjectAddChild(root,spheres));
+
+
+        // Build up ANARI world
+        ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                         ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
+
+        anariCommit(device,world);
+    }
+
+    visionaray::aabb getBounds()
+    {
+        visionaray::aabb bbox;
+        bbox.invalidate();
+        ASG_SAFE_CALL(asgComputeBounds(root,&bbox.min.x,&bbox.min.y,&bbox.min.z,
+                                       &bbox.max.x,&bbox.max.y,&bbox.max.z,0));
+        return bbox;
+    }
 };
 
 // Load volume file or generate default volume

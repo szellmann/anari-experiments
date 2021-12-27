@@ -29,6 +29,7 @@ typedef int ASGError_t;
 typedef int ASGType_t;
 #define ASG_TYPE_OBJECT                     0
 #define ASG_TYPE_TRIANGLE_GEOMETRY          1000
+#define ASG_TYPE_SPHERE_GEOMETRY            1001
 #define ASG_TYPE_MATERIAL                   1010
 #define ASG_TYPE_LIGHT                      1020
 #define ASG_TYPE_SURFACE                    1030
@@ -152,9 +153,9 @@ typedef struct {
 typedef void _ASGImpl;
 typedef _ASGImpl *ASGImpl;
 
-typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry, *ASGMaterial,
-    *ASGLight, *ASGSurface, *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume,
-    *ASGTransform, *ASGSelect, *ASGCamera;
+typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry,
+    *ASGSphereGeometry, *ASGMaterial, *ASGLight, *ASGSurface, *ASGSampler2D,
+    *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform, *ASGSelect, *ASGCamera;
 
 
 /* ========================================================
@@ -253,8 +254,15 @@ ASGAPI ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertex
                                                   float* vertexColors,
                                                   uint32_t numVertices, uint32_t* indices,
                                                   uint32_t numIncidices,
-                                                  ASGFreeFunc freeFunc);
+                                                  ASGFreeFunc freeFunc
+                                                  ASG_DFLT_PARAM(NULL));
 // TODO: special handling for 64-bit triangle indices (asgNewTriangleGeometry64?)
+
+ASGAPI ASGSphereGeometry asgNewSphereGeometry(float* positions, float* radii,
+                                              float* colors, uint32_t numSpheres,
+                                              uint32_t* indices, uint32_t numIndices,
+                                              float defaultRadius ASG_DFLT_PARAM(1.f),
+                                              ASGFreeFunc freeFunc ASG_DFLT_PARAM(NULL));
 
 // Surface
 ASGAPI ASGSurface asgNewSurface(ASGGeometry geom, ASGMaterial mat);

@@ -646,6 +646,46 @@ ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals
     return geom;
 }
 
+struct SphereGeom {
+    float* positions;
+    float* radii;
+    float* colors;
+    uint32_t numSpheres;
+    uint32_t* indices;
+    uint32_t numIndices;
+    float* positionsUserPtr;
+    float* radiiUserPtr;
+    float* colorsUserPtr;
+    uint32_t* indicesUserPtr;
+    float defaultRadius;
+    ASGFreeFunc freeFunc;
+    // Exclusively used by ANARI build visitors
+    ANARIGeometry anariGeometry = NULL;
+};
+
+ASGSphereGeometry asgNewSphereGeometry(float* positions, float* radii, float* colors,
+                                       uint32_t numSpheres, uint32_t* indices,
+                                       uint32_t numIndices, float defaultRadius,
+                                       ASGFreeFunc freeFunc)
+{
+    ASGSphereGeometry geom = (ASGSphereGeometry)asgNewObject();
+    geom->type = ASG_TYPE_SPHERE_GEOMETRY;
+    geom->impl = (SphereGeom*)calloc(1,sizeof(SphereGeom));
+    ((SphereGeom*)geom->impl)->positions = positions;
+    ((SphereGeom*)geom->impl)->radii = radii;
+    ((SphereGeom*)geom->impl)->colors = colors;
+    ((SphereGeom*)geom->impl)->numSpheres = numSpheres;
+    ((SphereGeom*)geom->impl)->indices = indices;
+    ((SphereGeom*)geom->impl)->numIndices = numIndices;
+    ((SphereGeom*)geom->impl)->positionsUserPtr = positions;
+    ((SphereGeom*)geom->impl)->radiiUserPtr = radii;
+    ((SphereGeom*)geom->impl)->colors = colors;
+    ((SphereGeom*)geom->impl)->indices = indices;
+    ((SphereGeom*)geom->impl)->defaultRadius = defaultRadius;
+    ((SphereGeom*)geom->impl)->freeFunc = freeFunc;
+    return geom;
+}
+
 // ========================================================
 // Surface
 // ========================================================
@@ -1357,6 +1397,56 @@ static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
                         bounds->maxVal = max(bounds->maxVal,v);
                     }
                 }
+            } else if (surf->geometry->type == ASG_TYPE_SPHERE_GEOMETRY) {
+
+                SphereGeom* geom = (SphereGeom*)surf->geometry->impl;
+
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    for (unsigned i=0; i<geom->numIndices; ++i) {
+                        asg::Vec3f v = {
+                            geom->positions[geom->indices[i]*3],
+                            geom->positions[geom->indices[i]*3+1],
+                            geom->positions[geom->indices[i]*3+2]
+                        };
+
+                        asg::Vec3f v1 = v - geom->radii[geom->indices[i]];
+                        asg::Vec3f v2 = v + geom->radii[geom->indices[i]];
+
+                        for (asg::Mat4x3f trans : bounds->transStack) {
+                            v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                            v2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                        }
+
+                        bounds->minVal = min(bounds->minVal,v1);
+                        bounds->maxVal = max(bounds->maxVal,v1);
+
+                        bounds->minVal = min(bounds->minVal,v2);
+                        bounds->maxVal = max(bounds->maxVal,v2);
+                    }
+                } else {
+                    // No indices, so just insert the verts directly
+                    for (unsigned i=0; i<geom->numSpheres; ++i) {
+                        asg::Vec3f v = {
+                            geom->positions[i*3],
+                            geom->positions[i*3+1],
+                            geom->positions[i*3+2]
+                        };
+
+                        asg::Vec3f v1 = v - geom->radii[i];
+                        asg::Vec3f v2 = v + geom->radii[i];
+
+                        for (asg::Mat4x3f trans : bounds->transStack) {
+                            v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                            v2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                        }
+
+                        bounds->minVal = min(bounds->minVal,v1);
+                        bounds->maxVal = max(bounds->maxVal,v1);
+
+                        bounds->minVal = min(bounds->minVal,v2);
+                        bounds->maxVal = max(bounds->maxVal,v2);
+                    }
+                }
             }
 
             break;
@@ -1538,14 +1628,19 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
             Surface* surf = (Surface*)obj->impl;
 
             assert(surf->geometry != nullptr);
-            TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
+
+            ANARIGeometry geomHandle = nullptr;
 
             if ((anari->flags & ASG_BUILD_WORLD_FLAG_GEOMETRIES) &&
                 surf->geometry->type == ASG_TYPE_TRIANGLE_GEOMETRY) {
 
+                TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
+
                 if (geom->anariGeometry == nullptr)
                     geom->anariGeometry
                         = anariNewGeometry(anari->device,"triangle");
+
+                geomHandle = geom->anariGeometry;
 
                 ANARIArray1D vertexPosition = anariNewArray1D(anari->device,
                                                               geom->vertices,
@@ -1556,6 +1651,50 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                                   ANARI_ARRAY1D,&vertexPosition);
 
                 anariRelease(anari->device,vertexPosition);
+
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    ANARIArray1D primitiveIndex = anariNewArray1D(anari->device,
+                                                                  geom->indices,
+                                                                  0,0,
+                                                                  ANARI_UINT32_VEC3,
+                                                                  geom->numIndices,
+                                                                  0);
+                    anariSetParameter(anari->device,geom->anariGeometry,
+                                      "primitive.index",
+                                      ANARI_ARRAY1D,&primitiveIndex);
+
+                    anariRelease(anari->device,primitiveIndex);
+                }
+
+                anariCommit(anari->device,geom->anariGeometry);
+            } else if ((anari->flags & ASG_BUILD_WORLD_FLAG_GEOMETRIES) &&
+                surf->geometry->type == ASG_TYPE_SPHERE_GEOMETRY) {
+
+                SphereGeom* geom = (SphereGeom*)surf->geometry->impl;
+
+                if (geom->anariGeometry == nullptr)
+                    geom->anariGeometry
+                        = anariNewGeometry(anari->device,"sphere");
+
+                geomHandle = geom->anariGeometry;
+
+                ANARIArray1D vertexPosition = anariNewArray1D(anari->device,
+                                                              geom->positions,
+                                                              0,0,ANARI_FLOAT32_VEC3,
+                                                              geom->numSpheres,0);
+
+                ANARIArray1D vertexRadius = anariNewArray1D(anari->device,geom->radii,
+                                                            0,0,ANARI_FLOAT32,
+                                                            geom->numSpheres,0);
+
+                anariSetParameter(anari->device,geom->anariGeometry,"vertex.position",
+                                  ANARI_ARRAY1D,&vertexPosition);
+
+                anariSetParameter(anari->device,geom->anariGeometry,"vertex.radius",
+                                  ANARI_ARRAY1D,&vertexRadius);
+
+                anariRelease(anari->device,vertexPosition);
+                anariRelease(anari->device,vertexRadius);
 
                 if (geom->indices != nullptr && geom->numIndices > 0) {
                     ANARIArray1D primitiveIndex = anariNewArray1D(anari->device,
@@ -1601,7 +1740,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 surf->anariSurface = anariNewSurface(anari->device);
 
             anariSetParameter(anari->device,surf->anariSurface,"geometry",
-                              ANARI_GEOMETRY,&geom->anariGeometry);
+                              ANARI_GEOMETRY,&geomHandle);
             if (surf->material != nullptr
                  && ((Material*)(surf->material->impl))->anariMaterial != nullptr) {
                 Material* mat = (Material*)surf->material->impl;
