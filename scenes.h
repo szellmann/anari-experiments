@@ -220,7 +220,7 @@ struct SphereTest : Scene
 
         std::vector<float> positions(numSpheres*3);
         std::vector<float> radii(numSpheres);
-        std::vector<float> colors(numSpheres*3);
+        std::vector<float> colors(numSpheres*4);
         std::vector<uint32_t> indices(numSpheres);
 
         std::default_random_engine rnd;
@@ -235,9 +235,10 @@ struct SphereTest : Scene
             unsigned r = (unsigned)(i*13*17 + 0x234235);
             unsigned g = (unsigned)(i*7*3*5 + 0x773477);
             unsigned b = (unsigned)(i*11*19 + 0x223766);
-            colors[i*3]   = (r&255)/255.f;
-            colors[i*3+1] = (g&255)/255.f;
-            colors[i*3+2] = (b&255)/255.f;
+            colors[i*4]   = (r&255)/255.f;
+            colors[i*4+1] = (g&255)/255.f;
+            colors[i*4+2] = (b&255)/255.f;
+            colors[i*4+3] = 1.f;
             indices[i] = i;
         }
 
@@ -252,7 +253,12 @@ struct SphereTest : Scene
                                                             colors.data(),numSpheres,NULL,
                                                             0);
 
-        ASGSurface spheres = asgNewSurface(sphereGeom,NULL);
+        ASGMaterial mat = asgNewMaterial("");
+        float grey[3] = {.8f,.8f,.8f};
+        ASG_SAFE_CALL(asgMakeMatte(&mat,grey,NULL));
+        ASG_SAFE_CALL(asgObjectSetName(mat,"grey"));
+
+        ASGSurface spheres = asgNewSurface(sphereGeom,mat);
         ASG_SAFE_CALL(asgObjectAddChild(root,spheres));
 
 

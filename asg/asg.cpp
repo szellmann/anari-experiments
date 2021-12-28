@@ -1699,7 +1699,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 if (geom->colors) {
                     // TODO: support all color types
                     ANARIArray1D vertexColor = anariNewArray1D(anari->device,geom->colors,
-                                                               0,0,ANARI_FLOAT32_VEC3,
+                                                               0,0,ANARI_FLOAT32_VEC4,
                                                                geom->numSpheres,0);
 
                     anariSetParameter(anari->device,geom->anariGeometry,"vertex.color",
