@@ -220,6 +220,7 @@ struct SphereTest : Scene
 
         std::vector<float> positions(numSpheres*3);
         std::vector<float> radii(numSpheres);
+        std::vector<float> colors(numSpheres*3);
         std::vector<uint32_t> indices(numSpheres);
 
         std::default_random_engine rnd;
@@ -231,6 +232,12 @@ struct SphereTest : Scene
             positions[i*3+1] = pos(rnd);
             positions[i*3+2] = pos(rnd);
             radii[i] = rad(rnd);
+            unsigned r = (unsigned)(i*13*17 + 0x234235);
+            unsigned g = (unsigned)(i*7*3*5 + 0x773477);
+            unsigned b = (unsigned)(i*11*19 + 0x223766);
+            colors[i*3]   = (r&255)/255.f;
+            colors[i*3+1] = (g&255)/255.f;
+            colors[i*3+2] = (b&255)/255.f;
             indices[i] = i;
         }
 
@@ -242,7 +249,8 @@ struct SphereTest : Scene
 
         // w/o indices
         ASGSphereGeometry sphereGeom = asgNewSphereGeometry(positions.data(),radii.data(),
-                                                            NULL,numSpheres,NULL,0);
+                                                            colors.data(),numSpheres,NULL,
+                                                            0);
 
         ASGSurface spheres = asgNewSurface(sphereGeom,NULL);
         ASG_SAFE_CALL(asgObjectAddChild(root,spheres));

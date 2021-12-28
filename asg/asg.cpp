@@ -1696,6 +1696,18 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anariRelease(anari->device,vertexPosition);
                 anariRelease(anari->device,vertexRadius);
 
+                if (geom->colors) {
+                    // TODO: support all color types
+                    ANARIArray1D vertexColor = anariNewArray1D(anari->device,geom->colors,
+                                                               0,0,ANARI_FLOAT32_VEC3,
+                                                               geom->numSpheres,0);
+
+                    anariSetParameter(anari->device,geom->anariGeometry,"vertex.color",
+                                      ANARI_ARRAY1D,&vertexColor);
+
+                    anariRelease(anari->device,vertexColor);
+                }
+
                 if (geom->indices != nullptr && geom->numIndices > 0) {
                     ANARIArray1D primitiveIndex = anariNewArray1D(anari->device,
                                                                   geom->indices,
