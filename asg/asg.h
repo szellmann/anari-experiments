@@ -257,6 +257,18 @@ ASGAPI ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertex
                                                   ASGFreeFunc freeFunc
                                                   ASG_DFLT_PARAM(NULL));
 // TODO: special handling for 64-bit triangle indices (asgNewTriangleGeometry64?)
+ASGAPI ASGError_t asgTriangleGeometryGetVertices(ASGTriangleGeometry geom,
+                                                 float** vertices);
+ASGAPI ASGError_t asgTriangleGeometryGetVertexNormals(ASGTriangleGeometry geom,
+                                                      float** vertexNormals);
+ASGAPI ASGError_t asgTriangleGeometryGetVertexColors(ASGTriangleGeometry geom,
+                                                     float** vertexColors);
+ASGAPI ASGError_t asgTriangleGeometryGetNumVertices(ASGTriangleGeometry geom,
+                                                    uint32_t* numVertices);
+ASGAPI ASGError_t asgTriangleGeometryGetIndices(ASGTriangleGeometry geom,
+                                                uint32_t** indices);
+ASGAPI ASGError_t asgTriangleGeometryGetNumIndices(ASGTriangleGeometry geom,
+                                                   uint32_t* numIndices);
 
 ASGAPI ASGSphereGeometry asgNewSphereGeometry(float* positions, float* radii,
                                               float* colors, uint32_t numSpheres,
@@ -327,6 +339,11 @@ ASGAPI ASGError_t asgMakePointLight(ASGLight* light, float position[3], float co
 ASGAPI ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ,
                                    float* maxX, float* maxY, float* maxZ,
                                    uint64_t nodeMask ASG_DFLT_PARAM(0));
+
+ASGAPI ASGError_t asgPickObject(ASGObject obj, ASGCamera camera, uint32_t x, uint32_t y,
+                                uint32_t frameSizeX, uint32_t frameSizeY,
+                                ASGObject* pickedObject,
+                                uint64_t nodeMask ASG_DFLT_PARAM(0));
 
 /*! Build ANARI world from ASG subgraph
   Visits the subgraph induced by @param obj and updates the ANARI world

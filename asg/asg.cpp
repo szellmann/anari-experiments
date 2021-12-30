@@ -646,6 +646,46 @@ ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals
     return geom;
 }
 
+ASGError_t asgTriangleGeometryGetVertices(ASGTriangleGeometry geom, float** vertices)
+{
+    *vertices = ((TriangleGeom*)geom->impl)->vertices;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgTriangleGeometryGetVertexNormals(ASGTriangleGeometry geom,
+                                               float** vertexNormals)
+{
+    *vertexNormals = ((TriangleGeom*)geom->impl)->vertexNormals;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgTriangleGeometryGetVertexColors(ASGTriangleGeometry geom,
+                                              float** vertexColors)
+{
+    *vertexColors = ((TriangleGeom*)geom->impl)->vertexColors;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgTriangleGeometryGetNumVertices(ASGTriangleGeometry geom,
+                                             uint32_t* numVertices)
+{
+    *numVertices = ((TriangleGeom*)geom->impl)->numVertices;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgTriangleGeometryGetIndices(ASGTriangleGeometry geom, uint32_t** indices)
+{
+    *indices = ((TriangleGeom*)geom->impl)->indices;
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgTriangleGeometryGetNumIndices(ASGTriangleGeometry geom,
+                                            uint32_t* numIndices)
+{
+    *numIndices = ((TriangleGeom*)geom->impl)->numIndices;
+    return ASG_ERROR_NO_ERROR;
+}
+
 struct SphereGeom {
     float* positions;
     float* radii;
@@ -1367,18 +1407,21 @@ static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
 
                 if (geom->indices != nullptr && geom->numIndices > 0) {
                     for (unsigned i=0; i<geom->numIndices; ++i) {
-                        asg::Vec3f v = {
-                            geom->vertices[geom->indices[i]*3],
-                            geom->vertices[geom->indices[i]*3+1],
-                            geom->vertices[geom->indices[i]*3+2]
-                        };
+                        for (unsigned j=0; j<3; ++j) {
+                            unsigned index = i * 3 + j;
+                            asg::Vec3f v = {
+                                geom->vertices[geom->indices[index]*3],
+                                geom->vertices[geom->indices[index]*3+1],
+                                geom->vertices[geom->indices[index]*3+2]
+                            };
 
-                        for (asg::Mat4x3f trans : bounds->transStack) {
-                            v = trans * asg::Vec4f{v.x,v.y,v.z,1.f};
+                            for (asg::Mat4x3f trans : bounds->transStack) {
+                                v = trans * asg::Vec4f{v.x,v.y,v.z,1.f};
+                            }
+
+                            bounds->minVal = min(bounds->minVal,v);
+                            bounds->maxVal = max(bounds->maxVal,v);
                         }
-
-                        bounds->minVal = min(bounds->minVal,v);
-                        bounds->maxVal = max(bounds->maxVal,v);
                     }
                 } else {
                     // No indices, so just insert the verts directly
@@ -1478,6 +1521,222 @@ ASGError_t asgComputeBounds(ASGObject obj, float* minX, float* minY, float* minZ
 
     *minX = bounds.minVal.x; *minY = bounds.minVal.y; *minZ = bounds.minVal.z;
     *maxX = bounds.maxVal.x; *maxY = bounds.maxVal.y; *maxZ = bounds.maxVal.z;
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+
+// Pick object
+
+struct PickRecord {
+    ASGObject handle;
+    asg::Vec3f rayOri, rayDir;
+    float maxT;
+    std::vector<asg::Mat4x3f> transStack;
+};
+
+static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
+
+    ASGType_t t;
+    asgGetType(obj,&t);
+
+    PickRecord* pr = (PickRecord*)userData;
+
+    switch (t)
+    {
+        case ASG_TYPE_TRANSFORM: {
+            Transform* trans = (Transform*)obj->impl;
+
+            asg::Mat4x3f mat4x3;
+            std::memcpy(&mat4x3,trans->matrix,sizeof(mat4x3));
+            pr->transStack.push_back(mat4x3);
+
+            asgVisitorApply(self,obj);
+
+            pr->transStack.pop_back();
+
+            break;
+        }
+
+        case ASG_TYPE_SURFACE: {
+            Surface* surf = (Surface*)obj->impl;
+            assert(surf->geometry != nullptr);
+
+            Bounds bounds;
+            bounds.minVal = {+FLT_MAX,+FLT_MAX,+FLT_MAX};
+            bounds.maxVal = {-FLT_MAX,-FLT_MAX,-FLT_MAX};
+
+            if (surf->geometry->type == ASG_TYPE_TRIANGLE_GEOMETRY) {
+
+                TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
+
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    for (unsigned i=0; i<geom->numIndices; ++i) {
+                        for (unsigned j=0; j<3; ++j) {
+                            unsigned index = i * 3 + j;
+                            asg::Vec3f v = {
+                                geom->vertices[geom->indices[index]*3],
+                                geom->vertices[geom->indices[index]*3+1],
+                                geom->vertices[geom->indices[index]*3+2]
+                            };
+
+                            for (asg::Mat4x3f trans : pr->transStack) {
+                                v = trans * asg::Vec4f{v.x,v.y,v.z,1.f};
+                            }
+
+                            bounds.minVal = min(bounds.minVal,v);
+                            bounds.maxVal = max(bounds.maxVal,v);
+                        }
+                    }
+                } else {
+                    // No indices, so just insert the verts directly
+                    for (unsigned i=0; i<geom->numVertices; ++i) {
+                        asg::Vec3f v = {
+                            geom->vertices[i*3],
+                            geom->vertices[i*3+1],
+                            geom->vertices[i*3+2]
+                        };
+
+                        for (asg::Mat4x3f trans : pr->transStack) {
+                            v = trans * asg::Vec4f{v.x,v.y,v.z,1.f};
+                        }
+
+                        bounds.minVal = min(bounds.minVal,v);
+                        bounds.maxVal = max(bounds.maxVal,v);
+                    }
+                }
+            } else if (surf->geometry->type == ASG_TYPE_SPHERE_GEOMETRY) {
+
+                SphereGeom* geom = (SphereGeom*)surf->geometry->impl;
+
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    for (unsigned i=0; i<geom->numIndices; ++i) {
+                        asg::Vec3f v = {
+                            geom->positions[geom->indices[i]*3],
+                            geom->positions[geom->indices[i]*3+1],
+                            geom->positions[geom->indices[i]*3+2]
+                        };
+
+                        asg::Vec3f v1 = v - geom->radii[geom->indices[i]];
+                        asg::Vec3f v2 = v + geom->radii[geom->indices[i]];
+
+                        for (asg::Mat4x3f trans : bounds.transStack) {
+                            v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                            v2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                        }
+
+                        bounds.minVal = min(bounds.minVal,v1);
+                        bounds.maxVal = max(bounds.maxVal,v1);
+
+                        bounds.minVal = min(bounds.minVal,v2);
+                        bounds.maxVal = max(bounds.maxVal,v2);
+                    }
+                } else {
+                    // No indices, so just insert the verts directly
+                    for (unsigned i=0; i<geom->numSpheres; ++i) {
+                        asg::Vec3f v = {
+                            geom->positions[i*3],
+                            geom->positions[i*3+1],
+                            geom->positions[i*3+2]
+                        };
+
+                        asg::Vec3f v1 = v - geom->radii[i];
+                        asg::Vec3f v2 = v + geom->radii[i];
+
+                        for (asg::Mat4x3f trans : bounds.transStack) {
+                            v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                            v2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                        }
+
+                        bounds.minVal = min(bounds.minVal,v1);
+                        bounds.maxVal = max(bounds.maxVal,v1);
+
+                        bounds.minVal = min(bounds.minVal,v2);
+                        bounds.maxVal = max(bounds.maxVal,v2);
+                    }
+                }
+            }
+
+            // TODO: we'll later let ANARI handle this, when picking
+            // is specified - and implemented by the devices
+
+            asg::Vec3f rayDirInv = 1.f/pr->rayDir;
+
+            asg::Vec3f t1 = (bounds.minVal - pr->rayOri) * rayDirInv; 
+            asg::Vec3f t2 = (bounds.maxVal - pr->rayOri) * rayDirInv; 
+
+            float tnear = std::max(std::min(t1.x,t2.x),std::max(std::min(t1.y,t2.y),std::min(t1.z,t2.z)));
+            float tfar  = std::min(std::max(t1.x,t2.x),std::min(std::max(t1.y,t2.y),std::max(t1.z,t2.z)));
+
+            float t = tnear < tfar ? tnear : FLT_MAX;
+
+            if (t < pr->maxT) {
+                pr->handle = obj;
+                pr->maxT = t;
+            }
+
+            break;
+        }
+        case ASG_TYPE_OBJECT:
+            // fall-through
+        default: {
+            asgVisitorApply(self,obj);
+            break;
+        }
+    }
+}
+
+ASGError_t asgPickObject(ASGObject obj, ASGCamera camera, uint32_t x, uint32_t y,
+                         uint32_t frameSizeX, uint32_t frameSizeY,
+                         ASGObject* pickedObject, uint64_t nodeMask)
+{
+    PickRecord pr;
+    pr.handle = nullptr;
+
+    // TODO: this requires knowledge of the parameters stored by cams..
+    // should really have ANARI handle picking, hope they'll specify that soon :)
+
+    // TODO: return errors if these parameters cannot be retrieved
+    float aspect = 0.f;
+    float position[3] {0.f,0.f,0.f};
+    float direction[3] {0.f,0.f,0.f};
+    float upv[3] {0.f,0.f,0.f};
+    ASGParam aspectParam, positionParam, directionParam, upParam;
+    asgCameraGetParam(camera,"aspect",&aspectParam);
+    asgParamGetValue(aspectParam,&aspect);
+    asgCameraGetParam(camera,"position",&positionParam);
+    asgParamGetValue(positionParam,position);
+    asgCameraGetParam(camera,"direction",&directionParam);
+    asgParamGetValue(directionParam,direction);
+    asgCameraGetParam(camera,"up",&upParam);
+    asgParamGetValue(upParam,upv);
+    float fovy = M_PI/3.f; // TODO: that's just the dflt..
+
+    asg::Vec3f eye, center, up;
+    eye.x = position[0]; eye.y = position[1]; eye.z = position[2];
+    center.x = eye.x+direction[0]; center.y = eye.y+direction[1]; center.z = eye.z+direction[2];
+    up.x = upv[0]; up.y = upv[1]; up.z = upv[2];
+    asg::Vec3f f = normalize(eye-center);
+    asg::Vec3f s = normalize(cross(up,f));
+    asg::Vec3f u = cross(f,s);
+
+    asg::Vec3f U = s * std::tan(fovy*.5f) * aspect;
+    asg::Vec3f V = u * std::tan(fovy*.5f);
+    asg::Vec3f W = -f;
+
+    float xf = 2.f * (x+.5f) / frameSizeX - 1.f;
+    float yf = 2.f * (y+.5f) / frameSizeY - 1.f;
+
+    pr.rayOri = eye;
+    pr.rayDir = normalize(U*xf + V*yf + W);
+
+    pr.maxT = FLT_MAX;
+    ASGVisitor visitor = asgCreateVisitor(pickObject,&pr,
+                                          ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
+    asgObjectAccept(obj,visitor);
+    asgDestroyVisitor(visitor);
+
+    *pickedObject = pr.handle;
 
     return ASG_ERROR_NO_ERROR;
 }

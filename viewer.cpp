@@ -88,6 +88,7 @@ struct Viewer : visionaray::viewer_glut
         }
 
         visionaray::aabb bbox(visionaray::vec3(bounds),visionaray::vec3(bounds+3));
+        std::cout << bbox.min << bbox.max << '\n';
         bool fixed = false;
         visionaray::vec3 pos = fixed ? bbox.max : cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
         float intensity = 60.f;
@@ -111,6 +112,42 @@ struct Viewer : visionaray::viewer_glut
         anariCommit(anari.device, anari.world);
     }
 
+    void pickObject(visionaray::mouse::pos mousePos) {
+        float aspect = cam.aspect();
+        float pos[3] = { cam.eye().x, cam.eye().y, cam.eye().z };
+        float view[3] = { cam.center().x-cam.eye().x,
+                          cam.center().y-cam.eye().y,
+                          cam.center().z-cam.eye().z };
+        float up[3] = { cam.up().x, cam.up().y, cam.up().z };
+        ASGCamera cam = asgNewCamera("perspective");
+        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam1f("aspect",aspect)));
+        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("position",pos)));
+        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("direction",view)));
+        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("up",up)));
+        ASGObject pickedObject = NULL;
+        ASG_SAFE_CALL(asgPickObject(anari.scene->root,cam,mousePos.x,
+                                    height()-mousePos.y-1,
+                                    width(),height(),&pickedObject));
+        ASG_SAFE_CALL(asgRelease(cam));
+
+        if (pickedObject != NULL) {
+            ASGType_t type;
+            ASG_SAFE_CALL(asgGetType(pickedObject,&type));
+
+            if (type == ASG_TYPE_SURFACE) {
+                ASGGeometry geom;
+                // TODO: is triangle geom?
+                ASG_SAFE_CALL(asgSurfaceGetGeometry(pickedObject,&geom));
+
+                createTriangleGeomPipelineGL(picked.glPipeline);
+                updateTriangleGeomPipelineGL(geom,picked.glPipeline);
+                picked.handle = geom;
+            }
+        } else {
+            picked.handle = NULL;
+        }
+    }
+
     void on_display() {
 
         float duration = 0.f;
@@ -131,20 +168,42 @@ struct Viewer : visionaray::viewer_glut
             anariFrameReady(anari.device, anari.frame, ANARI_WAIT);
         }
 
-        const uint32_t *fbPointer = (uint32_t *)anariMapFrame(anari.device, anari.frame, "color");
-        visionaray::vec4f bgColor(background_color(),1.f);
-        glClearColor(bgColor[0],bgColor[1],bgColor[2],bgColor[3]);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDrawPixels(width(),height(),GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
-        anariUnmapFrame(anari.device, anari.frame, "color");
+        bool debugDepth = false;
+
+        if (!debugDepth) {
+            const uint32_t *fbPointer = (uint32_t *)anariMapFrame(anari.device, anari.frame, "color");
+            visionaray::vec4f bgColor(background_color(),1.f);
+            glClearColor(bgColor[0],bgColor[1],bgColor[2],bgColor[3]);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDrawPixels(width(),height(),GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
+            anariUnmapFrame(anari.device, anari.frame, "color");
+        } else {
+            const float *dbPointer = (float *)anariMapFrame(anari.device, anari.frame, "depth");
+            float *cpy = (float *)malloc(width()*height()*sizeof(float));
+            memcpy(cpy,dbPointer,width()*height()*sizeof(float));
+            float max = 0.f;
+            for (int i=0; i<width()*height(); ++i) {
+                if (!std::isinf(cpy[i]))
+                    max = std::max(max,cpy[i]);
+            }
+            for (int i=0; i<width()*height(); ++i) {
+                cpy[i] /= max;
+            }
+            glClear(GL_DEPTH_BUFFER_BIT);
+            glDrawPixels(width(),height(),GL_LUMINANCE,GL_FLOAT,cpy);
+            anariUnmapFrame(anari.device, anari.frame, "depth");
+        }
 
         anari.scene->afterRenderFrame();
 
         anari.scene->renderUI(cam);
 
         anari.scene->afterRenderUI();
+
+        if (picked.handle != nullptr)
+            renderTriangleGeomPipelineGL(picked.glPipeline,cam.get_view_matrix(),cam.get_proj_matrix());
 
         if (anari.scene->needFrameReset())
             anariCommit(anari.device,anari.camera); // provoke frame reset
@@ -157,7 +216,7 @@ struct Viewer : visionaray::viewer_glut
 
         cam.set_viewport(0, 0, w, h);
         float aspect = w/(float)h;
-        cam.perspective(45.f * visionaray::constants::degrees_to_radians<float>(), aspect, .001f, 1000.f);
+        cam.perspective(M_PI/3.f, aspect, .001f, 1000.f);
 
         unsigned imgSize[2] = { (unsigned)w, (unsigned)h };
         anariSetParameter(anari.device, anari.frame, "size", ANARI_UINT32_VEC2, imgSize);
@@ -170,11 +229,15 @@ struct Viewer : visionaray::viewer_glut
     }
 
     void on_mouse_down(const visionaray::mouse_event& event) {
+        picked.downPos = event.pos();
         if (!anari.scene->handleMouseDown(event))
             viewer_glut::on_mouse_down(event);
     }
 
     void on_mouse_up(const visionaray::mouse_event& event) {
+        if (picked.downPos == event.pos())
+            pickObject(event.pos());
+
         if (!anari.scene->handleMouseUp(event))
             viewer_glut::on_mouse_up(event);
     }
@@ -187,6 +250,12 @@ struct Viewer : visionaray::viewer_glut
         if (!anari.scene->handleMouseMove(event))
             viewer_glut::on_mouse_move(event);
     }
+
+    struct {
+        ASGTriangleGeometry handle = nullptr;
+        TriangleGeomPipelineGL glPipeline;
+        visionaray::mouse::pos downPos;
+    } picked;
 
     struct {
         std::string libType = "environment";
@@ -257,7 +326,9 @@ struct Viewer : visionaray::viewer_glut
             anariCommit(device, frame);
             //ANARIDataType fbFormat = ANARI_UFIXED8_VEC4;
             ANARIDataType fbFormat = ANARI_UFIXED8_RGBA_SRGB;
+            ANARIDataType dbFormat = ANARI_FLOAT32;
             anariSetParameter(device, frame, "color", ANARI_DATA_TYPE, &fbFormat);
+            //anariSetParameter(device, frame, "depth", ANARI_DATA_TYPE, &dbFormat);
             anariSetParameter(device, frame, "renderer", ANARI_RENDERER, &renderer);
             //renderer = anariNewRenderer(device, "raycast");
             //renderer = anariNewRenderer(device, "ao");
@@ -300,7 +371,7 @@ int main(int argc, char** argv)
 
     // More boilerplate to set up camera manipulators
     float aspect = viewer.width()/(float)viewer.height();
-    viewer.cam.perspective(45.f * constants::degrees_to_radians<float>(), aspect, .001f, 1000.f);
+    viewer.cam.perspective(M_PI/3.f, aspect, .001f, 1000.f);
     viewer.cam.view_all(viewer.anari.scene->getBounds());
 
     viewer.add_manipulator(std::make_shared<arcball_manipulator>(viewer.cam, mouse::Left));

@@ -224,6 +224,11 @@ namespace asg
         return !(a == b);
     }
 
+    ASG_FUNC inline Vec3f operator-(Vec3f const& a)
+    {
+        return { -a.x, -a.y, -a.z };
+    }
+
     ASG_FUNC inline Vec3f operator+(Vec3f const& a, Vec3f const& b)
     {
         return  { a.x + b.x, a.y + b.y, a.z + b.z };
@@ -267,6 +272,11 @@ namespace asg
     ASG_FUNC inline Vec3f operator*(float a, Vec3f const& b)
     {
         return  { a * b.x, a * b.y, a * b.z };
+    }
+
+    ASG_FUNC inline Vec3f operator/(float a, Vec3f const& b)
+    {
+        return { a / b.x, a / b.y, a / b.z };
     }
 
     ASG_FUNC inline Vec3f& operator+=(Vec3f& a, Vec3f const& b)
@@ -315,6 +325,13 @@ namespace asg
     {
         a = a / b;
         return a;
+    }
+
+    ASG_FUNC inline Vec3f cross(Vec3f const& a, Vec3f const& b)
+    {
+        return { a.y * b.z - a.z * b.y,
+                 a.z * b.x - a.x * b.z,
+                 a.x * b.y - a.y * b.x };
     }
 
     ASG_FUNC inline float dot(Vec3f const& a, Vec3f const& b)
