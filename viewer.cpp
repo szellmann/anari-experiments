@@ -90,20 +90,17 @@ struct Viewer : visionaray::viewer_glut
         visionaray::aabb bbox(visionaray::vec3(bounds),visionaray::vec3(bounds+3));
         bool fixed = false;
         visionaray::vec3 pos = fixed ? bbox.max : cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
-        float intensity = 1.f;
+        float intensity = 60.f;
         float radius = 0.f;
         if (anari.deviceSubtype != std::string("generic")) {
-            // particularly, do this for ospray b/c their point light source intensity depends on distance!
-            // OSPRay atm doesn't allow for device subtype introspection
-            intensity = 3.14f*length(bbox.max-bbox.min);
+            anariSetParameter(anari.device, anari.headLight, "radiance", ANARI_FLOAT32, &intensity);
             radius = length(bbox.max-bbox.min)*.1f;
         } else {
-            intensity = 60.f;
+            anariSetParameter(anari.device, anari.headLight, "intensity", ANARI_FLOAT32, &intensity);
             radius = length(bbox.max-bbox.min)*.1f;
         }
         visionaray::vec3f color{.9f,.85f,.85f};
         anariSetParameter(anari.device, anari.headLight, "position", ANARI_FLOAT32_VEC3, pos.data());
-        anariSetParameter(anari.device, anari.headLight, "intensity", ANARI_FLOAT32, &intensity);
         anariSetParameter(anari.device, anari.headLight, "radius", ANARI_FLOAT32, &radius);
         anariSetParameter(anari.device, anari.headLight, "color", ANARI_FLOAT32_VEC3, color.data());
         if (radius > 0.f) {
