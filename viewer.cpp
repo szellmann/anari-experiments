@@ -98,12 +98,14 @@ struct Viewer : visionaray::viewer_glut
             intensity = 3.14f*length(bbox.max-bbox.min);
             radius = length(bbox.max-bbox.min)*.1f;
         } else {
-            intensity = 10.f*length(bbox.max-bbox.min);
+            intensity = 60.f;
             radius = length(bbox.max-bbox.min)*.1f;
         }
+        visionaray::vec3f color{.9f,.85f,.85f};
         anariSetParameter(anari.device, anari.headLight, "position", ANARI_FLOAT32_VEC3, pos.data());
         anariSetParameter(anari.device, anari.headLight, "intensity", ANARI_FLOAT32, &intensity);
         anariSetParameter(anari.device, anari.headLight, "radius", ANARI_FLOAT32, &radius);
+        anariSetParameter(anari.device, anari.headLight, "color", ANARI_FLOAT32_VEC3, color.data());
         if (radius > 0.f) {
             bool visible = false;
             anariSetParameter(anari.device, anari.headLight, "visible", ANARI_BOOL, &visible);
