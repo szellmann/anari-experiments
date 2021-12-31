@@ -1,3 +1,6 @@
 [submodule "volkit"]
 	path = volkit
 	url = https://github.com/volkit/volkit
+[submodule "imgui"]
+	path = imgui
+	url = https://github.com/ocornut/imgui

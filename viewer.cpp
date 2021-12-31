@@ -88,7 +88,6 @@ struct Viewer : visionaray::viewer_glut
         }
 
         visionaray::aabb bbox(visionaray::vec3(bounds),visionaray::vec3(bounds+3));
-        std::cout << bbox.min << bbox.max << '\n';
         bool fixed = false;
         visionaray::vec3 pos = fixed ? bbox.max : cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
         float intensity = 60.f;
