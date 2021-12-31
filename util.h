@@ -76,6 +76,52 @@ static void printSceneGraph(ASGObject rootObj, bool verbose = false)
 
             case ASG_TYPE_SURFACE: {
                 std::cout << indent << "Surface" << nameOut;
+                if (data->verbose) {
+                    ASGGeometry geom;
+                    ASG_SAFE_CALL(asgSurfaceGetGeometry((ASGSurface)obj,&geom));
+
+                    ASGType_t type;
+                    ASG_SAFE_CALL(asgGetType(geom,&type));
+
+                    if (type==ASG_TYPE_TRIANGLE_GEOMETRY) {
+                        std::cout << ", triangle-geom";
+                        float *vertices, *vertexNormals, *vertexColors;
+                        uint32_t *indices;
+                        uint32_t numVertices, numIndices;
+
+                        ASG_SAFE_CALL(asgTriangleGeometryGetVertices(
+                                (ASGTriangleGeometry)geom,&vertices));
+                        ASG_SAFE_CALL(asgTriangleGeometryGetVertexNormals(
+                                (ASGTriangleGeometry)geom,&vertexNormals));
+                        ASG_SAFE_CALL(asgTriangleGeometryGetVertexColors(
+                                (ASGTriangleGeometry)geom,&vertexColors));
+                        ASG_SAFE_CALL(asgTriangleGeometryGetNumVertices(
+                                (ASGTriangleGeometry)geom,&numVertices));
+                        ASG_SAFE_CALL(asgTriangleGeometryGetIndices(
+                                (ASGTriangleGeometry)geom,&indices));
+                        ASG_SAFE_CALL(asgTriangleGeometryGetNumIndices(
+                                (ASGTriangleGeometry)geom,&numIndices));
+
+                        std::cout << ", # vertices: " << numVertices;
+                        std::cout << ", # indices: " << numIndices;
+                        std::cout << ", addresses (V,VN,VC,I): ";
+                        std::cout << vertices << ' ' << vertexNormals << ' '
+                                  << vertexColors << ' ' << indices;
+                    }
+
+                    ASGMaterial mat;
+                    ASG_SAFE_CALL(asgSurfaceGetMaterial((ASGSurface)obj,&mat));
+
+                    if (mat != NULL) {
+                        float kd[3] {0.f,0.f,0.f};
+                        ASGParam kdParam;
+                        ASG_SAFE_CALL(asgMaterialGetParam(mat,"kd",&kdParam));
+                        ASG_SAFE_CALL(asgParamGetValue(kdParam,kd));
+
+                        std::cout << ", material KD: "
+                                  << kd[0] << ' ' << kd[1] << ' ' << kd[2];
+                    }
+                }
                 std::cout << '\n';
                 break;
             }

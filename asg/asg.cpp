@@ -396,8 +396,98 @@ ASGError_t asgObjectGetName(ASGObject obj, const char** name)
 
 ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child)
 {
-    obj->addChild(obj,child);
+    obj->addChild(obj,child); // TODO: why do we need this indirection here!?
     return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgObjectSetChild(ASGObject obj, int childID, ASGObject child)
+{
+    if (childID >= obj->children.size())
+        return ASG_ERROR_INVALID_CHILD_ID;
+
+    // TODO: implement that through forests!
+    obj->children[childID] = child;
+    // TODO: check if we are parent already?!
+    child->parents.push_back(obj);
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgObjectGetChild(ASGObject obj, int childID, ASGObject* child)
+{
+    if (childID >= obj->children.size())
+        return ASG_ERROR_INVALID_CHILD_ID;
+
+    *child = obj->children[childID];
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgObjectGetChildren(ASGObject obj, ASGObject* children, int* numChildren)
+{
+    *numChildren = (int)obj->children.size();
+    if (children == NULL) {
+        return ASG_ERROR_NO_ERROR;
+    } else {
+        std::memcpy(children,obj->children.data(),obj->children.size()*sizeof(ASGObject));
+        return ASG_ERROR_NO_ERROR;
+    }
+}
+
+ASGError_t asgObjectRemoveChild(ASGObject obj, ASGObject child)
+{
+    // from the child that we're going to remove, first remove obj as a parent
+    std::vector<ASGObject>& parents = child->parents;
+    parents.erase(std::remove_if(parents.begin(),parents.end(),
+                                 [obj](ASGObject parent) { return parent==obj; }),
+                  parents.end());
+
+    // Now remove the child from the list of children (however unlikely, we _might_
+    // be storing multiple references to that child..
+    std::vector<ASGObject>& children = obj->children;
+    children.erase(std::remove_if(children.begin(),children.end(),
+                                  [child](ASGObject c) { return c==child; }),
+                  children.end());
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgObjectRemoveChildAt(ASGObject obj, int childID)
+{
+    if (childID >= obj->children.size())
+        return ASG_ERROR_INVALID_CHILD_ID;
+
+    // from the child that we're going to remove, first remove obj as a parent
+    std::vector<ASGObject>& parents = obj->children[childID]->parents;
+    parents.erase(std::remove_if(parents.begin(),parents.end(),
+                                 [obj](ASGObject parent) { return parent==obj; }),
+                  parents.end());
+
+    // Now remove the child from the list of children
+    obj->children.erase(obj->children.begin()+childID);
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgObjectGetParent(ASGObject obj, int parentID, ASGObject* parent)
+{
+    if (parentID >= obj->parents.size())
+        return ASG_ERROR_INVALID_PARENT_ID;
+
+    *parent = obj->parents[parentID];
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgObjectGetParents(ASGObject obj, ASGObject* parents, int* numParents)
+{
+    *numParents = (int)obj->parents.size();
+    if (parents == NULL) {
+        return ASG_ERROR_NO_ERROR;
+    } else {
+        std::memcpy(parents,obj->parents.data(),obj->parents.size()*sizeof(ASGObject));
+        return ASG_ERROR_NO_ERROR;
+    }
 }
 
 ASGError_t asgObjectAccept(ASGObject obj, ASGVisitor visitor)
@@ -2068,6 +2158,25 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
             if (surf->anariSurface == nullptr)
                 surf->anariSurface = anariNewSurface(anari->device);
+
+            if (geomHandle == nullptr) {
+                // That means we didn't process geometries, so at least
+                // need to obtain the handle
+                switch (surf->geometry->type) {
+
+                    case ASG_TYPE_TRIANGLE_GEOMETRY: {
+                        TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
+                        geomHandle = geom->anariGeometry;
+                        break;
+                    }
+
+                    case ASG_TYPE_SPHERE_GEOMETRY: {
+                        SphereGeom* geom = (SphereGeom*)surf->geometry->impl;
+                        geomHandle = geom->anariGeometry;
+                        break;
+                    }
+                }
+            }
 
             anariSetParameter(anari->device,surf->anariSurface,"geometry",
                               ANARI_GEOMETRY,&geomHandle);

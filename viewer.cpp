@@ -111,48 +111,6 @@ struct Viewer : visionaray::viewer_glut
         anariCommit(anari.device, anari.world);
     }
 
-    void pickObject(visionaray::mouse::pos mousePos) {
-        float aspect = cam.aspect();
-        float pos[3] = { cam.eye().x, cam.eye().y, cam.eye().z };
-        float view[3] = { cam.center().x-cam.eye().x,
-                          cam.center().y-cam.eye().y,
-                          cam.center().z-cam.eye().z };
-        float up[3] = { cam.up().x, cam.up().y, cam.up().z };
-        ASGCamera cam = asgNewCamera("perspective");
-        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam1f("aspect",aspect)));
-        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("position",pos)));
-        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("direction",view)));
-        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("up",up)));
-
-        // Pick in high-res frame:
-        uint32_t scale = 16;
-        uint32_t w = width()*scale;
-        uint32_t h = height()*scale;
-        uint32_t x = mousePos.x*scale;
-        uint32_t y = mousePos.y*scale;
-
-        ASGObject pickedObject = NULL;
-        ASG_SAFE_CALL(asgPickObject(anari.scene->root,cam,x,h-y-1,w,h,&pickedObject));
-        ASG_SAFE_CALL(asgRelease(cam));
-
-        if (pickedObject != NULL) {
-            ASGType_t type;
-            ASG_SAFE_CALL(asgGetType(pickedObject,&type));
-
-            if (type == ASG_TYPE_SURFACE) {
-                ASGGeometry geom;
-                // TODO: is triangle geom?
-                ASG_SAFE_CALL(asgSurfaceGetGeometry(pickedObject,&geom));
-
-                createTriangleGeomPipelineGL(picked.glPipeline);
-                updateTriangleGeomPipelineGL(geom,picked.glPipeline);
-                picked.handle = geom;
-            }
-        } else {
-            picked.handle = NULL;
-        }
-    }
-
     void on_display() {
 
         float duration = 0.f;
@@ -207,9 +165,6 @@ struct Viewer : visionaray::viewer_glut
 
         anari.scene->afterRenderUI();
 
-        if (picked.handle != nullptr)
-            renderTriangleGeomPipelineGL(picked.glPipeline,cam.get_view_matrix(),cam.get_proj_matrix());
-
         if (anari.scene->needFrameReset())
             anariCommit(anari.device,anari.camera); // provoke frame reset
     }
@@ -230,19 +185,16 @@ struct Viewer : visionaray::viewer_glut
         resetANARICamera();
         resetANARIMainLight();
 
-        viewer_glut::on_resize(w,h);
+        if (!anari.scene->handleResize(w,h))
+            viewer_glut::on_resize(w,h);
     }
 
     void on_mouse_down(const visionaray::mouse_event& event) {
-        picked.downPos = event.pos();
         if (!anari.scene->handleMouseDown(event))
             viewer_glut::on_mouse_down(event);
     }
 
     void on_mouse_up(const visionaray::mouse_event& event) {
-        if (picked.downPos == event.pos())
-            pickObject(event.pos());
-
         if (!anari.scene->handleMouseUp(event))
             viewer_glut::on_mouse_up(event);
     }
@@ -255,12 +207,6 @@ struct Viewer : visionaray::viewer_glut
         if (!anari.scene->handleMouseMove(event))
             viewer_glut::on_mouse_move(event);
     }
-
-    struct {
-        ASGTriangleGeometry handle = nullptr;
-        TriangleGeomPipelineGL glPipeline;
-        visionaray::mouse::pos downPos;
-    } picked;
 
     struct {
         std::string libType = "environment";

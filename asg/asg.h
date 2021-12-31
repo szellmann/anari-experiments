@@ -20,6 +20,8 @@ typedef uint8_t ASGBool_t;
 
 typedef int ASGError_t;
 #define ASG_ERROR_NO_ERROR                  0
+#define ASG_ERROR_INVALID_CHILD_ID          5
+#define ASG_ERROR_INVALID_PARENT_ID         6
 #define ASG_ERROR_INSUFFICIENT_ARRAY_SIZE   10
 #define ASG_ERROR_PARAM_NOT_FOUND           50
 #define ASG_ERROR_MISSING_FILE_HANDLER      100
@@ -193,10 +195,20 @@ ASGAPI ASGError_t asgParamGetValue(ASGParam param, void* mem);
   is derived from ASGObject */
 ASGAPI ASGObject asgNewObject();
 ASGAPI ASGError_t asgRelease(ASGObject obj);
+ASGAPI ASGError_t asgRetain(ASGObject obj);
 ASGAPI ASGError_t asgGetType(ASGObject obj, ASGType_t* type);
 ASGAPI ASGError_t asgObjectSetName(ASGObject obj, const char* name);
 ASGAPI ASGError_t asgObjectGetName(ASGObject obj, const char** name);
 ASGAPI ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child);
+ASGAPI ASGError_t asgObjectSetChild(ASGObject obj, int childID, ASGObject child);
+ASGAPI ASGError_t asgObjectGetChild(ASGObject obj, int childID, ASGObject* child);
+ASGAPI ASGError_t asgObjectGetChildren(ASGObject obj, ASGObject* children,
+                                       int* numChildren);
+ASGAPI ASGError_t asgObjectRemoveChild(ASGObject obj, ASGObject child);
+ASGAPI ASGError_t asgObjectRemoveChildAt(ASGObject obj, int childID);
+ASGAPI ASGError_t asgObjectGetParent(ASGObject obj, int parentID, ASGObject* parent);
+ASGAPI ASGError_t asgObjectGetParents(ASGObject obj, ASGObject* parents,
+                                      int* numParents);
 ASGAPI ASGError_t asgObjectAccept(ASGObject obj, ASGVisitor visitor);
 
 // Visitor

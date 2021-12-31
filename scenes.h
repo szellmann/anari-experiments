@@ -4,6 +4,9 @@
 #include <memory>
 #include <random>
 #include <vector>
+#include <imgui.h>
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include <imgui_internal.h>
 #include <visionaray/math/math.h>
 #include <visionaray/pinhole_camera.h>
 #include <common/manip/rotate_manipulator.h>
@@ -52,6 +55,13 @@ struct Scene
     {
     }
 
+    virtual bool handleResize(int width, int height)
+    {
+        viewportWidth = width;
+        viewportHeight = height;
+        return false;
+    }
+
     virtual bool handleMouseDown(visionaray::mouse_event const&)
     {
         return false;
@@ -76,6 +86,9 @@ struct Scene
     ANARIWorld world = nullptr;
 
     ASGObject root = nullptr;
+
+    int viewportWidth = 0;
+    int viewportHeight = 0;
 };
 
 struct SelectTest : Scene
@@ -469,11 +482,33 @@ struct Model : Scene
         return bbox;
     }
 
+    virtual bool handleMouseDown(visionaray::mouse_event const& event)
+    {
+        if (event.pos().y < toolbarHeight)
+            return true;
+
+        picked.downPos = event.pos();
+        return false;
+    }
+
+    virtual bool handleMouseUp(visionaray::mouse_event const& event)
+    {
+        if (event.pos().y < toolbarHeight)
+            return true;
+
+        if (manip == 1 && picked.downPos == event.pos())
+            pickObject(event.pos());
+
+        return false;
+    }
+
     virtual void beforeRenderFrame()
     {
         if (rebuildANARIWorld) {
             ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                              ASG_BUILD_WORLD_FLAG_MATERIALS,0));
+            // ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+            //                                  ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
             anariCommit(device,world);
         }
@@ -481,8 +516,92 @@ struct Model : Scene
         rebuildANARIWorld = false;
     }
 
-    virtual void renderUI(visionaray::pinhole_camera const&)
+    void pickObject(visionaray::mouse::pos mousePos) {
+        float aspect = cam.aspect();
+        float pos[3] = { cam.eye().x, cam.eye().y, cam.eye().z };
+        float view[3] = { cam.center().x-cam.eye().x,
+                          cam.center().y-cam.eye().y,
+                          cam.center().z-cam.eye().z };
+        float up[3] = { cam.up().x, cam.up().y, cam.up().z };
+        ASGCamera cam = asgNewCamera("perspective");
+        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam1f("aspect",aspect)));
+        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("position",pos)));
+        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("direction",view)));
+        ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("up",up)));
+
+        // Pick in high-res frame:
+        uint32_t scale = 16;
+        uint32_t w = viewportWidth*scale;
+        uint32_t h = viewportHeight*scale;
+        uint32_t x = mousePos.x*scale;
+        uint32_t y = mousePos.y*scale;
+
+        ASGObject pickedObject = NULL;
+        ASG_SAFE_CALL(asgPickObject(root,cam,x,h-y-1,w,h,&pickedObject));
+        ASG_SAFE_CALL(asgRelease(cam));
+
+        if (pickedObject != NULL) {
+            ASGType_t type;
+            ASG_SAFE_CALL(asgGetType(pickedObject,&type));
+
+            if (type == ASG_TYPE_SURFACE) {
+                ASGGeometry geom;
+                // TODO: is triangle geom?
+                ASG_SAFE_CALL(asgSurfaceGetGeometry(pickedObject,&geom));
+
+                createTriangleGeomPipelineGL(picked.glPipeline);
+                updateTriangleGeomPipelineGL(geom,picked.glPipeline);
+                picked.handle = pickedObject;
+                picked.geomHandle = geom;
+            }
+        } else {
+            picked.handle = NULL;
+            picked.geomHandle = NULL;
+        }
+    }
+
+    void ToolbarUI()
     {
+        int menuBarHeight = 0;
+
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + menuBarHeight));
+        ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, toolbarHeight));
+        ImGui::SetNextWindowViewport(viewport->ID);
+
+        ImGuiWindowFlags window_flags = 0
+            | ImGuiWindowFlags_NoDocking 
+            | ImGuiWindowFlags_NoTitleBar 
+            | ImGuiWindowFlags_NoResize 
+            | ImGuiWindowFlags_NoMove 
+            | ImGuiWindowFlags_NoScrollbar 
+            | ImGuiWindowFlags_NoSavedSettings;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+        ImGui::Begin("TOOLBAR", NULL, window_flags);
+        ImGui::PopStyleVar();
+
+        ImGui::RadioButton("None",   &manip, 0); ImGui::SameLine();
+        ImGui::RadioButton("Pick",   &manip, 1); ImGui::SameLine();
+        ImGui::BeginDisabled(); // not working yet
+        ImGui::RadioButton("Rotate", &manip, 2); ImGui::SameLine();
+        ImGui::RadioButton("Move",   &manip, 3); ImGui::SameLine();
+        ImGui::EndDisabled();
+        doDelete = ImGui::Button("Delete");
+
+        ImGui::End();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.f);
+    }
+
+    virtual void renderUI(visionaray::pinhole_camera const& cam)
+    {
+        // store this here, don't have access to it elsewhere..
+        this->cam = cam;
+
+        ToolbarUI();
+
         ImGui::Begin("Materials");
 
         static const char* current_item = NULL;
@@ -524,6 +643,53 @@ struct Model : Scene
         ImGui::End();
     }
 
+    virtual void afterRenderUI()
+    {
+        if (picked.geomHandle != nullptr) {
+            renderTriangleGeomPipelineGL(picked.glPipeline,cam.get_view_matrix(),cam.get_proj_matrix());
+
+            if (manip==2 || manip==3) { // TODO: that's not working yet
+                ASGSurface surf = picked.handle;
+
+                // TODO: might have more than one parents..
+                ASGObject parent = nullptr;
+                ASG_SAFE_CALL(asgObjectGetParent(surf,0,&parent));
+
+                ASGType_t type;
+                ASG_SAFE_CALL(asgGetType(parent,&type));
+
+                if (type!=ASG_TYPE_TRANSFORM) {
+                    float matrix[] = {1.f,0.f,0.f,
+                                      0.f,1.f,0.f,
+                                      0.f,0.f,1.f,
+                                      0.f,0.f,0.f};
+
+                    ASG_SAFE_CALL(asgRetain(surf));
+                    ASG_SAFE_CALL(asgObjectRemoveChild(parent,surf));
+                    ASGTransform trans = asgNewTransform(matrix);
+                    ASG_SAFE_CALL(asgObjectAddChild(trans,surf));
+                    ASG_SAFE_CALL(asgObjectAddChild(parent,trans));
+
+                    rebuildANARIWorld = true;
+                }
+            } else if (manip==1 && doDelete) {
+                ASGSurface surf = picked.handle;
+
+                // TODO: might have more than one parents..
+                ASGObject parent = nullptr;
+                ASG_SAFE_CALL(asgObjectGetParent(surf,0,&parent));
+                ASG_SAFE_CALL(asgObjectRemoveChild(parent,surf));
+                ASG_SAFE_CALL(asgRelease(surf));
+                // TODO: release geom etc.
+                picked.handle = nullptr;
+                picked.geomHandle = nullptr;
+
+                doDelete = false;
+                rebuildANARIWorld = true;
+            }
+        }
+    }
+
     bool needFrameReset()
     {
         return rebuildANARIWorld;
@@ -532,6 +698,20 @@ struct Model : Scene
     visionaray::aabb bbox;
 
     std::vector<ASGMaterial> materials;
+
+    visionaray::pinhole_camera cam;
+
+    int toolbarHeight = 48;
+
+    int manip = 0;
+    bool doDelete = false;
+
+    struct {
+        ASGSurface handle = nullptr;
+        ASGTriangleGeometry geomHandle = nullptr;
+        TriangleGeomPipelineGL glPipeline;
+        visionaray::mouse::pos downPos;
+    } picked;
 
     bool rebuildANARIWorld = false;
 };
