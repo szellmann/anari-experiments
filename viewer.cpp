@@ -124,10 +124,16 @@ struct Viewer : visionaray::viewer_glut
         ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("position",pos)));
         ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("direction",view)));
         ASG_SAFE_CALL(asgCameraSetParam(cam,asgParam3fv("up",up)));
+
+        // Pick in high-res frame:
+        uint32_t scale = 16;
+        uint32_t w = width()*scale;
+        uint32_t h = height()*scale;
+        uint32_t x = mousePos.x*scale;
+        uint32_t y = mousePos.y*scale;
+
         ASGObject pickedObject = NULL;
-        ASG_SAFE_CALL(asgPickObject(anari.scene->root,cam,mousePos.x,
-                                    height()-mousePos.y-1,
-                                    width(),height(),&pickedObject));
+        ASG_SAFE_CALL(asgPickObject(anari.scene->root,cam,x,h-y-1,w,h,&pickedObject));
         ASG_SAFE_CALL(asgRelease(cam));
 
         if (pickedObject != NULL) {

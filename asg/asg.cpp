@@ -19,6 +19,15 @@
 #include <vkt/StructuredVolume.hpp>
 #include <vkt/VolumeFile.hpp>
 #endif
+// For picking, currently using a Visionaray LBVH that is built lazily
+// when the object is first tested for intersection. Removing that
+// (and the whole dependency against that lib) as soon as ANARI supports
+// picking natively
+#define __USE_VISIONARAY_FOR_PICKING 1
+#if __USE_VISIONARAY_FOR_PICKING
+#include <visionaray/bvh.h>
+#include <visionaray/traverse.h>
+#endif
 #include "asg.h"
 #include "linalg.hpp"
 
@@ -622,6 +631,9 @@ struct TriangleGeom {
     ASGFreeFunc freeFunc;
     // Exclusively used by ANARI build visitors
     ANARIGeometry anariGeometry = NULL;
+#if __USE_VISIONARAY_FOR_PICKING
+    visionaray::index_bvh<visionaray::basic_triangle<3,float>> bvh;
+#endif
 };
 
 ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals,
@@ -1571,6 +1583,50 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                 TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
 
                 if (geom->indices != nullptr && geom->numIndices > 0) {
+#if __USE_VISIONARAY_FOR_PICKING
+                    using namespace visionaray;
+                    if (geom->bvh.num_nodes() == 0) {
+                        std::vector<basic_triangle<3,float>> tris;
+
+                        for (unsigned i=0; i<geom->numIndices; ++i) {
+                            vec3 v1 = {
+                                geom->vertices[geom->indices[i*3]*3],
+                                geom->vertices[geom->indices[i*3]*3+1],
+                                geom->vertices[geom->indices[i*3]*3+2]
+                            };
+                            vec3 v2 = {
+                                geom->vertices[geom->indices[i*3+1]*3],
+                                geom->vertices[geom->indices[i*3+1]*3+1],
+                                geom->vertices[geom->indices[i*3+1]*3+2]
+                            };
+                            vec3 v3 = {
+                                geom->vertices[geom->indices[i*3+2]*3],
+                                geom->vertices[geom->indices[i*3+2]*3+1],
+                                geom->vertices[geom->indices[i*3+2]*3+2]
+                            };
+
+                            basic_triangle<3,float> tri;
+                            tri.v1 = v1; tri.e1 = v2-v1; tri.e2 = v3-v1;
+                            tri.prim_id = i;
+                            tris.push_back(tri);
+                        }
+
+                        lbvh_builder builder;
+                        geom->bvh = builder.build(index_bvh<basic_triangle<3,float>>{},
+                                                  tris.data(),tris.size());
+                    }
+
+                    basic_ray<float> r;
+                    r.ori = vec3f(pr->rayOri.x,pr->rayOri.y,pr->rayOri.z);
+                    r.dir = vec3f(pr->rayDir.x,pr->rayDir.y,pr->rayDir.z);
+                    r.tmin = 0.f;
+                    r.tmax = pr->maxT;
+                    auto hr = closest_hit(r,&geom->bvh,&geom->bvh+1);
+                    if (hr.t < pr->maxT) {
+                        pr->handle = obj;
+                        pr->maxT = hr.t;
+                    }
+#else
                     for (unsigned i=0; i<geom->numIndices; ++i) {
                         for (unsigned j=0; j<3; ++j) {
                             unsigned index = i * 3 + j;
@@ -1588,6 +1644,7 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                             bounds.maxVal = max(bounds.maxVal,v);
                         }
                     }
+#endif
                 } else {
                     // No indices, so just insert the verts directly
                     for (unsigned i=0; i<geom->numVertices; ++i) {
@@ -1657,6 +1714,7 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                 }
             }
 
+#if !__USE_VISIONARAY_FOR_PICKING
             // TODO: we'll later let ANARI handle this, when picking
             // is specified - and implemented by the devices
 
@@ -1674,6 +1732,7 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                 pr->handle = obj;
                 pr->maxT = t;
             }
+#endif
 
             break;
         }
