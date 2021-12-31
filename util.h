@@ -207,8 +207,10 @@ static void renderTriangleGeomPipelineGL(TriangleGeomPipelineGL& pipeline,
     // Store OpenGL state
     GLint array_buffer_binding = 0;
     GLint element_array_buffer_binding = 0;
+    GLint polygon_mode = 0;
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer_binding);
     glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_array_buffer_binding);
+    glGetIntegerv(GL_POLYGON_MODE, &polygon_mode);
 
     pipeline.prog.enable();
 
@@ -221,11 +223,14 @@ static void renderTriangleGeomPipelineGL(TriangleGeomPipelineGL& pipeline,
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pipeline.index_buffer.get());
 
-    glDrawElements(GL_LINES, pipeline.numElements * 3, GL_UNSIGNED_INT, 0);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    glDrawElements(GL_TRIANGLES, pipeline.numElements * 3, GL_UNSIGNED_INT, 0);
 
     pipeline.prog.disable();
 
     // Restore OpenGL state
+    glPolygonMode(GL_FRONT_AND_BACK, polygon_mode);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element_array_buffer_binding);
     glBindBuffer(GL_ARRAY_BUFFER, array_buffer_binding);
 
