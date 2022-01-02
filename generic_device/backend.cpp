@@ -803,18 +803,6 @@ namespace generic {
 
                         // TODO: Lights
                     }
-
-                    for (size_t i=0; i<mats.size(); ++i) {
-                        Material::SP m = mats[i];
-
-                        matte<float> mat;
-                        mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
-                        mat.cd() = from_rgb(m->color);
-                        mat.ka() = 1.f;
-                        mat.kd() = 1.f;
-
-                        (*it)->surfaceImpl.materials.push_back(mat);
-                    }
                 }
 
                 // Surfaces
@@ -853,18 +841,6 @@ namespace generic {
                         TriangleBVH::bvh_inst inst = (*sit)->bvhInst;
                         inst.set_inst_id(instID);
                         (*it)->surfaceImpl.triangleBVHInsts.push_back(inst);
-                    }
-
-                    for (size_t i=0; i<mats.size(); ++i) {
-                        Material::SP m = mats[i];
-
-                        matte<float> mat;
-                        mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
-                        mat.cd() = from_rgb(m->color);
-                        mat.ka() = 1.f;
-                        mat.kd() = 1.f;
-
-                        (*it)->surfaceImpl.materials.push_back(mat);
                     }
                 }
 
@@ -953,6 +929,18 @@ namespace generic {
                             (*it)->lightImpl.lights.push_back(pl);
                         }
                     }
+                }
+
+                for (size_t i=0; i<mats.size(); ++i) {
+                    Material::SP m = mats[i];
+
+                    matte<float> mat;
+                    mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
+                    mat.cd() = from_rgb(m->color);
+                    mat.ka() = 1.f;
+                    mat.kd() = 1.f;
+
+                    (*it)->surfaceImpl.materials.push_back(mat);
                 }
 
                 if (!(*it)->lightImpl.lights.empty()) {
@@ -1244,7 +1232,7 @@ namespace generic {
                 memcpy((*it)->transform,inst.transform,sizeof((*it)->transform));
 
                 Group* group = (Group*)GetResource(inst.group);
-                std::cout << inst.group << ' ' << group << '\n';
+                //std::cout << inst.group << ' ' << group << '\n';
 
                 // Surfaces
                 if (group != nullptr && group->surface != nullptr) {
