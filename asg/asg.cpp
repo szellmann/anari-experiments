@@ -519,6 +519,7 @@ ASGError_t getPaths(ASGObject obj, ASGObject target, int traversalOrder,
     } else if (paths == NULL) {             // count lengths of all paths
 
         struct TraversalData {
+            ASGObject from;
             ASGObject target;
             int traversalOrder;
             int** pathLengths;
@@ -526,26 +527,30 @@ ASGError_t getPaths(ASGObject obj, ASGObject target, int traversalOrder,
             int currentPath;
         };
 
-        TraversalData data { target, traversalOrder, pathLengths, numPaths, 0 };
+        TraversalData data { obj, target, traversalOrder, pathLengths, numPaths, 0 };
 
         ASGVisitor visitor = asgCreateVisitor(
             [](ASGVisitor self, ASGObject obj, void* userData) {
                 TraversalData* data = (TraversalData*)userData;
 
-                if ((data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN
+                if ((obj != data->target) &&
+                    ((data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN
                         && obj->children.empty()) ||
-                    (data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_PARENTS
-                        && obj->parents.empty()))
+                     (data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_PARENTS
+                        && obj->parents.empty())))
                 {
                     // Dead-end, reset node count
                     *data->pathLengths[data->currentPath] = 0;
                 } else if (obj==data->target) {
+                    (*data->pathLengths[data->currentPath])++;
                     data->currentPath++;
-                } else {
+                } else if (obj!=data->from) {
                     (*data->pathLengths[data->currentPath])++;
                 }
 
-                asgVisitorApply(self,obj);
+                if (data->currentPath < *data->numPaths)
+                    asgVisitorApply(self,obj);
+
             },&data,traversalOrder);
 
         asgObjectAccept(obj,visitor);
@@ -553,6 +558,7 @@ ASGError_t getPaths(ASGObject obj, ASGObject target, int traversalOrder,
     } else {                                // assemble paths
 
         struct TraversalData {
+            ASGObject from;
             ASGObject target;
             ASGObject** paths;
             int traversalOrder;
@@ -563,21 +569,23 @@ ASGError_t getPaths(ASGObject obj, ASGObject target, int traversalOrder,
         };
 
         std::vector<ASGObject> onePath;
-        TraversalData data { target, paths, traversalOrder, pathLengths, numPaths,
+        TraversalData data { obj, target, paths, traversalOrder, pathLengths, numPaths,
                              onePath, 0 };
 
         ASGVisitor visitor = asgCreateVisitor(
             [](ASGVisitor self, ASGObject obj, void* userData) {
                 TraversalData* data = (TraversalData*)userData;
 
-                if ((data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN
+                if ((obj != data->target) &&
+                    ((data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN
                         && obj->children.empty()) ||
-                    (data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_PARENTS
-                        && obj->parents.empty()))
+                     (data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_PARENTS
+                        && obj->parents.empty())))
                 {
                     // Dead-end, clear path
                     data->onePath.clear();
                 } else if (obj==data->target) {
+                    data->onePath.push_back(obj);
                     if ((int)data->onePath.size()
                             == *data->pathLengths[data->currentPath]) {
                         memcpy(data->paths[data->currentPath],data->onePath.data(),
@@ -587,11 +595,13 @@ ASGError_t getPaths(ASGObject obj, ASGObject target, int traversalOrder,
                         // TODO: problem!
                     }
                     data->currentPath++;
-                } else {
+                } else if (obj!=data->from) {
                     data->onePath.push_back(obj);
                 }
 
-                asgVisitorApply(self,obj);
+                if (data->currentPath < *data->numPaths)
+                    asgVisitorApply(self,obj);
+
             },&data,traversalOrder);
 
         asgObjectAccept(obj,visitor);
