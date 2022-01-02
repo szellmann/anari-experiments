@@ -42,6 +42,17 @@ namespace generic {
         }
     }
 
+    void PerspectiveCamera::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"fovy",4)==0) {
+            fovy = M_PI/3.f;
+        } else if (strncmp(name,"aspect",6)==0) {
+            aspect = 1.f;
+        } else {
+            Camera::unsetParameter(name);
+        }
+    }
+
 } // generic
 
 

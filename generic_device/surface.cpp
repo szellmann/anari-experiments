@@ -51,6 +51,17 @@ namespace generic {
         }
     }
 
+    void Surface::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"geometry",8)==0) {
+            geometry = nullptr;
+        } else if (strncmp(name,"material",8)==0) {
+            material = nullptr;
+        } else {
+            LOG(logging::Level::Warning) << "Surface: Unsupported parameter " << name;
+        }
+    }
+
 } // generic
 
 

@@ -47,6 +47,22 @@ namespace generic {
         }
     }
 
+    void Instance::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"group",5)==0) {
+            group = nullptr;
+        } else if (strncmp(name,"transform",9)==0) {
+            for (int i=0; i<3; ++i) {
+                for (int j=0; j<3; ++j) {
+                    transform[i][j] = (i==j) ? 1.f : 0.f;
+                }
+            }
+            transform[3][0] = transform[3][1] = transform[3][2] = 0.f;
+        } else {
+            LOG(logging::Level::Warning) << "Instance: Unsupported parameter " << name;
+        }
+    }
+
 } // generic
 
 

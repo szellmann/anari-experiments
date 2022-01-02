@@ -56,6 +56,27 @@ namespace generic {
         }
     }
 
+    void Volume::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"field",5)==0) {
+            field = nullptr;
+        } else if (strncmp(name,"valueRange",10)==0) {
+            valueRange[0] = 0.f; valueRange[1] = 1.f;
+        } else if (strncmp(name,"color",5)==0) {
+            color = nullptr;
+        } else if (strncmp(name,"color.position",14)==0) {
+            color_position = nullptr;
+        } else if (strncmp(name,"opacity",7)==0) {
+            opacity = nullptr;
+        } else if (strncmp(name,"opacity.position",16)==0) {
+            opacity_position = nullptr;
+        } else if (strncmp(name,"densityScale",12)==0) {
+            densityScale = 1.f;
+        } else {
+            LOG(logging::Level::Warning) << "Volume: Unsupported parameter " << name;
+        }
+    }
+
     std::unique_ptr<Volume> createVolume(const char* subtype)
     {
         (void)subtype;

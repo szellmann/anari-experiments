@@ -21,6 +21,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         float fovy = M_PI/3.f;
         float aspect = 1.f;
     };

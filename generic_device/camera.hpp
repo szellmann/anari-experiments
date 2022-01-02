@@ -25,6 +25,8 @@ namespace generic {
                                   ANARIDataType type,
                                   const void* mem);
 
+        virtual void unsetParameter(const char* name);
+
         float position[3] = {0.f,0.f,0.f};
         float direction[3] = {0.f,0.f,-1.f};
         float up[3] = {0.f,1.f,0.f};

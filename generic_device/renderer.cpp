@@ -52,6 +52,15 @@ namespace generic {
         }
     }
 
+    void Renderer::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"backgroundColor",15)==0) {
+            backgroundColor[0] = backgroundColor[1] = backgroundColor[2] = backgroundColor[3] = 0.f;
+        } else {
+            LOG(logging::Level::Warning) << "Renderer: Unsupported parameter " << name;
+        }
+    }
+
     std::unique_ptr<Renderer> createRenderer(const char* subtype)
     {
         if (strncmp(subtype,"default",7)==0 || strncmp(subtype,"pathtracer",10)==0)

@@ -40,9 +40,22 @@ namespace generic {
     {
         if (strncmp(name,"color",5)==0 && type==ANARI_FLOAT32_VEC3) {
             memcpy(color,mem,sizeof(color));
+        } else if (strncmp(name,"visible",7)==0 && type==ANARI_BOOL) {
+            memcpy(&visible,mem,sizeof(visible));
         } else {
             LOG(logging::Level::Warning) << "Light: Unsupported parameter "
                 << "/parameter type: " << name << " / " << type;
+        }
+    }
+
+    void Light::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"color",5)==0) {
+            color[0] = color[1] = color[2] = 1.f;
+        } else if (strncmp(name,"visible",7)==0) {
+            visible = true;
+        } else {
+            LOG(logging::Level::Warning) << "Light: Unsupported parameter " << name;
         }
     }
 

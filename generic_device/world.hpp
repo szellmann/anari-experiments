@@ -23,6 +23,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         ANARIArray1D instance = nullptr;
         ANARIArray1D surface = nullptr;
         ANARIArray1D volume = nullptr;

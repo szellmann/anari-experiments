@@ -13,6 +13,8 @@ namespace generic {
                                   ANARIDataType type,
                                   const void* mem) = 0;
 
+        virtual void unsetParameter(const char* name) = 0;
+
         virtual int getProperty(const char* name,
                                 ANARIDataType type,
                                 void* mem,

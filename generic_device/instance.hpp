@@ -23,6 +23,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         ANARIGroup group = nullptr;
         float transform[4][3] = {{1.f,0.f,0.f},{0.f,1.f,0.f},{0.f,0.f,1.f},{0.f,0.f,0.f}};
 

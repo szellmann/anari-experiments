@@ -43,6 +43,12 @@ namespace generic {
             << "\" on invalid geometry!";
     }
 
+    void Geometry::unsetParameter(const char* name)
+    {
+        LOG(logging::Level::Warning) << "Unsetting parameter \"" << name
+            << "\" on invalid geometry!";
+    }
+
     std::unique_ptr<Geometry> createGeometry(const char* subtype)
     {
         if (strncmp(subtype,"triangle",8)==0)

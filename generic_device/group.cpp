@@ -48,6 +48,19 @@ namespace generic {
         }
     }
 
+    void Group::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"surface",7)==0) {
+            surface = nullptr;
+        } else if (strncmp(name,"volume",6)==0) {
+            volume = nullptr;
+        } else if (strncmp(name,"light",5)==0) {
+            light = nullptr;
+        } else {
+            LOG(logging::Level::Warning) << "Group: Unsupported parameter " << name;
+        }
+    }
+
 } // generic
 
 

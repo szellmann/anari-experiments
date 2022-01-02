@@ -45,6 +45,17 @@ namespace generic {
         }
     }
 
+    void StructuredRegular::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"data",4)==0) {
+            data = nullptr;
+        } else if (strncmp(name,"filter",6)==0) {
+            filter = "linear";
+        } else {
+            LOG(logging::Level::Warning) << "StructuredRegular: Unsupported parameter " << name;
+        }
+    }
+
 } // generic
 
 

@@ -961,6 +961,12 @@ namespace generic {
             }, ExecutionOrder::World);
         }
 
+        void commit(generic::Group& group)
+        {
+            // TODO: we're currently just submitting these as part of
+            // the ANARI world, which is obviously wrong..
+        }
+
         void commit(generic::Camera& cam)
         {
             enqueueCommit([&cam]() {

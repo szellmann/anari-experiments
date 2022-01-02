@@ -23,6 +23,8 @@ namespace generic {
                                   ANARIDataType type,
                                   const void* mem);
 
+        virtual void unsetParameter(const char* name);
+
     private:
         ANARIGeometry resourceHandle;
 

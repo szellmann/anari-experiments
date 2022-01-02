@@ -20,7 +20,9 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
-        float position[3];
+        void unsetParameter(const char* name);
+
+        float position[3] = {0.f,0.f,0.f};
         float intensity = 1.f;
         float power = 1.f;
         float radius = 0.f;

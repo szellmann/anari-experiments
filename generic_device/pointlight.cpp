@@ -50,6 +50,25 @@ namespace generic {
         }
     }
 
+    void PointLight::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"position",8)==0) {
+            position[0] = position[1] = position[2] = 0.f;
+        } else if (strncmp(name,"intensity",9)==0) {
+            intensity = 1.f;
+            intensityWasSet = false;
+        } else if (strncmp(name,"power",5)==0) {
+            power = 1.f;
+            powerWasSet = false;
+        } else if (strncmp(name,"radius",6)==0) {
+            radius = 0.f;
+        } else if (strncmp(name,"radiance",8)==0) {
+            radiance = 1.f;
+        } else {
+            Light::unsetParameter(name);
+        }
+    }
+
 } // generic
 
 

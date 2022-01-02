@@ -963,6 +963,120 @@ ASGSphereGeometry asgNewSphereGeometry(float* positions, float* radii, float* co
     return geom;
 }
 
+ASGError_t asgGeometryComputeBounds(ASGGeometry geom,
+                                    float* minX, float* minY, float* minZ,
+                                    float* maxX, float* maxY, float* maxZ)
+{
+    *minX = *minY = *minZ =  FLT_MAX;
+    *maxX = *maxY = *maxZ = -FLT_MAX;
+
+    if (geom->type == ASG_TYPE_TRIANGLE_GEOMETRY) {
+
+        TriangleGeom* tg = (TriangleGeom*)geom->impl;
+
+        if (tg->indices != nullptr && tg->numIndices > 0) {
+            for (unsigned i=0; i<tg->numIndices; ++i) {
+                for (unsigned j=0; j<3; ++j) {
+                    unsigned index = i * 3 + j;
+                    asg::Vec3f v = {
+                        tg->vertices[tg->indices[index]*3],
+                        tg->vertices[tg->indices[index]*3+1],
+                        tg->vertices[tg->indices[index]*3+2]
+                    };
+
+                    *minX = fminf(*minX,v.x);
+                    *minY = fminf(*minY,v.y);
+                    *minZ = fminf(*minZ,v.z);
+
+                    *maxX = fmaxf(*maxX,v.x);
+                    *maxY = fmaxf(*maxY,v.y);
+                    *maxZ = fmaxf(*maxZ,v.z);
+                }
+            }
+        } else {
+            // No indices, so just insert the verts directly
+            for (unsigned i=0; i<tg->numVertices; ++i) {
+                asg::Vec3f v = {
+                    tg->vertices[i*3],
+                    tg->vertices[i*3+1],
+                    tg->vertices[i*3+2]
+                };
+
+                *minX = fminf(*minX,v.x);
+                *minY = fminf(*minY,v.y);
+                *minZ = fminf(*minZ,v.z);
+
+                *maxX = fmaxf(*maxX,v.x);
+                *maxY = fmaxf(*maxY,v.y);
+                *maxZ = fmaxf(*maxZ,v.z);
+            }
+        }
+    } else if (geom->type == ASG_TYPE_SPHERE_GEOMETRY) {
+
+        SphereGeom* sg = (SphereGeom*)geom->impl;
+
+        if (sg->indices != nullptr && sg->numIndices > 0) {
+            for (unsigned i=0; i<sg->numIndices; ++i) {
+                asg::Vec3f v = {
+                    sg->positions[sg->indices[i]*3],
+                    sg->positions[sg->indices[i]*3+1],
+                    sg->positions[sg->indices[i]*3+2]
+                };
+
+                asg::Vec3f v1 = v - sg->radii[sg->indices[i]];
+                asg::Vec3f v2 = v + sg->radii[sg->indices[i]];
+
+                *minX = fminf(*minX,v1.x);
+                *minY = fminf(*minY,v1.y);
+                *minZ = fminf(*minZ,v1.z);
+
+                *maxX = fmaxf(*maxX,v1.x);
+                *maxY = fmaxf(*maxY,v1.y);
+                *maxZ = fmaxf(*maxZ,v1.z);
+
+                *minX = fminf(*minX,v2.x);
+                *minY = fminf(*minY,v2.y);
+                *minZ = fminf(*minZ,v2.z);
+
+                *maxX = fmaxf(*maxX,v2.x);
+                *maxY = fmaxf(*maxY,v2.y);
+                *maxZ = fmaxf(*maxZ,v2.z);
+            }
+        } else {
+            // No indices, so just insert the verts directly
+            for (unsigned i=0; i<sg->numSpheres; ++i) {
+                asg::Vec3f v = {
+                    sg->positions[i*3],
+                    sg->positions[i*3+1],
+                    sg->positions[i*3+2]
+                };
+
+                asg::Vec3f v1 = v - sg->radii[i];
+                asg::Vec3f v2 = v + sg->radii[i];
+
+                *minX = fminf(*minX,v1.x);
+                *minY = fminf(*minY,v1.y);
+                *minZ = fminf(*minZ,v1.z);
+
+                *maxX = fmaxf(*maxX,v1.x);
+                *maxY = fmaxf(*maxY,v1.y);
+                *maxZ = fmaxf(*maxZ,v1.z);
+
+                *minX = fminf(*minX,v2.x);
+                *minY = fminf(*minY,v2.y);
+                *minZ = fminf(*minZ,v2.z);
+
+                *maxX = fmaxf(*maxX,v2.x);
+                *maxY = fmaxf(*maxY,v2.y);
+                *maxZ = fmaxf(*maxZ,v2.z);
+            }
+        }
+    }
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+
 // ========================================================
 // Surface
 // ========================================================
@@ -1830,6 +1944,16 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                                 geom->vertices[geom->indices[i*3+2]*3+2]
                             };
 
+                            for (asg::Mat4x3f trans : pr->transStack) {
+                                asg::Vec3f vv1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                                asg::Vec3f vv2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                                asg::Vec3f vv3 = trans * asg::Vec4f{v3.x,v3.y,v3.z,1.f};
+
+                                v1 = { vv1.x, vv1.y, vv1.z };
+                                v2 = { vv2.x, vv2.y, vv2.z };
+                                v3 = { vv3.x, vv3.y, vv3.z };
+                            }
+
                             basic_triangle<3,float> tri;
                             tri.v1 = v1; tri.e1 = v2-v1; tri.e2 = v3-v1;
                             tri.prim_id = i;
@@ -2040,6 +2164,11 @@ struct ANARI {
 template <typename GroupNode>
 void setANARIEntities(GroupNode groupNode, ANARI& anari)
 {
+    anariUnsetParameter(anari.device,groupNode,"instance");
+    anariUnsetParameter(anari.device,groupNode,"surface");
+    anariUnsetParameter(anari.device,groupNode,"volume");
+    anariUnsetParameter(anari.device,groupNode,"light");
+
     if (anari.instances.size() > 0) {
         ANARIArray1D instances = anariNewArray1D(anari.device,anari.instances.data(),0,0,
                                                  ANARI_INSTANCE,

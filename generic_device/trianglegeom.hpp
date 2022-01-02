@@ -20,6 +20,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         ANARIArray1D vertex_position = nullptr;
         ANARIArray1D vertex_normal = nullptr;
         ANARIArray1D vertex_color = nullptr;

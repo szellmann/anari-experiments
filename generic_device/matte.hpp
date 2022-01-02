@@ -20,6 +20,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         float color[3] = {.8f,.8f,.8f};
     };
 

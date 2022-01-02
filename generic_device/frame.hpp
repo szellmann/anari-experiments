@@ -28,6 +28,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         int getProperty(const char* name,
                         ANARIDataType type,
                         void* mem,

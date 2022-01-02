@@ -23,6 +23,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         ANARISpatialField field = nullptr;
         float valueRange[2] = {0.f,1.f};
         ANARIArray1D color = nullptr;

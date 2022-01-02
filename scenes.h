@@ -487,6 +487,18 @@ struct Model : Scene
         if (event.pos().y < toolbarHeight)
             return true;
 
+        if (rotManip && rotManip->active()) {
+            if (rotManip->handle_mouse_down(event)) {
+                return true;
+            }
+        }
+
+        if (transManip && transManip->active()) {
+            if (transManip->handle_mouse_down(event)) {
+                return true;
+            }
+        }
+
         picked.downPos = event.pos();
         return false;
     }
@@ -496,17 +508,62 @@ struct Model : Scene
         if (event.pos().y < toolbarHeight)
             return true;
 
-        if (manip == 1 && picked.downPos == event.pos())
+        if (rotManip && rotManip->active()) {
+            if (rotManip->handle_mouse_up(event)) {
+                return true;
+            }
+        }
+
+        if (transManip && transManip->active()) {
+            if (transManip->handle_mouse_up(event)) {
+                return true;
+            }
+        }
+
+        if (manip == 1 && picked.downPos == event.pos()) {
             pickObject(event.pos());
+            doDelete = doRotate = doMove = false;
+            modelMatrix = visionaray::mat4::identity();
+        }
 
         return false;
+    }
+
+    virtual bool handleMouseMove(visionaray::mouse_event const& event)
+    {
+        visionaray::mat4x3 m4x3;
+        m4x3.col0 = modelMatrix.col0.xyz();
+        m4x3.col1 = modelMatrix.col1.xyz();
+        m4x3.col2 = modelMatrix.col2.xyz();
+        m4x3.col3 = modelMatrix.col3.xyz();
+
+        if (rotManip && rotManip->active()) {
+            if (rotManip->handle_mouse_move(event)) {
+                ASG_SAFE_CALL(asgTransformSetMatrix(picked.transform,m4x3.data()));
+                ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                                 ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
+                return true;
+            }
+        }
+
+        if (transManip && transManip->active()) {
+            if (transManip->handle_mouse_move(event)) {
+                ASG_SAFE_CALL(asgTransformSetMatrix(picked.transform,m4x3.data()));
+                ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
+                                                 ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
+                return true;
+            }
+        }
+
+        return Scene::handleMouseMove(event);
     }
 
     virtual void beforeRenderFrame()
     {
         if (rebuildANARIWorld) {
             ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
-                                             ASG_BUILD_WORLD_FLAG_MATERIALS,0));
+                                             ASG_BUILD_WORLD_FLAG_MATERIALS |
+                                             ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
             // ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
             //                                  ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
@@ -538,7 +595,7 @@ struct Model : Scene
 
         ASGObject pickedObject = NULL;
         ASG_SAFE_CALL(asgPickObject(root,cam,x,h-y-1,w,h,&pickedObject));
-        ASG_SAFE_CALL(asgRelease(cam));
+        ASG_SAFE_CALL(asgRelease(cam));std::cout << pickedObject << '\n';
 
         if (pickedObject != NULL) {
             ASGType_t type;
@@ -553,8 +610,18 @@ struct Model : Scene
                 updateTriangleGeomPipelineGL(geom,picked.glPipeline);
                 picked.handle = pickedObject;
                 picked.geomHandle = geom;
+
+                ASGObject parent;
+                ASG_SAFE_CALL(asgObjectGetParent(pickedObject,0,&parent));
+                if (parent != NULL) {
+                    ASGType_t ptype;
+                    ASG_SAFE_CALL(asgGetType(parent,&ptype));
+                    if (ptype==ASG_TYPE_TRANSFORM)
+                        picked.transform = parent;
+                }
             }
         } else {
+            picked.transform = NULL;
             picked.handle = NULL;
             picked.geomHandle = NULL;
         }
@@ -584,10 +651,10 @@ struct Model : Scene
 
         ImGui::RadioButton("None",   &manip, 0); ImGui::SameLine();
         ImGui::RadioButton("Pick",   &manip, 1); ImGui::SameLine();
-        ImGui::BeginDisabled(); // not working yet
+        ImGui::BeginDisabled();
         ImGui::RadioButton("Rotate", &manip, 2); ImGui::SameLine();
-        ImGui::RadioButton("Move",   &manip, 3); ImGui::SameLine();
         ImGui::EndDisabled();
+        ImGui::RadioButton("Move",   &manip, 3); ImGui::SameLine();
         doDelete = ImGui::Button("Delete");
 
         ImGui::End();
@@ -640,15 +707,47 @@ struct Model : Scene
                 rebuildANARIWorld = true;
             }
         }
+
+        // Rotation
+        // if (rotManip == nullptr) {
+        //     rotManip = std::make_shared<visionaray::rotate_manipulator>(
+        //         cam,
+        //         modelMatrix,
+        //         visionaray::vec3f(bbox.size().z*.5f),
+        //         visionaray::mouse::Left,
+        //         3
+        //     );
+        // }
+
+        // if (doRotate && !rotManip->active()) {
+
+        // }
+
+        // rotManip->set_active(doRotate);
+
+        // if (rotManip->active())
+        //      rotManip->render();
+
+
+        if (doMove) {
+            transManip->set_active(doMove);
+
+            if (transManip->active())
+                transManip->render();
+        }
+
         ImGui::End();
     }
 
     virtual void afterRenderUI()
     {
         if (picked.geomHandle != nullptr) {
-            renderTriangleGeomPipelineGL(picked.glPipeline,cam.get_view_matrix(),cam.get_proj_matrix());
+            renderTriangleGeomPipelineGL(picked.glPipeline,cam.get_view_matrix(),
+                                         cam.get_proj_matrix(),modelMatrix);
 
-            if (manip==2 || manip==3) { // TODO: that's not working yet
+            if (manip==0) {
+                doDelete = doRotate = doMove = false;
+            } else if ((manip==2 && !doRotate) || (manip==3 && !doMove)) {
                 ASGSurface surf = picked.handle;
 
                 // TODO: might have more than one parents..
@@ -658,6 +757,8 @@ struct Model : Scene
                 ASGType_t type;
                 ASG_SAFE_CALL(asgGetType(parent,&type));
 
+                ASGTransform trans;
+
                 if (type!=ASG_TYPE_TRANSFORM) {
                     float matrix[] = {1.f,0.f,0.f,
                                       0.f,1.f,0.f,
@@ -666,12 +767,96 @@ struct Model : Scene
 
                     ASG_SAFE_CALL(asgRetain(surf));
                     ASG_SAFE_CALL(asgObjectRemoveChild(parent,surf));
-                    ASGTransform trans = asgNewTransform(matrix);
+                    trans = asgNewTransform(matrix);
                     ASG_SAFE_CALL(asgObjectAddChild(trans,surf));
                     ASG_SAFE_CALL(asgObjectAddChild(parent,trans));
 
-                    rebuildANARIWorld = true;
+                } else {
+                    trans = parent;
                 }
+
+                float matrix[12];
+                ASG_SAFE_CALL(asgTransformGetMatrix(trans,matrix));
+
+                modelMatrix = visionaray::mat4(visionaray::mat4x3(matrix));
+
+                int numPaths=0;
+                asgObjectGetParentPaths(surf,root,NULL,NULL,&numPaths);
+                std::vector<int> pathLengths(numPaths);
+                int* pl = pathLengths.data();
+                asgObjectGetParentPaths(surf,root,NULL,&pl,&numPaths);
+                ASGObject** paths = new ASGObject*[numPaths];
+                for (int i=0; i<numPaths; ++i) {
+                    paths[i] = new ASGObject[pathLengths[i]];
+                }
+                asgObjectGetParentPaths(surf,root,paths,&pl,&numPaths);
+                if (numPaths != 1) {
+                    std::cerr << "oups\n"; // TODO!
+                }
+                picked.parentPath.clear();
+                for (int i=0; i<pathLengths[0]; ++i) {
+                    picked.parentPath.push_back(paths[0][i]);
+                }
+                for (int i=0; i<numPaths; ++i) {
+                    delete[] paths[i];
+                }
+                delete[] paths;
+
+                picked.transform = trans;
+
+                if (manip==2) {
+                    doRotate = true;
+                } else {
+                    // Translation
+                    {
+                        visionaray::aabb bounds;
+                        ASGTriangleGeometry geom = picked.geomHandle;
+                        ASG_SAFE_CALL(asgGeometryComputeBounds(
+                                (ASGGeometry)geom,
+                                &bounds.min.x,&bounds.min.y,&bounds.min.z,
+                                &bounds.max.x,&bounds.max.y,&bounds.max.z));
+
+                        auto verts = visionaray::compute_vertices(bounds);
+
+                        for (auto it = picked.parentPath.rbegin(); it != picked.parentPath.rend(); ++it) {
+                            ASGType_t type;
+                            ASG_SAFE_CALL(asgGetType(*it,&type));
+
+                            if (type==ASG_TYPE_TRANSFORM) {
+                                float m[12];
+                                ASG_SAFE_CALL(asgTransformGetMatrix((ASGTransform)*it,m));
+                                visionaray::mat4x3 m4x3(m);
+
+                                for (int i=0; i<8; ++i) {
+                                    //verts[i] = (verts[i]*m4x3).xyz();
+                                    verts[i] = m4x3*visionaray::vec4f(verts[i],1.f);
+                                }
+                            }
+                        }
+
+                        bounds.invalidate();
+                        for (int i=0; i<8; ++i) {
+                            bounds.insert(verts[i]);
+                        }
+
+                        //std::cout << modelMatrix << '\n';
+                        //std::cout << bounds.size() << '\n';
+                        //printSceneGraph(root,true);
+
+                        transManip = std::make_shared<visionaray::translate_manipulator>(
+                            cam,
+                            modelMatrix,
+                            visionaray::vec3f(bounds.size()*.0006f), // TODO: largest
+                            visionaray::mouse::Left,
+                            3
+                        );
+
+                        std::cout << bounds.center() << '\n';
+                        transManip->set_position(bounds.center());
+                    }
+                    doMove = true;
+                }
+
             } else if (manip==1 && doDelete) {
                 ASGSurface surf = picked.handle;
 
@@ -701,9 +886,15 @@ struct Model : Scene
 
     visionaray::pinhole_camera cam;
 
+    std::shared_ptr<visionaray::rotate_manipulator> rotManip = nullptr;
+    std::shared_ptr<visionaray::translate_manipulator> transManip = nullptr;
+    visionaray::mat4 modelMatrix = visionaray::mat4::identity();
+
     int toolbarHeight = 48;
 
     int manip = 0;
+    bool doRotate = false;
+    bool doMove = false;
     bool doDelete = false;
 
     struct {
@@ -711,6 +902,8 @@ struct Model : Scene
         ASGTriangleGeometry geomHandle = nullptr;
         TriangleGeomPipelineGL glPipeline;
         visionaray::mouse::pos downPos;
+        ASGTransform transform = nullptr; // the parent transform
+        std::vector<ASGObject> parentPath;
     } picked;
 
     bool rebuildANARIWorld = false;

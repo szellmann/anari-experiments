@@ -154,6 +154,7 @@ struct TriangleGeomPipelineGL
     gl::program prog;
     gl::shader  vert;
     gl::shader  frag;
+    GLuint      model_loc;
     GLuint      view_loc;
     GLuint      proj_loc;
     GLuint      vertex_loc;
@@ -169,11 +170,12 @@ static void createTriangleGeomPipelineGL(TriangleGeomPipelineGL& pipeline)
 
         uniform mat4 view;
         uniform mat4 proj;
+        uniform mat4 model;
 
 
         void main(void)
         {
-            gl_Position = proj * view * vec4(vertex, 1.0);
+            gl_Position = proj * view * model * vec4(vertex, 1.0);
         }
         )");
     pipeline.vert.compile();
@@ -200,6 +202,7 @@ static void createTriangleGeomPipelineGL(TriangleGeomPipelineGL& pipeline)
         throw std::runtime_error("prog link failed");
 
     pipeline.vertex_loc = glGetAttribLocation(pipeline.prog.get(), "vertex");
+    pipeline.model_loc  = glGetUniformLocation(pipeline.prog.get(), "model");
     pipeline.view_loc   = glGetUniformLocation(pipeline.prog.get(), "view");
     pipeline.proj_loc   = glGetUniformLocation(pipeline.prog.get(), "proj");
 
@@ -248,7 +251,8 @@ static void updateTriangleGeomPipelineGL(ASGTriangleGeometry geom,
 }
 
 static void renderTriangleGeomPipelineGL(TriangleGeomPipelineGL& pipeline,
-                                         visionaray::mat4 view, visionaray::mat4 proj)
+                                         visionaray::mat4 view, visionaray::mat4 proj,
+                                         visionaray::mat4 model)
 {
     // Store OpenGL state
     GLint array_buffer_binding = 0;
@@ -260,6 +264,7 @@ static void renderTriangleGeomPipelineGL(TriangleGeomPipelineGL& pipeline,
 
     pipeline.prog.enable();
 
+    glUniformMatrix4fv(pipeline.model_loc, 1, GL_FALSE, model.data());
     glUniformMatrix4fv(pipeline.view_loc, 1, GL_FALSE, view.data());
     glUniformMatrix4fv(pipeline.proj_loc, 1, GL_FALSE, proj.data());
 

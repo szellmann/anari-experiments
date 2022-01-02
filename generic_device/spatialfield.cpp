@@ -43,6 +43,12 @@ namespace generic {
             << "\" on invalid spatial field!";
     }
 
+    void SpatialField::unsetParameter(const char* name)
+    {
+        LOG(logging::Level::Warning) << "Unsetting parameter \"" << name
+            << "\" on invalid spatial field!";
+    }
+
     std::unique_ptr<SpatialField> createSpatialField(const char* subtype)
     {
         if (strncmp(subtype,"structuredRegular",17)==0)

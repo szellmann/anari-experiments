@@ -3,6 +3,7 @@
 #include "ao.hpp"
 #include "camera.hpp"
 #include "frame.hpp"
+#include "group.hpp"
 #include "instance.hpp"
 #include "light.hpp"
 #include "matte.hpp"
@@ -23,6 +24,8 @@ namespace generic {
         void commit(generic::Object& obj);
 
         void commit(generic::World& world);
+
+        void commit(generic::Group& group);
 
         void commit(generic::Camera& cam);
 

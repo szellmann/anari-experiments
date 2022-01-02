@@ -25,7 +25,10 @@ namespace generic {
                                   ANARIDataType type,
                                   const void* mem);
 
+        virtual void unsetParameter(const char* name);
+
         float color[3] = {1.f,1.f,1.f};
+        int32_t visible = true;
 
     private:
         ANARILight resourceHandle;

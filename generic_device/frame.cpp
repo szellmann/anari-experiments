@@ -66,6 +66,25 @@ namespace generic {
         }
     }
 
+    void Frame::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"world",5)==0) {
+            world = nullptr;
+        } else if (strncmp(name,"camera",6)==0) {
+            camera = nullptr;
+        } else if (strncmp(name,"renderer",8)==0) {
+            renderer = nullptr;
+        } else if (strncmp(name,"size",4)==0) {
+            size[0] = size[1] = 0;
+        } else if (strncmp(name,"color",5)==0) {
+            color = {};
+        } else if (strncmp(name,"depth",5)==0) {
+            depth = {};
+        } else {
+            LOG(logging::Level::Warning) << "Frame: Unsupported parameter " << name;
+        }
+    }
+
     int Frame::getProperty(const char* name,
                            ANARIDataType type,
                            void* mem,

@@ -39,6 +39,15 @@ namespace generic {
         }
     }
 
+    void Matte::unsetParameter(const char* name)
+    {
+        if (strncmp(name,"color",5)==0) {
+            color[0] = color[1] = color[2] = .8f;
+        } else {
+            LOG(logging::Level::Warning) << "matte: Unsupported parameter " << name;
+        }
+    }
+
 } // generic
 
 

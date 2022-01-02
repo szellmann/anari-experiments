@@ -22,6 +22,7 @@ typedef int ASGError_t;
 #define ASG_ERROR_NO_ERROR                  0
 #define ASG_ERROR_INVALID_CHILD_ID          5
 #define ASG_ERROR_INVALID_PARENT_ID         6
+#define ASG_ERROR_INVALID_PATH_ID           7
 #define ASG_ERROR_INSUFFICIENT_ARRAY_SIZE   10
 #define ASG_ERROR_PARAM_NOT_FOUND           50
 #define ASG_ERROR_MISSING_FILE_HANDLER      100
@@ -293,6 +294,10 @@ ASGAPI ASGSphereGeometry asgNewSphereGeometry(float* positions, float* radii,
                                               uint32_t* indices, uint32_t numIndices,
                                               float defaultRadius ASG_DFLT_PARAM(1.f),
                                               ASGFreeFunc freeFunc ASG_DFLT_PARAM(NULL));
+
+ASGAPI ASGError_t asgGeometryComputeBounds(ASGGeometry geom,
+                                           float* minX, float* minY, float* minZ,
+                                           float* maxX, float* maxY, float* maxZ);
 
 // Surface
 ASGAPI ASGSurface asgNewSurface(ASGGeometry geom, ASGMaterial mat);

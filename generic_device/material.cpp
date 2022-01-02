@@ -43,6 +43,12 @@ namespace generic {
             << "\" on invalid material!";
     }
 
+    void Material::unsetParameter(const char* name)
+    {
+        LOG(logging::Level::Warning) << "Unsetting parameter \"" << name
+            << "\" on invalid material!";
+    }
+
     std::unique_ptr<Material> createMaterial(const char* subtype)
     {
         if (strncmp(subtype,"matte",5)==0)

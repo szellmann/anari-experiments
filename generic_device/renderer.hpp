@@ -26,6 +26,8 @@ namespace generic {
                                   ANARIDataType type,
                                   const void* mem);
 
+        virtual void unsetParameter(const char* name);
+
         float backgroundColor[4] = {0.f,0.f,0.f,0.f};
 
         constexpr static const char* Subtypes[3] = {

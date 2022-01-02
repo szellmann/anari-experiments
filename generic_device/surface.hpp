@@ -23,6 +23,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         ANARIGeometry geometry = nullptr;
         ANARIMaterial material = nullptr;
 

@@ -20,6 +20,8 @@ namespace generic {
                           ANARIDataType type,
                           const void* mem);
 
+        void unsetParameter(const char* name);
+
         ANARIArray3D data = nullptr;
         float origin[3] = {0,0,0};
         float spacing[3] = {1,1,1};

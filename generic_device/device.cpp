@@ -179,6 +179,11 @@ namespace generic {
     void Device::unsetParameter(ANARIObject object,
                                 const char* name)
     {
+        Object* obj = (Object*)GetResource(object);
+        if (obj == nullptr)
+            LOG(logging::Level::Error) << "ANARIDevice error: unsetting parameter on object: " << name;
+        else
+            obj->unsetParameter(name);
     }
 
     void Device::commit(ANARIObject object)
