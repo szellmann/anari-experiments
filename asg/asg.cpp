@@ -490,6 +490,131 @@ ASGError_t asgObjectGetParents(ASGObject obj, ASGObject* parents, int* numParent
     }
 }
 
+// Assemble node paths
+
+ASGError_t getPaths(ASGObject obj, ASGObject target, int traversalOrder,
+                    ASGObject** paths, int** pathLengths, int* numPaths)
+{
+    if (paths == NULL && *numPaths == 0) {  // count paths
+
+        struct TraversalData {
+            ASGObject target;
+            int* numPaths;
+        };
+
+        TraversalData data { target, numPaths };
+
+        ASGVisitor visitor = asgCreateVisitor(
+            [](ASGVisitor self, ASGObject obj, void* userData) {
+                TraversalData* data = (TraversalData*)userData;
+
+                if (obj==data->target)
+                    (*data->numPaths)++;
+
+                asgVisitorApply(self,obj);
+            },&data,traversalOrder);
+
+        asgObjectAccept(obj,visitor);
+        asgDestroyVisitor(visitor);
+    } else if (paths == NULL) {             // count lengths of all paths
+
+        struct TraversalData {
+            ASGObject target;
+            int traversalOrder;
+            int** pathLengths;
+            const int* numPaths;
+            int currentPath;
+        };
+
+        TraversalData data { target, traversalOrder, pathLengths, numPaths, 0 };
+
+        ASGVisitor visitor = asgCreateVisitor(
+            [](ASGVisitor self, ASGObject obj, void* userData) {
+                TraversalData* data = (TraversalData*)userData;
+
+                if ((data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN
+                        && obj->children.empty()) ||
+                    (data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_PARENTS
+                        && obj->parents.empty()))
+                {
+                    // Dead-end, reset node count
+                    *data->pathLengths[data->currentPath] = 0;
+                } else if (obj==data->target) {
+                    data->currentPath++;
+                } else {
+                    (*data->pathLengths[data->currentPath])++;
+                }
+
+                asgVisitorApply(self,obj);
+            },&data,traversalOrder);
+
+        asgObjectAccept(obj,visitor);
+        asgDestroyVisitor(visitor);
+    } else {                                // assemble paths
+
+        struct TraversalData {
+            ASGObject target;
+            ASGObject** paths;
+            int traversalOrder;
+            int** pathLengths;
+            const int* numPaths;
+            std::vector<ASGObject> onePath;
+            int currentPath;
+        };
+
+        std::vector<ASGObject> onePath;
+        TraversalData data { target, paths, traversalOrder, pathLengths, numPaths,
+                             onePath, 0 };
+
+        ASGVisitor visitor = asgCreateVisitor(
+            [](ASGVisitor self, ASGObject obj, void* userData) {
+                TraversalData* data = (TraversalData*)userData;
+
+                if ((data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN
+                        && obj->children.empty()) ||
+                    (data->traversalOrder==ASG_VISITOR_TRAVERSAL_TYPE_PARENTS
+                        && obj->parents.empty()))
+                {
+                    // Dead-end, clear path
+                    data->onePath.clear();
+                } else if (obj==data->target) {
+                    if ((int)data->onePath.size()
+                            == *data->pathLengths[data->currentPath]) {
+                        memcpy(data->paths[data->currentPath],data->onePath.data(),
+                               data->onePath.size()*sizeof(ASGObject));
+                        data->onePath.clear();
+                    } else {
+                        // TODO: problem!
+                    }
+                    data->currentPath++;
+                } else {
+                    data->onePath.push_back(obj);
+                }
+
+                asgVisitorApply(self,obj);
+            },&data,traversalOrder);
+
+        asgObjectAccept(obj,visitor);
+        asgDestroyVisitor(visitor);
+    }
+
+    return ASG_ERROR_NO_ERROR;
+}
+
+ASGError_t asgObjectGetChildPaths(ASGObject obj, ASGObject target, ASGObject** paths,
+                                  int** pathLengths, int* numPaths)
+{
+    return getPaths(obj,target,ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN,paths,pathLengths,
+                    numPaths);
+}
+
+ASGError_t asgObjectGetParentPaths(ASGObject obj, ASGObject target, ASGObject** paths,
+                                   int** pathLengths, int* numPaths)
+{
+    return getPaths(obj,target,ASG_VISITOR_TRAVERSAL_TYPE_PARENTS,paths,pathLengths,
+                    numPaths);
+}
+
 ASGError_t asgObjectAccept(ASGObject obj, ASGVisitor visitor)
 {
     obj->accept(obj,visitor);

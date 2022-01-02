@@ -209,6 +209,12 @@ ASGAPI ASGError_t asgObjectRemoveChildAt(ASGObject obj, int childID);
 ASGAPI ASGError_t asgObjectGetParent(ASGObject obj, int parentID, ASGObject* parent);
 ASGAPI ASGError_t asgObjectGetParents(ASGObject obj, ASGObject* parents,
                                       int* numParents);
+ASGAPI ASGError_t asgObjectGetChildPaths(ASGObject obj, ASGObject target,
+                                         ASGObject** paths, int** pathLengths,
+                                         int* numPaths);
+ASGAPI ASGError_t asgObjectGetParentPaths(ASGObject obj, ASGObject target,
+                                          ASGObject** paths, int** pathLengths,
+                                          int* numPaths);
 ASGAPI ASGError_t asgObjectAccept(ASGObject obj, ASGVisitor visitor);
 
 // Visitor
