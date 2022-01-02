@@ -533,8 +533,8 @@ struct Model : Scene
         uint32_t scale = 16;
         uint32_t w = viewportWidth*scale;
         uint32_t h = viewportHeight*scale;
-        uint32_t x = mousePos.x*scale;
-        uint32_t y = mousePos.y*scale;
+        uint32_t x = mousePos.x*scale+scale/2;
+        uint32_t y = mousePos.y*scale+scale/2;
 
         ASGObject pickedObject = NULL;
         ASG_SAFE_CALL(asgPickObject(root,cam,x,h-y-1,w,h,&pickedObject));
