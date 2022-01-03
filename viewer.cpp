@@ -208,6 +208,15 @@ struct Viewer : visionaray::viewer_glut
             viewer_glut::on_mouse_move(event);
     }
 
+    void on_space_mouse_move(visionaray::space_mouse_event const& event) {
+        if (event.buttons() != visionaray::mouse::button::NoButton) {
+            resetANARICamera();
+            resetANARIMainLight();
+        }
+        //if (!anari.scene->handleSpaceMouseMove(event))
+            viewer_glut::on_space_mouse_move(event);
+    }
+
     struct {
         std::string libType = "environment";
         std::string devType = "default";

@@ -3,6 +3,10 @@ project(anari-experiments)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
+    ${PROJECT_SOURCE_DIR}/cmake
+)
+
 find_package(anari REQUIRED)
 find_package(GLEW REQUIRED)
 
@@ -52,4 +56,8 @@ target_include_directories(viewer
 
 target_link_libraries(viewer PUBLIC GLEW::GLEW volkit visionaray_common asg anari::anari)
 
+option(ASG_MACOSX_BUNDLE "Build executables as application bundles on macOS" ON)
+if(ASG_MACOSX_BUNDLE)
+    set_target_properties(viewer PROPERTIES MACOSX_BUNDLE TRUE)
+endif()
 
