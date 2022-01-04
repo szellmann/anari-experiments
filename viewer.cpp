@@ -45,6 +45,8 @@ struct Viewer : visionaray::viewer_glut
 
     std::string fileName;
 
+    visionaray::vec4f imageRegion{0.f,0.f,1.f,1.f};
+
     Viewer() : viewer_glut(512,512,"ANARI experiments") {
 
         using namespace support;
@@ -59,10 +61,24 @@ struct Viewer : visionaray::viewer_glut
             cl::Optional,
             cl::init(fileName)
             ));
+
+        add_cmdline_option( cl::makeOption<visionaray::vec4&, cl::ScalarType>(
+            [&](StringRef name, StringRef /*arg*/, visionaray::vec4& value)
+            {
+                cl::Parser<>()(name + "-lox", cmd_line_inst().bump(), value.x);
+                cl::Parser<>()(name + "-loy", cmd_line_inst().bump(), value.y);
+                cl::Parser<>()(name + "-hix", cmd_line_inst().bump(), value.z);
+                cl::Parser<>()(name + "-hiy", cmd_line_inst().bump(), value.w);
+            },
+            "imageRegion",
+            cl::Desc("Region of the sensor in normalized screen-space coordinates"),
+            cl::ArgDisallowed,
+            cl::init(imageRegion)
+            ) );
     }
 
     void resetANARICamera() {
-        float aspect = cam.aspect();
+        float aspect = cam.aspect() / ((imageRegion.z-imageRegion.x)/(imageRegion.w-imageRegion.y));;
         float pos[3] = { cam.eye().x, cam.eye().y, cam.eye().z };
         float view[3] = { cam.center().x-cam.eye().x,
                           cam.center().y-cam.eye().y,
@@ -73,6 +89,7 @@ struct Viewer : visionaray::viewer_glut
         anariSetParameter(anari.device, anari.camera, "position", ANARI_FLOAT32_VEC3, &pos);
         anariSetParameter(anari.device, anari.camera, "direction", ANARI_FLOAT32_VEC3, &view);
         anariSetParameter(anari.device, anari.camera, "up", ANARI_FLOAT32_VEC3, &up);
+        anariSetParameter(anari.device, anari.camera, "imageRegion", ANARI_FLOAT32_BOX2, imageRegion.data());
         anariCommit(anari.device, anari.camera);
     }
 
