@@ -733,6 +733,10 @@ namespace generic {
         void commit(generic::World& world)
         {
             enqueueCommit([&world]() {
+                if (backend::materials.empty()) {
+                    backend::createDefaultMaterial();
+                }
+
                 auto it = std::find_if(backend::worlds.begin(),
                                        backend::worlds.end(),
                                        [&world](const World::SP& wrld) {
