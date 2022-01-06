@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -362,13 +363,21 @@ namespace generic {
             return get_area(&tlases[0].triangleTLAS,hr);
         }
 
-        struct TriangleGeom
+        struct Geometry
+        {
+            using SP = std::shared_ptr<Geometry>;
+
+            virtual ~Geometry() {}
+
+            ANARIGeometry handle = nullptr;
+            unsigned geomID = unsigned(-1);
+        };
+
+        struct TriangleGeom : Geometry
         {
             using SP = std::shared_ptr<TriangleGeom>;
 
             TriangleBVH bvh;
-            ANARIGeometry handle = nullptr;
-            unsigned geomID = unsigned(-1);
         };
 
         struct Material
@@ -383,7 +392,7 @@ namespace generic {
         {
             using SP = std::shared_ptr<Surface>;
 
-            TriangleGeom::SP triangleGeom;
+            Geometry::SP geom;
             Material::SP material = nullptr;
             TriangleBVH::bvh_inst bvhInst;
 
@@ -655,7 +664,7 @@ namespace generic {
             ANARIRenderer handle = nullptr;
         };
 
-        std::vector<TriangleGeom::SP> triangleGeoms;
+        std::vector<Geometry::SP> geoms;
         std::vector<Material::SP> materials;
         std::vector<Instance::SP> instances;
         std::vector<Surface::SP> surfaces;
@@ -676,7 +685,7 @@ namespace generic {
         enum class ExecutionOrder {
             Object = 9999, // catch error messages first
             StructuredRegular = 7,
-            TriangleGeom = 7,
+            Geometry = 7,
             Matte = 7,
             Volume = 6,
             Surface = 6,
@@ -797,10 +806,11 @@ namespace generic {
 
                             float* trans = (*iit)->transform;
 
-                            TriangleBVH::bvh_inst inst
-                                = (*iit)->surfaces[i]->triangleGeom->bvh.inst(mat4x3(trans));
-                            inst.set_inst_id(instID);
-                            (*it)->surfaceImpl.triangleBVHInsts.push_back(inst);
+                            if (auto tg = std::dynamic_pointer_cast<TriangleGeom>((*iit)->surfaces[i]->geom)) {
+                                TriangleBVH::bvh_inst inst = tg->bvh.inst(mat4x3(trans));
+                                inst.set_inst_id(instID);
+                                (*it)->surfaceImpl.triangleBVHInsts.push_back(inst);
+                            }
                         }
 
                         // TODO: Volumes
@@ -1107,24 +1117,27 @@ namespace generic {
         void commit(generic::TriangleGeom& geom)
         {
             enqueueCommit([&geom]() {
-                auto it = std::find_if(backend::triangleGeoms.begin(),backend::triangleGeoms.end(),
-                                       [&geom](const TriangleGeom::SP& tg) {
+                auto it = std::find_if(backend::geoms.begin(),backend::geoms.end(),
+                                       [&geom](const Geometry::SP& tg) {
                                            return tg->handle != nullptr
                                                && tg->handle == geom.getResourceHandle();
                                        });
 
                 unsigned geomID(-1);
 
-                if (it == backend::triangleGeoms.end()) {
-                    backend::triangleGeoms.push_back(std::make_shared<TriangleGeom>());
-                    it = backend::triangleGeoms.end()-1;
-                    geomID = backend::triangleGeoms.size()-1;
+                if (it == backend::geoms.end()) {
+                    backend::geoms.push_back(std::make_shared<TriangleGeom>());
+                    it = backend::geoms.end()-1;
+                    geomID = backend::geoms.size()-1;
                 } else {
-                    geomID = std::distance(it,backend::triangleGeoms.begin());
+                    geomID = std::distance(it,backend::geoms.begin());
                 }
 
-                (*it)->handle = (ANARIGeometry)geom.getResourceHandle();
-                (*it)->geomID = geomID;
+                auto tg = std::dynamic_pointer_cast<TriangleGeom>(*it);
+                assert(tg != nullptr);
+
+                tg->handle = (ANARIGeometry)geom.getResourceHandle();
+                tg->geomID = geomID;
 
                 aligned_vector<basic_triangle<3,float>> triangles;
 
@@ -1152,11 +1165,11 @@ namespace generic {
                     binned_sah_builder builder;
                     builder.enable_spatial_splits(true);
 
-                    (*it)->bvh = builder.build(TriangleBVH{},triangles.data(),triangles.size());
+                    tg->bvh = builder.build(TriangleBVH{},triangles.data(),triangles.size());
                 } else {
                     assert(0 && "not implemented yet!!");
                 }
-            }, ExecutionOrder::TriangleGeom);
+            }, ExecutionOrder::Geometry);
         }
 
         void commit(generic::Matte& mat)
@@ -1200,16 +1213,18 @@ namespace generic {
 
                 assert(surf.geometry != nullptr);
 
-                auto git = std::find_if(backend::triangleGeoms.begin(),backend::triangleGeoms.end(),
-                                        [&surf](const TriangleGeom::SP& tg) {
-                                            return tg->handle == surf.geometry;
+                auto git = std::find_if(backend::geoms.begin(),backend::geoms.end(),
+                                        [&surf](const Geometry::SP& g) {
+                                            return g->handle == surf.geometry;
                                         });
 
-                (*it)->triangleGeom = *git;
 
-                assert(git != backend::triangleGeoms.end());
-
-                (*it)->bvhInst = (*git)->bvh.inst({mat3x3::identity(),vec3f(0.f)});
+                if (git != backend::geoms.end()) {
+                    if (auto tg = std::dynamic_pointer_cast<TriangleGeom>(*git)) {
+                        (*it)->geom = *git;
+                        (*it)->bvhInst = tg->bvh.inst({mat3x3::identity(),vec3f(0.f)});
+                    }
+                }
 
                 if (surf.material != nullptr) {
                     auto mit = std::find_if(backend::materials.begin(),backend::materials.end(),

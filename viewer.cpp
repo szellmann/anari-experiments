@@ -260,7 +260,8 @@ struct Viewer : visionaray::viewer_glut
 
 
 
-        void init(std::string fileName) {
+        void init(Viewer &instance) {
+            std::string fileName = instance.fileName;
             library = anariLoadLibrary(libType.c_str(), statusFunc);
             if (library == nullptr)
                 throw std::runtime_error("Error loading ANARI library");
@@ -355,7 +356,7 @@ int main(int argc, char** argv)
     }
 
     // Setup ANARI library, device, and renderer
-    viewer.anari.init(viewer.fileName);
+    viewer.anari.init(viewer);
 
     // More boilerplate to set up camera manipulators
     float aspect = viewer.width()/(float)viewer.height();
