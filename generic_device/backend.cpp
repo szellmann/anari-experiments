@@ -1242,6 +1242,8 @@ namespace generic {
 
                 // Surfaces
                 if (group != nullptr && group->surface != nullptr) {
+                    (*it)->surfaces.clear();
+
                     Array1D* surfaces = (Array1D*)GetResource(group->surface);
 
                     for (uint32_t i=0; i<surfaces->numItems[0]; ++i) {
