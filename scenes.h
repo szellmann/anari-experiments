@@ -523,7 +523,6 @@ struct Model : Scene
         if (manip == 1 && picked.downPos == event.pos()) {
             pickObject(event.pos());
             doDelete = doRotate = doMove = false;
-            modelMatrix = visionaray::mat4::identity();
         }
 
         return false;
@@ -613,8 +612,18 @@ struct Model : Scene
                 if (parent != NULL) {
                     ASGType_t ptype;
                     ASG_SAFE_CALL(asgGetType(parent,&ptype));
-                    if (ptype==ASG_TYPE_TRANSFORM)
+                    if (ptype==ASG_TYPE_TRANSFORM) {
                         picked.transform = parent;
+
+                        float matrix[12];
+                        ASG_SAFE_CALL(asgTransformGetMatrix(parent,matrix));
+
+                        modelMatrix = visionaray::mat4(visionaray::mat4x3(matrix));
+                    } else {
+                        modelMatrix = visionaray::mat4::identity();
+                    }
+                } else {
+                    modelMatrix = visionaray::mat4::identity();
                 }
             }
         } else {

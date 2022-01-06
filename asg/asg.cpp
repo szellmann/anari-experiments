@@ -1944,16 +1944,6 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                                 geom->vertices[geom->indices[i*3+2]*3+2]
                             };
 
-                            for (asg::Mat4x3f trans : pr->transStack) {
-                                asg::Vec3f vv1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
-                                asg::Vec3f vv2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
-                                asg::Vec3f vv3 = trans * asg::Vec4f{v3.x,v3.y,v3.z,1.f};
-
-                                v1 = { vv1.x, vv1.y, vv1.z };
-                                v2 = { vv2.x, vv2.y, vv2.z };
-                                v3 = { vv3.x, vv3.y, vv3.z };
-                            }
-
                             basic_triangle<3,float> tri;
                             tri.v1 = v1; tri.e1 = v2-v1; tri.e2 = v3-v1;
                             tri.prim_id = i;
@@ -1965,12 +1955,21 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                                                   tris.data(),tris.size());
                     }
 
+                    mat3x3 m3 = mat3x3::identity();
+                    vec3 t(0.f);
+                    for (asg::Mat4x3f trans : pr->transStack) {
+                        mat3x3 m33(*((vec3*)&trans.col0),*((vec3*)&trans.col1),*((vec3*)&trans.col2));
+                        vec3 tt(*(vec3*)&trans.col3);
+                        m3 = m33 * m3;
+                        t += tt;
+                    }
+                    auto inst = geom->bvh.inst({m3,t});
                     basic_ray<float> r;
                     r.ori = vec3f(pr->rayOri.x,pr->rayOri.y,pr->rayOri.z);
                     r.dir = vec3f(pr->rayDir.x,pr->rayDir.y,pr->rayDir.z);
                     r.tmin = 0.f;
                     r.tmax = pr->maxT;
-                    auto hr = closest_hit(r,&geom->bvh,&geom->bvh+1);
+                    auto hr = closest_hit(r,&inst,&inst+1);
                     if (hr.t < pr->maxT) {
                         pr->handle = obj;
                         pr->maxT = hr.t;
