@@ -562,10 +562,7 @@ struct Model : Scene
     {
         if (rebuildANARIWorld) {
             ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
-                                             ASG_BUILD_WORLD_FLAG_MATERIALS |
-                                             ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
-            // ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
-            //                                  ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
+                                             ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
             anariCommit(device,world);
         }
