@@ -2166,7 +2166,9 @@ void setANARIEntities(GroupNode groupNode, ANARI& anari)
     anariUnsetParameter(anari.device,groupNode,"instance");
     anariUnsetParameter(anari.device,groupNode,"surface");
     anariUnsetParameter(anari.device,groupNode,"volume");
-    anariUnsetParameter(anari.device,groupNode,"light");
+
+    if (anari.flags & ASG_BUILD_WORLD_FLAG_LIGHTS)
+        anariUnsetParameter(anari.device,groupNode,"light");
 
     if (anari.instances.size() > 0) {
         ANARIArray1D instances = anariNewArray1D(anari.device,anari.instances.data(),0,0,
@@ -2190,7 +2192,7 @@ void setANARIEntities(GroupNode groupNode, ANARI& anari)
         anariRelease(anari.device,volumes);
     }
 
-    if (anari.lights.size() > 0) {
+    if ((anari.flags & ASG_BUILD_WORLD_FLAG_LIGHTS) && anari.lights.size() > 0) {
         ANARIArray1D lights = anariNewArray1D(anari.device,anari.lights.data(),0,0,
                                               ANARI_LIGHT,anari.lights.size(),0);
         anariSetParameter(anari.device,groupNode,"light",ANARI_ARRAY1D,&lights);

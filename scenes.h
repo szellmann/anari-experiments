@@ -176,7 +176,7 @@ struct SelectTest : Scene
     {
         if (rebuildANARIWorld) {
             ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
-                                             ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
+                        ASG_BUILD_WORLD_FLAG_FULL_REBUILD & ~ASG_BUILD_WORLD_FLAG_LIGHTS,0));
 
             anariCommit(device,world);
         }
