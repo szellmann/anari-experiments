@@ -430,10 +430,7 @@ struct VolumeScene : Scene
     vkt::TransfuncEditor tfe;
 };
 
-// Load scene w/ pbrtParser (TODO)
-struct PBRT : Scene {};
-
-// Load scene w/ assimp
+// Load scene w/ assimp or pbrtParser
 struct Model : Scene
 {
     Model(ANARIDevice device, ANARIWorld wrld, const char* fileName)
@@ -444,7 +441,11 @@ struct Model : Scene
         root = asgNewObject();
 
         // Load from file
-        ASG_SAFE_CALL(asgLoadASSIMP(root,fileName,0));
+        std::string ext = getExt(fileName);
+        if (ext==".pbf" || ext==".pbrt")
+            ASG_SAFE_CALL(asgLoadPBRT(root,fileName,0));
+        else
+            ASG_SAFE_CALL(asgLoadASSIMP(root,fileName,0));
 
         // Compute bounding box
         ASG_SAFE_CALL(asgComputeBounds(root,&bbox.min.x,&bbox.min.y,&bbox.min.z,

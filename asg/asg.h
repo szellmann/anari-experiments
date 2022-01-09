@@ -346,6 +346,7 @@ ASGAPI ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
 
 // I/O
 ASGAPI ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags);
+ASGAPI ASGError_t asgLoadPBRT(ASGObject obj, const char* fileName, uint64_t flags);
 ASGAPI ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName,
                                 uint64_t flags);
 

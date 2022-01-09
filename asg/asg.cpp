@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 #if ASG_HAVE_ASSIMP
 #include <assimp/DefaultLogger.hpp>
@@ -12,6 +13,9 @@
 #include <assimp/Matrix4x4.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#endif
+#if ASG_HAVE_PBRT_PARSER
+#include <pbrtParser/Scene.h>
 #endif
 #if ASG_HAVE_VOLKIT
 #include <vkt/InputStream.hpp>
@@ -1533,6 +1537,127 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
 
     assimp::VisitFlags vflags = assimp::FLAG_GEOMETRY | assimp::FLAG_ACCUM_TRANSFORMS;
     assimp::Visit(scene->mRootNode,scene,obj,materials,lights,aiMatrix4x4(),vflags);
+
+    return ASG_ERROR_NO_ERROR;
+#else
+    return ASG_ERROR_MISSING_FILE_HANDLER;
+#endif
+}
+
+#if ASG_HAVE_PBRT_PARSER
+namespace pbrt {
+
+    void Visit(Object::SP pbrtOBJ, ASGObject obj,
+               std::unordered_map<pbrt::Shape::SP,ASGGeometry>& shape2geom,
+               std::unordered_map<pbrt::Material::SP,ASGMaterial>& mat2mat)
+    {
+        for (auto shape : pbrtOBJ->shapes) {
+
+            ASGSurface surf = NULL;
+            ASGGeometry geom = NULL;
+            ASGMaterial mat = NULL;
+
+            auto it = shape2geom.find(shape);
+
+            if (it != shape2geom.end())
+                geom = it->second;
+            else {
+                if (auto sphere = std::dynamic_pointer_cast<Sphere>(shape)) {
+
+                } else if (auto mesh = std::dynamic_pointer_cast<TriangleMesh>(shape)) {
+
+                    float* vertex
+                        = (float*)malloc(mesh->vertex.size()*3*sizeof(float));
+                    memcpy(vertex,mesh->vertex.data(),mesh->vertex.size()*3*sizeof(float));
+
+                    uint32_t* index
+                        = (uint32_t*)malloc(mesh->index.size()*3*sizeof(uint32_t));
+
+                    // int to uint
+                    for (size_t i=0; i<mesh->index.size(); ++i) {
+                        index[i*3]   = (uint32_t)mesh->index[i].x;
+                        index[i*3+1] = (uint32_t)mesh->index[i].y;
+                        index[i*3+2] = (uint32_t)mesh->index[i].z;
+                    }
+
+                    geom = asgNewTriangleGeometry(vertex,NULL,NULL,mesh->vertex.size(),
+                                                  index,mesh->index.size(),free);
+
+                    shape2geom.insert({shape,geom});
+                }
+            }
+
+            auto mit = mat2mat.find(shape->material);
+
+            if (mit != mat2mat.end())
+                mat = mit->second;
+            else {
+                if (auto m = std::dynamic_pointer_cast<MatteMaterial>(shape->material)) {
+                    mat = asgNewMaterial("");
+                    float kd[3] = {m->kd.x,m->kd.y,m->kd.z};
+                    asgMakeMatte(&mat,kd);
+                    asgObjectSetName(mat,m->name.c_str());
+                }
+            }
+
+            if (geom != nullptr) {
+                surf = asgNewSurface(geom,mat);
+                asgObjectAddChild(obj,surf);
+            }
+        }
+
+        for (auto inst : pbrtOBJ->instances) {
+            float mat[12] = {
+                inst->xfm.l.vx.x,inst->xfm.l.vx.y,inst->xfm.l.vx.z,
+                inst->xfm.l.vy.x,inst->xfm.l.vy.y,inst->xfm.l.vy.z,
+                inst->xfm.l.vz.x,inst->xfm.l.vz.y,inst->xfm.l.vz.z,
+                inst->xfm.p.x,inst->xfm.p.y,inst->xfm.p.z
+            };
+
+            ASGTransform trans = asgNewTransform(mat);
+
+            Visit(inst->object,trans,shape2geom,mat2mat);
+
+            asgObjectAddChild(obj,trans);
+        }
+
+        for (auto ls : pbrtOBJ->lightSources) {
+
+        }
+    }
+} // ::pbrt
+#endif
+
+ASGError_t asgLoadPBRT(ASGObject obj, const char* fileName, uint64_t flags)
+{
+#if ASG_HAVE_PBRT_PARSER
+    using namespace pbrt;
+
+    Scene::SP scene;
+
+    // get file extension
+    std::string fn(fileName);
+    int pos = fn.rfind('.');
+    if (pos == fn.npos)
+        return ASG_ERROR_FILE_IO_ERROR;
+    std::string ext = fn.substr(pos);
+
+    try {
+        if (ext==".pbf")
+            scene = Scene::loadFrom(fileName);
+        else if (ext==".pbrt")
+            scene = importPBRT(fileName);
+        else
+            return ASG_ERROR_FILE_IO_ERROR;
+    } catch (std::runtime_error& e) {
+        return ASG_ERROR_FILE_IO_ERROR;
+    }
+
+    // Keep track of the shapes we found and the geometries we
+    // already created
+    std::unordered_map<pbrt::Shape::SP,ASGGeometry> shape2geom;
+    std::unordered_map<pbrt::Material::SP,ASGMaterial> mat2mat;
+    Visit(scene->world,obj,shape2geom,mat2mat);
 
     return ASG_ERROR_NO_ERROR;
 #else
