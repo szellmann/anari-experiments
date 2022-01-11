@@ -75,6 +75,28 @@ struct Viewer : visionaray::viewer_glut
             cl::ArgDisallowed,
             cl::init(imageRegion)
             ) );
+
+        // --camera 4.609820366 5.294075012 7.147429466 0.2170000076 1.575000048 0 -0.2758344114 0.9115958214 -0.3048091531 --fov 1.04719758
+        add_cmdline_option( cl::makeOption<visionaray::pinhole_camera&, cl::ScalarType>(
+            [&](StringRef name, StringRef /*arg*/, visionaray::pinhole_camera& cam)
+            {
+                cl::Parser<>()(name + "-ex", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.eye()).x);
+                cl::Parser<>()(name + "-ey", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.eye()).y);
+                cl::Parser<>()(name + "-ez", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.eye()).z);
+
+                cl::Parser<>()(name + "-cx", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.center()).x);
+                cl::Parser<>()(name + "-cy", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.center()).y);
+                cl::Parser<>()(name + "-cz", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.center()).z);
+
+                cl::Parser<>()(name + "-ux", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.up()).x);
+                cl::Parser<>()(name + "-uy", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.up()).y);
+                cl::Parser<>()(name + "-uz", cmd_line_inst().bump(), const_cast<visionaray::vec3&>(cam.up()).z);
+            },
+            "camera",
+            cl::Desc("Region of the sensor in normalized screen-space coordinates"),
+            cl::ArgDisallowed,
+            cl::init(cam)
+            ) );
     }
 
     void resetANARICamera() {
@@ -245,6 +267,34 @@ struct Viewer : visionaray::viewer_glut
             viewer_glut::on_space_mouse_move(event);
     }
 
+    void on_key_press(visionaray::key_event const& event) {
+        switch (event.key()) {
+        case 'C': {
+        auto &fc = cam;
+        std::cout << "(C)urrent camera:" << std::endl;
+        std::cout << "- from :" << fc.eye() << std::endl;
+        std::cout << "- poi  :" << fc.center() << std::endl;
+        std::cout << "- upVec:" << fc.up() << std::endl; 
+        //std::cout << "- frame:" << fc.frame << std::endl;
+        std::cout.precision(10);
+        std::cout << "cmdline: --camera "
+                  << fc.eye().x << " "
+                  << fc.eye().y << " "
+                  << fc.eye().z << " "
+                  << fc.center().x << " "
+                  << fc.center().y << " "
+                  << fc.center().z << " "
+                  << fc.up().x << " "
+                  << fc.up().y << " "
+                  << fc.up().z << " "
+                  << "--fov " << cam.fovy()
+                  << std::endl;
+      } break;
+      }
+
+        viewer_glut::on_key_press(event);
+    }
+
     struct {
         std::string libType = "environment";
         std::string devType = "default";
@@ -351,6 +401,8 @@ int main(int argc, char** argv)
 
     try {
         viewer.init(argc,argv);
+
+        std::cout << viewer.cam.eye() << '\n';
     } catch (...) {
         return -1;
     }

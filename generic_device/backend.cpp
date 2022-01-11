@@ -451,7 +451,91 @@ namespace generic {
                 blend_params.dfactor = 1.f - alpha;
                 auto sparams = make_sched_params(blend_params,cam,frame);
 
-                if (algorithm==Algorithm::Pathtracing) {
+                if (1) {
+
+                    auto kparams = make_kernel_params(
+                        &world.surfaceImpl.triangleTLAS,
+                        &world.surfaceImpl.triangleTLAS+1,
+                        world.surfaceImpl.materials.begin(),
+                        10,
+                        1e-5f,
+                        vec4f{0.f,0.f,0.f,0.f},
+                        vec4f{1.f,1.f,1.f,1.f}
+                    );
+
+                    static bool prevCamInitialized = false;
+                    static thin_lens_camera prevCam;
+
+                    struct GBuffer {
+                        std::vector<ray> rays;
+                        std::vector<vec2f> barycentrics;
+                        std::vector<unsigned> primIDs;
+                        std::vector<basic_triangle<3,float>> triangles;
+                    };
+
+                    GBuffer gBuffer;
+                    gBuffer.rays.resize(frame.width()*frame.height());
+                    gBuffer.barycentrics.resize(frame.width()*frame.height(),{0.f,0.f});
+                    gBuffer.primIDs.resize(frame.width()*frame.height(),unsigned(-1));
+                    gBuffer.triangles.resize(frame.width()*frame.height());
+
+                    auto gBufferKernel = [&](ray r, random_generator<float>& gen, int x, int y) {
+                        result_record<float> result;
+
+                        auto hit_rec = closest_hit(r, kparams.prims.begin, kparams.prims.end);
+
+                        if (hit_rec.hit) {
+                            auto surf = get_surface(hit_rec, kparams);
+                            auto view_dir = -r.dir;
+                            auto light_dir = -r.dir;
+                            auto shaded_clr = surf.shade(view_dir, light_dir, vec3f(1.f));
+
+                            //result.color = to_rgba(shaded_clr);
+                            result.depth = hit_rec.t;
+
+                            gBuffer.rays[y*frame.width()+x] = r;
+                            gBuffer.barycentrics[y*frame.width()+x] = {hit_rec.u,hit_rec.v};
+                            gBuffer.primIDs[y*frame.width()+x] = hit_rec.prim_id;
+                            gBuffer.triangles[y*frame.width()+x] = get_primitive(kparams.prims.begin,hit_rec);
+                        }
+
+                        return result;
+                    };
+                    if (prevCamInitialized) sched.frame(gBufferKernel,sparams);
+
+                    mat4 proj = prevCam.get_proj_matrix();
+                    mat4 view = prevCam.get_view_matrix();
+                    auto motionVectorKernel = [&](ray r, random_generator<float>& gen, int x, int y) {
+                        result_record<float> result;
+
+                        if (gBuffer.primIDs[y*frame.width()+x] != unsigned(-1)) {
+                            auto tri = gBuffer.triangles[y*frame.width()+x];
+                            auto uv = gBuffer.barycentrics[y*frame.width()+x];
+                            vec3f v1 = tri.v1;
+                            vec3f v2 = tri.v1+tri.e1;
+                            vec3f v3 = tri.v1+tri.e2;
+                            vec3f pos = lerp(v1,v2,v3,uv.x,uv.y);
+                            vec4f clipPos = proj * view * vec4f(pos,1.f);
+                            vec2f prevPixelPos = clipPos.xy()/clipPos.w;
+                            prevPixelPos += vec2f(1.f,1.f);
+                            prevPixelPos *= vec2f(.5f,.5f);
+
+                            vec2f currPixelPos{float(x)/(frame.width()-1),float(y)/(frame.height()-1)};
+                            vec2f motionVec = currPixelPos-prevPixelPos;
+
+                            // *100.f to see anything...
+                            result.color = vec4f{motionVec*100.f,1.f,1.f};
+                        } else {
+                            result.color = vec4f{0.f,0.f,0.f,0.f};
+                        }
+                        return result;
+                    };
+                    if (prevCamInitialized) sched.frame(motionVectorKernel,sparams);
+
+                    prevCam = cam;
+                    prevCamInitialized = true;
+
+                } else if (algorithm==Algorithm::Pathtracing) {
 
                     if (world.volumeImpl.structuredVolumes.size()==1) { // single volume only
                         StructuredVolumeRef& volume = *world.volumeImpl.structuredVolumes[0];
