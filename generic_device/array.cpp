@@ -1,5 +1,5 @@
 #include <string.h>
-#include <anari/detail/helpers.h>
+#include <anari/detail/Helpers.h>
 #include "array.hpp"
 #include <iostream>
 

@@ -1,3 +1,4 @@
+#include <string.h>
 #include "array.hpp"
 #include "backend.hpp"
 #include "group.hpp"
