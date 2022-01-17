@@ -1329,6 +1329,7 @@ ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
 // I/O
 // ========================================================
 
+#if ASG_HAVE_ASSIMP
 namespace assimp {
 
     typedef uint64_t VisitFlags;
@@ -1469,6 +1470,7 @@ namespace assimp {
         }
     }
 } // ::assimp
+#endif
 
 ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
 {
