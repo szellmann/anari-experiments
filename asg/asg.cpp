@@ -130,7 +130,7 @@ ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1) {                       
 }
 
 #define PARAM_DEF2(TYPE,TYPENAME,MNEMONIC)                                              \
-ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1, TYPE v2) {                      \
+ASGParam asgParam2##MNEMONIC(const char* name, TYPE v1, TYPE v2) {                      \
     ASGParam param;                                                                     \
     param.name = name;                                                                  \
     param.type = TYPENAME##_VEC2;                                                       \
@@ -141,7 +141,7 @@ ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1, TYPE v2) {              
 }
 
 #define PARAM_DEF3(TYPE,TYPENAME,MNEMONIC)                                              \
-ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3) {             \
+ASGParam asgParam3##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3) {             \
     ASGParam param;                                                                     \
     param.name = name;                                                                  \
     param.type = TYPENAME##_VEC3;                                                       \
@@ -153,7 +153,7 @@ ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3) {     
 }
 
 #define PARAM_DEF4(TYPE,TYPENAME,MNEMONIC)                                              \
-ASGParam asgParam1##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3, TYPE v4) {    \
+ASGParam asgParam4##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3, TYPE v4) {    \
     ASGParam param;                                                                     \
     param.name = name;                                                                  \
     param.type = TYPENAME##_VEC4;                                                       \
