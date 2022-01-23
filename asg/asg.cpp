@@ -136,7 +136,7 @@ ASGParam asgParam2##MNEMONIC(const char* name, TYPE v1, TYPE v2) {              
     param.type = TYPENAME##_VEC2;                                                       \
     size_t sodt = asgSizeOfDataType(TYPENAME);                                          \
     std::memcpy(&param.value,&v1,sodt);                                                 \
-    std::memcpy(&param.value+sodt,&v2,sodt);                                            \
+    std::memcpy((char*)(&param.value)+sodt,&v2,sodt);                                   \
     return param;                                                                       \
 }
 
@@ -147,8 +147,8 @@ ASGParam asgParam3##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3) {     
     param.type = TYPENAME##_VEC3;                                                       \
     size_t sodt = asgSizeOfDataType(TYPENAME);                                          \
     std::memcpy(&param.value,&v1,sodt);                                                 \
-    std::memcpy(&param.value+sodt,&v2,sodt);                                            \
-    std::memcpy(&param.value+2*sodt,&v3,sodt);                                          \
+    std::memcpy((char*)(&param.value)+sodt,&v2,sodt);                                   \
+    std::memcpy((char*)(&param.value)+2*sodt,&v3,sodt);                                 \
     return param;                                                                       \
 }
 
@@ -159,9 +159,9 @@ ASGParam asgParam4##MNEMONIC(const char* name, TYPE v1, TYPE v2, TYPE v3, TYPE v
     param.type = TYPENAME##_VEC4;                                                       \
     size_t sodt = asgSizeOfDataType(TYPENAME);                                          \
     std::memcpy(&param.value,&v1,sodt);                                                 \
-    std::memcpy(&param.value+sodt,&v2,sodt);                                            \
-    std::memcpy(&param.value+2*sodt,&v3,sodt);                                          \
-    std::memcpy(&param.value+3*sodt,&v4,sodt);                                          \
+    std::memcpy((char*)(&param.value)+sodt,&v2,sodt);                                   \
+    std::memcpy((char*)(&param.value)+2*sodt,&v3,sodt);                                 \
+    std::memcpy((char*)(&param.value)+3*sodt,&v4,sodt);                                 \
     return param;                                                                       \
 }
 
