@@ -132,8 +132,16 @@ static void printSceneGraph(ASGObject rootObj, bool verbose = false)
                 break;
             }
 
+            case ASG_TYPE_OBJECT: {
+                std::cout << indent << "Object" << nameOut;
+                std::cout << '\n';
+                break;
+            }
+
             default: {
-                std::cout << indent << "Object" << nameOut << '\n';
+                std::cout << indent << "Unknown" << nameOut;
+                std::cout << ", type: " << t;
+                std::cout << '\n';
                 break;
             }
         }

@@ -112,7 +112,8 @@ struct SelectTest : Scene
                                    5,4,1, 5,1,0, 3,2,7, 3,7,6};
 
         ASGTriangleGeometry boxGeom = asgNewTriangleGeometry(vertex,NULL,NULL,8,
-                                                             index,12,NULL);
+                                                             index,12,NULL,NULL,NULL,
+                                                             NULL);
 
         // 1st
         ASGMaterial mat1 = asgNewMaterial("");
@@ -961,7 +962,8 @@ struct FilmStudio : Scene
         ASGTriangleGeometry groundPlaneGeom = asgNewTriangleGeometry(groundPlaneVertex,
                                                                      NULL,NULL,4,
                                                                      groundPlaneIndex,
-                                                                     2,NULL);
+                                                                     2,NULL,NULL,NULL,
+                                                                     NULL);
 
         ASGSurface groundPlane = asgNewSurface(groundPlaneGeom,NULL);
 
@@ -993,7 +995,8 @@ struct FilmStudio : Scene
                                    5,4,1, 5,1,0, 3,2,7, 3,7,6};
 
         ASGTriangleGeometry boxGeom = asgNewTriangleGeometry(vertex,NULL,NULL,8,
-                                                             index,12,NULL);
+                                                             index,12,NULL,NULL,NULL,
+                                                             NULL);
         // ASGSurface boxSurf = asgNewSurface(boxGeom,NULL);
         // ASG_SAFE_CALL(asgObjectAddChild(camTransform1,boxSurf));
 

@@ -286,7 +286,10 @@ struct _ASGObject {
     // Ref count (TODO!)
 
     // Visitable interface
-    void (*accept)(struct _ASGObject*, ASGVisitor);
+    void (*accept)(_ASGObject*, ASGVisitor);
+
+    // Release function
+    void (*release)(_ASGObject*);
 
     // Private implementation
     ASGImpl impl;
@@ -365,6 +368,7 @@ ASGObject asgNewObject()
         obj->children.push_back(child);
         child->parents.push_back(obj);
     };
+    obj->release = NULL;
     obj->impl = NULL;
     obj->mask = 0ULL;
     return obj;
@@ -379,6 +383,9 @@ ASGError_t asgGetType(ASGObject obj, ASGType_t* type)
 
 ASGError_t asgRelease(ASGObject obj)
 {
+    if (obj->release != NULL)
+        obj->release(obj);
+
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -860,7 +867,10 @@ struct TriangleGeom {
     float* vertexNormalsUserPtr;
     float* vertexColorsUserPtr;
     uint32_t* indicesUserPtr;
-    ASGFreeFunc freeFunc;
+    ASGFreeFunc freeVertices;
+    ASGFreeFunc freeNormals;
+    ASGFreeFunc freeColors;
+    ASGFreeFunc freeIndices;
     // Exclusively used by ANARI build visitors
     ANARIGeometry anariGeometry = NULL;
 #if __USE_VISIONARAY_FOR_PICKING
@@ -868,13 +878,21 @@ struct TriangleGeom {
 #endif
 };
 
+void _asgReleaseTriangleGeometry(ASGTriangleGeometry geom)
+{
+}
+
 ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals,
                                            float* vertexColors, uint32_t numVertices,
                                            uint32_t* indices, uint32_t numIndices,
-                                           ASGFreeFunc freeFunc)
+                                           ASGFreeFunc freeVertices,
+                                           ASGFreeFunc freeNormals,
+                                           ASGFreeFunc freeColors,
+                                           ASGFreeFunc freeIndices)
 {
     ASGTriangleGeometry geom = (ASGTriangleGeometry)asgNewObject();
     geom->type = ASG_TYPE_TRIANGLE_GEOMETRY;
+    geom->release = _asgReleaseTriangleGeometry;
     geom->impl = (TriangleGeom*)calloc(1,sizeof(TriangleGeom));
     ((TriangleGeom*)geom->impl)->vertices = vertices;
     ((TriangleGeom*)geom->impl)->vertexNormals = vertexNormals;
@@ -886,7 +904,10 @@ ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals
     ((TriangleGeom*)geom->impl)->vertexNormalsUserPtr = vertexNormals;
     ((TriangleGeom*)geom->impl)->vertexColorsUserPtr = vertexColors;
     ((TriangleGeom*)geom->impl)->indicesUserPtr = indices;
-    ((TriangleGeom*)geom->impl)->freeFunc = freeFunc;
+    ((TriangleGeom*)geom->impl)->freeVertices = freeVertices;
+    ((TriangleGeom*)geom->impl)->freeNormals = freeNormals;
+    ((TriangleGeom*)geom->impl)->freeColors = freeColors;
+    ((TriangleGeom*)geom->impl)->freeIndices = freeIndices;
     return geom;
 }
 
@@ -931,42 +952,108 @@ ASGError_t asgTriangleGeometryGetNumIndices(ASGTriangleGeometry geom,
 }
 
 struct SphereGeom {
-    float* positions;
+    float* vertices;
     float* radii;
-    float* colors;
-    uint32_t numSpheres;
+    float* vertexColors;
+    uint32_t numVertices;
     uint32_t* indices;
     uint32_t numIndices;
-    float* positionsUserPtr;
+    float* verticesUserPtr;
     float* radiiUserPtr;
-    float* colorsUserPtr;
+    float* vertexColorsUserPtr;
     uint32_t* indicesUserPtr;
     float defaultRadius;
-    ASGFreeFunc freeFunc;
+    ASGFreeFunc freeVertices;
+    ASGFreeFunc freeRadii;
+    ASGFreeFunc freeColors;
+    ASGFreeFunc freeIndices;
     // Exclusively used by ANARI build visitors
     ANARIGeometry anariGeometry = NULL;
 };
 
-ASGSphereGeometry asgNewSphereGeometry(float* positions, float* radii, float* colors,
-                                       uint32_t numSpheres, uint32_t* indices,
-                                       uint32_t numIndices, float defaultRadius,
-                                       ASGFreeFunc freeFunc)
+ASGSphereGeometry asgNewSphereGeometry(float* vertices, float* radii,
+                                       float* vertexColors, uint32_t numVertices,
+                                       uint32_t* indices, uint32_t numIndices,
+                                       float defaultRadius, ASGFreeFunc freeVertices,
+                                       ASGFreeFunc freeRadii, ASGFreeFunc freeColors,
+                                       ASGFreeFunc freeIndices)
 {
     ASGSphereGeometry geom = (ASGSphereGeometry)asgNewObject();
     geom->type = ASG_TYPE_SPHERE_GEOMETRY;
     geom->impl = (SphereGeom*)calloc(1,sizeof(SphereGeom));
-    ((SphereGeom*)geom->impl)->positions = positions;
+    ((SphereGeom*)geom->impl)->vertices = vertices;
     ((SphereGeom*)geom->impl)->radii = radii;
-    ((SphereGeom*)geom->impl)->colors = colors;
-    ((SphereGeom*)geom->impl)->numSpheres = numSpheres;
+    ((SphereGeom*)geom->impl)->vertexColors = vertexColors;
+    ((SphereGeom*)geom->impl)->numVertices = numVertices;
     ((SphereGeom*)geom->impl)->indices = indices;
     ((SphereGeom*)geom->impl)->numIndices = numIndices;
-    ((SphereGeom*)geom->impl)->positionsUserPtr = positions;
+    ((SphereGeom*)geom->impl)->verticesUserPtr = vertices;
     ((SphereGeom*)geom->impl)->radiiUserPtr = radii;
-    ((SphereGeom*)geom->impl)->colors = colors;
+    ((SphereGeom*)geom->impl)->vertexColorsUserPtr = vertexColors;
     ((SphereGeom*)geom->impl)->indices = indices;
     ((SphereGeom*)geom->impl)->defaultRadius = defaultRadius;
-    ((SphereGeom*)geom->impl)->freeFunc = freeFunc;
+    ((SphereGeom*)geom->impl)->freeVertices = freeVertices;
+    ((SphereGeom*)geom->impl)->freeRadii = freeRadii;
+    ((SphereGeom*)geom->impl)->freeColors = freeColors;
+    ((SphereGeom*)geom->impl)->freeIndices = freeIndices;
+    return geom;
+}
+
+struct CylinderGeom {
+    float* vertices;
+    float* radii;
+    float* vertexColors;
+    uint8_t* caps;
+    uint32_t numVertices;
+    uint32_t* indices;
+    uint32_t numIndices;
+    float* verticesUserPtr;
+    float* radiiUserPtr;
+    float* vertexColorsUserPtr;
+    uint8_t* capsUserPtr;
+    uint32_t* indicesUserPtr;
+    float defaultRadius;
+    ASGFreeFunc freeVertices;
+    ASGFreeFunc freeRadii;
+    ASGFreeFunc freeColors;
+    ASGFreeFunc freeCaps;
+    ASGFreeFunc freeIndices;
+    // Exclusively used by ANARI build visitors
+    ANARIGeometry anariGeometry = NULL;
+};
+
+ASGAPI ASGCylinderGeometry asgNewCylinderGeometry(float* vertices, float* radii,
+                                                  float* vertexColors, uint8_t* caps,
+                                                  uint32_t numVertices,
+                                                  uint32_t* indices, uint32_t numIndices,
+                                                  float defaultRadius,
+                                                  ASGFreeFunc freeVertices,
+                                                  ASGFreeFunc freeRadii,
+                                                  ASGFreeFunc freeColors,
+                                                  ASGFreeFunc freeCaps,
+                                                  ASGFreeFunc freeIndices)
+{
+    ASGCylinderGeometry geom = (ASGCylinderGeometry)asgNewObject();
+    geom->type = ASG_TYPE_CYLINDER_GEOMETRY;
+    geom->impl = (CylinderGeom*)calloc(1,sizeof(CylinderGeom));
+    ((CylinderGeom*)geom->impl)->vertices = vertices;
+    ((CylinderGeom*)geom->impl)->radii = radii;
+    ((CylinderGeom*)geom->impl)->vertexColors = vertexColors;
+    ((CylinderGeom*)geom->impl)->caps = caps;
+    ((CylinderGeom*)geom->impl)->numVertices = numVertices;
+    ((CylinderGeom*)geom->impl)->indices = indices;
+    ((CylinderGeom*)geom->impl)->numIndices = numIndices;
+    ((CylinderGeom*)geom->impl)->verticesUserPtr = vertices;
+    ((CylinderGeom*)geom->impl)->radiiUserPtr = radii;
+    ((CylinderGeom*)geom->impl)->vertexColorsUserPtr = vertexColors;
+    ((CylinderGeom*)geom->impl)->capsUserPtr = caps;
+    ((CylinderGeom*)geom->impl)->indices = indices;
+    ((CylinderGeom*)geom->impl)->defaultRadius = defaultRadius;
+    ((CylinderGeom*)geom->impl)->freeVertices = freeVertices;
+    ((CylinderGeom*)geom->impl)->freeRadii = freeRadii;
+    ((CylinderGeom*)geom->impl)->freeColors = freeColors;
+    ((CylinderGeom*)geom->impl)->freeCaps = freeCaps;
+    ((CylinderGeom*)geom->impl)->freeIndices = freeIndices;
     return geom;
 }
 
@@ -1025,9 +1112,9 @@ ASGError_t asgGeometryComputeBounds(ASGGeometry geom,
         if (sg->indices != nullptr && sg->numIndices > 0) {
             for (unsigned i=0; i<sg->numIndices; ++i) {
                 asg::Vec3f v = {
-                    sg->positions[sg->indices[i]*3],
-                    sg->positions[sg->indices[i]*3+1],
-                    sg->positions[sg->indices[i]*3+2]
+                    sg->vertices[sg->indices[i]*3],
+                    sg->vertices[sg->indices[i]*3+1],
+                    sg->vertices[sg->indices[i]*3+2]
                 };
 
                 asg::Vec3f v1 = v - sg->radii[sg->indices[i]];
@@ -1051,15 +1138,132 @@ ASGError_t asgGeometryComputeBounds(ASGGeometry geom,
             }
         } else {
             // No indices, so just insert the verts directly
-            for (unsigned i=0; i<sg->numSpheres; ++i) {
+            for (unsigned i=0; i<sg->numVertices; ++i) {
                 asg::Vec3f v = {
-                    sg->positions[i*3],
-                    sg->positions[i*3+1],
-                    sg->positions[i*3+2]
+                    sg->vertices[i*3],
+                    sg->vertices[i*3+1],
+                    sg->vertices[i*3+2]
                 };
 
                 asg::Vec3f v1 = v - sg->radii[i];
                 asg::Vec3f v2 = v + sg->radii[i];
+
+                *minX = fminf(*minX,v1.x);
+                *minY = fminf(*minY,v1.y);
+                *minZ = fminf(*minZ,v1.z);
+
+                *maxX = fmaxf(*maxX,v1.x);
+                *maxY = fmaxf(*maxY,v1.y);
+                *maxZ = fmaxf(*maxZ,v1.z);
+
+                *minX = fminf(*minX,v2.x);
+                *minY = fminf(*minY,v2.y);
+                *minZ = fminf(*minZ,v2.z);
+
+                *maxX = fmaxf(*maxX,v2.x);
+                *maxY = fmaxf(*maxY,v2.y);
+                *maxZ = fmaxf(*maxZ,v2.z);
+            }
+        }
+    } else if (geom->type == ASG_TYPE_CYLINDER_GEOMETRY) {
+
+        CylinderGeom* cg = (CylinderGeom*)geom->impl;
+
+        if (cg->indices != nullptr && cg->numIndices > 0) {
+            for (unsigned i=0; i<cg->numIndices; ++i) {
+
+                asg::Vec3f v1 = {
+                    cg->vertices[cg->indices[i*2]*3],
+                    cg->vertices[cg->indices[i*2]*3+1],
+                    cg->vertices[cg->indices[i*2]*3+2]
+                };
+
+                asg::Vec3f v2 = {
+                    cg->vertices[cg->indices[i*2+1]*3],
+                    cg->vertices[cg->indices[i*2+1]*3+1],
+                    cg->vertices[cg->indices[i*2+1]*3+2]
+                };
+
+                float radius = cg->radii[i];
+
+                asg::Vec3f a = v2 - v1;
+                float aa = dot(a,a);
+                asg::Vec3f e = {
+                    radius * sqrtf(1.f - a.x * a.x / aa),
+                    radius * sqrtf(1.f - a.y * a.y / aa),
+                    radius * sqrtf(1.f - a.z * a.z / aa)
+                };
+
+                asg::Vec3f pa = {
+                    fminf(v1.x-e.x,v2.x-e.x),
+                    fminf(v1.y-e.y,v2.y-e.y),
+                    fminf(v1.z-e.z,v2.z-e.z)
+                };
+
+                asg::Vec3f pb = {
+                    fmaxf(v1.x+e.x,v2.x+e.x),
+                    fmaxf(v1.y+e.y,v2.y+e.y),
+                    fmaxf(v1.z+e.z,v2.z+e.z)
+                };
+
+                v1 = pa;
+                v2 = pb;
+
+                *minX = fminf(*minX,v1.x);
+                *minY = fminf(*minY,v1.y);
+                *minZ = fminf(*minZ,v1.z);
+
+                *maxX = fmaxf(*maxX,v1.x);
+                *maxY = fmaxf(*maxY,v1.y);
+                *maxZ = fmaxf(*maxZ,v1.z);
+
+                *minX = fminf(*minX,v2.x);
+                *minY = fminf(*minY,v2.y);
+                *minZ = fminf(*minZ,v2.z);
+
+                *maxX = fmaxf(*maxX,v2.x);
+                *maxY = fmaxf(*maxY,v2.y);
+                *maxZ = fmaxf(*maxZ,v2.z);
+            }
+        } else {
+            // No indices, so just insert the verts directly
+            for (unsigned i=0; i<cg->numVertices; ++i) {
+                asg::Vec3f v1 = {
+                    cg->vertices[i*6],
+                    cg->vertices[i*6+1],
+                    cg->vertices[i*6+2]
+                };
+
+                asg::Vec3f v2 = {
+                    cg->vertices[i*6+3],
+                    cg->vertices[i*6+4],
+                    cg->vertices[i*6+5]
+                };
+
+                float radius = cg->radii[i];
+
+                asg::Vec3f a = v2 - v1;
+                float aa = dot(a,a);
+                asg::Vec3f e = {
+                    radius * sqrtf(1.f - a.x * a.x / aa),
+                    radius * sqrtf(1.f - a.y * a.y / aa),
+                    radius * sqrtf(1.f - a.z * a.z / aa)
+                };
+
+                asg::Vec3f pa = {
+                    fminf(v1.x-e.x,v2.x-e.x),
+                    fminf(v1.y-e.y,v2.y-e.y),
+                    fminf(v1.z-e.z,v2.z-e.z)
+                };
+
+                asg::Vec3f pb = {
+                    fmaxf(v1.x+e.x,v2.x+e.x),
+                    fmaxf(v1.y+e.y,v2.y+e.y),
+                    fmaxf(v1.z+e.z,v2.z+e.z)
+                };
+
+                v1 = pa;
+                v2 = pb;
 
                 *minX = fminf(*minX,v1.x);
                 *minY = fminf(*minY,v1.y);
@@ -1177,11 +1381,12 @@ struct LUT1D {
     int32_t numEntries;
     float* rgbUserPtr;
     float* alphaUserPtr;
-    ASGFreeFunc freeFunc;
+    ASGFreeFunc freeRGB;
+    ASGFreeFunc freeAlpha;
 };
 
 ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
-                                     ASGFreeFunc freeFunc)
+                                     ASGFreeFunc freeRGB, ASGFreeFunc freeAlpha)
 {
     ASGLookupTable1D lut = (ASGLookupTable1D)asgNewObject();
     lut->type = ASG_TYPE_LOOKUP_TABLE1D;
@@ -1191,7 +1396,8 @@ ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntrie
     ((LUT1D*)lut->impl)->numEntries = numEntries;
     ((LUT1D*)lut->impl)->rgbUserPtr = rgb;
     ((LUT1D*)lut->impl)->alphaUserPtr = alpha;
-    ((LUT1D*)lut->impl)->freeFunc = freeFunc;
+    ((LUT1D*)lut->impl)->freeRGB = freeRGB;
+    ((LUT1D*)lut->impl)->freeAlpha = freeAlpha;
     return lut;
 }
 
@@ -1225,7 +1431,7 @@ struct StructuredVolume {
     float distX, distY, distZ;
     ASGLookupTable1D lut1D;
     void* userPtr;
-    ASGFreeFunc freeFunc;
+    ASGFreeFunc freeData;
     // Exclusively used by ANARI build visitors
     ANARIVolume anariVolume = NULL;
     ANARISpatialField anariSpatialField = NULL;
@@ -1233,7 +1439,7 @@ struct StructuredVolume {
 
 ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t height,
                                           int32_t depth, ASGDataType_t type,
-                                          ASGFreeFunc freeFunc)
+                                          ASGFreeFunc freeData)
 {
     ASGStructuredVolume vol = (ASGStructuredVolume)asgNewObject();
     vol->type = ASG_TYPE_STRUCTURED_VOLUME;
@@ -1250,7 +1456,7 @@ ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t he
     ((StructuredVolume*)vol->impl)->distY = 1.f;
     ((StructuredVolume*)vol->impl)->lut1D = NULL;
     ((StructuredVolume*)vol->impl)->userPtr = data;
-    ((StructuredVolume*)vol->impl)->freeFunc = freeFunc;
+    ((StructuredVolume*)vol->impl)->freeData = freeData;
     return vol;
 }
 
@@ -1425,7 +1631,8 @@ namespace assimp {
                                                                       mesh->mNumVertices,
                                                                       indices,
                                                                       numIndices,
-                                                                      free);
+                                                                      free,free,
+                                                                      free,free);
 
                     ASGSurface surf = asgNewSurface(geom,mat);
 
@@ -1586,7 +1793,8 @@ namespace pbrt {
                     }
 
                     geom = asgNewTriangleGeometry(vertex,NULL,NULL,mesh->vertex.size(),
-                                                  index,mesh->index.size(),free);
+                                                  index,mesh->index.size(),free,free,
+                                                  free,free);
 
                     shape2geom.insert({shape,geom});
                 }
@@ -1743,7 +1951,7 @@ ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName, uint64_t
     impl->distZ = volkitVolume.getDist().z;
     impl->lut1D = NULL; // TODO: file might actually have a lut
     impl->userPtr = impl->data;
-    impl->freeFunc = free;
+    impl->freeData = free;
     return ASG_ERROR_NO_ERROR;
 #else
     return ASG_ERROR_MISSING_FILE_HANDLER;
@@ -1928,9 +2136,9 @@ static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
                 if (geom->indices != nullptr && geom->numIndices > 0) {
                     for (unsigned i=0; i<geom->numIndices; ++i) {
                         asg::Vec3f v = {
-                            geom->positions[geom->indices[i]*3],
-                            geom->positions[geom->indices[i]*3+1],
-                            geom->positions[geom->indices[i]*3+2]
+                            geom->vertices[geom->indices[i]*3],
+                            geom->vertices[geom->indices[i]*3+1],
+                            geom->vertices[geom->indices[i]*3+2]
                         };
 
                         asg::Vec3f v1 = v - geom->radii[geom->indices[i]];
@@ -1949,15 +2157,123 @@ static void visitBounds(ASGVisitor self, ASGObject obj, void* userData) {
                     }
                 } else {
                     // No indices, so just insert the verts directly
-                    for (unsigned i=0; i<geom->numSpheres; ++i) {
+                    for (unsigned i=0; i<geom->numVertices; ++i) {
                         asg::Vec3f v = {
-                            geom->positions[i*3],
-                            geom->positions[i*3+1],
-                            geom->positions[i*3+2]
+                            geom->vertices[i*3],
+                            geom->vertices[i*3+1],
+                            geom->vertices[i*3+2]
                         };
 
                         asg::Vec3f v1 = v - geom->radii[i];
                         asg::Vec3f v2 = v + geom->radii[i];
+
+                        for (asg::Mat4x3f trans : bounds->transStack) {
+                            v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                            v2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                        }
+
+                        bounds->minVal = min(bounds->minVal,v1);
+                        bounds->maxVal = max(bounds->maxVal,v1);
+
+                        bounds->minVal = min(bounds->minVal,v2);
+                        bounds->maxVal = max(bounds->maxVal,v2);
+                    }
+                }
+            } else if (surf->geometry->type == ASG_TYPE_CYLINDER_GEOMETRY) {
+
+                CylinderGeom* geom = (CylinderGeom*)surf->geometry->impl;
+
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    for (unsigned i=0; i<geom->numIndices; ++i) {
+
+                        asg::Vec3f v1 = {
+                            geom->vertices[geom->indices[i*2]*3],
+                            geom->vertices[geom->indices[i*2]*3+1],
+                            geom->vertices[geom->indices[i*2]*3+2]
+                        };
+
+                        asg::Vec3f v2 = {
+                            geom->vertices[geom->indices[i*2+1]*3],
+                            geom->vertices[geom->indices[i*2+1]*3+1],
+                            geom->vertices[geom->indices[i*2+1]*3+2]
+                        };
+
+                        float radius = geom->radii[i];
+
+                        asg::Vec3f a = v2 - v1;
+                        float aa = dot(a,a);
+                        asg::Vec3f e = {
+                            radius * sqrtf(1.f - a.x * a.x / aa),
+                            radius * sqrtf(1.f - a.y * a.y / aa),
+                            radius * sqrtf(1.f - a.z * a.z / aa)
+                        };
+
+                        asg::Vec3f pa = {
+                            fminf(v1.x-e.x,v2.x-e.x),
+                            fminf(v1.y-e.y,v2.y-e.y),
+                            fminf(v1.z-e.z,v2.z-e.z)
+                        };
+
+                        asg::Vec3f pb = {
+                            fmaxf(v1.x+e.x,v2.x+e.x),
+                            fmaxf(v1.y+e.y,v2.y+e.y),
+                            fmaxf(v1.z+e.z,v2.z+e.z)
+                        };
+
+                        v1 = pa;
+                        v2 = pb;
+
+                        for (asg::Mat4x3f trans : bounds->transStack) {
+                            v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                            v2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                        }
+
+                        bounds->minVal = min(bounds->minVal,v1);
+                        bounds->maxVal = max(bounds->maxVal,v1);
+
+                        bounds->minVal = min(bounds->minVal,v2);
+                        bounds->maxVal = max(bounds->maxVal,v2);
+                    }
+                } else {
+                    // No indices, so just insert the verts directly
+                    for (unsigned i=0; i<geom->numVertices; ++i) {
+
+                        asg::Vec3f v1 = {
+                            geom->vertices[i*6],
+                            geom->vertices[i*6+1],
+                            geom->vertices[i*6+2]
+                        };
+
+                        asg::Vec3f v2 = {
+                            geom->vertices[i*6+3],
+                            geom->vertices[i*6+4],
+                            geom->vertices[i*6+5]
+                        };
+
+                        float radius = geom->radii[i];
+
+                        asg::Vec3f a = v2 - v1;
+                        float aa = dot(a,a);
+                        asg::Vec3f e = {
+                            radius * sqrtf(1.f - a.x * a.x / aa),
+                            radius * sqrtf(1.f - a.y * a.y / aa),
+                            radius * sqrtf(1.f - a.z * a.z / aa)
+                        };
+
+                        asg::Vec3f pa = {
+                            fminf(v1.x-e.x,v2.x-e.x),
+                            fminf(v1.y-e.y,v2.y-e.y),
+                            fminf(v1.z-e.z,v2.z-e.z)
+                        };
+
+                        asg::Vec3f pb = {
+                            fmaxf(v1.x+e.x,v2.x+e.x),
+                            fmaxf(v1.y+e.y,v2.y+e.y),
+                            fmaxf(v1.z+e.z,v2.z+e.z)
+                        };
+
+                        v1 = pa;
+                        v2 = pb;
 
                         for (asg::Mat4x3f trans : bounds->transStack) {
                             v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
@@ -2147,9 +2463,9 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                 if (geom->indices != nullptr && geom->numIndices > 0) {
                     for (unsigned i=0; i<geom->numIndices; ++i) {
                         asg::Vec3f v = {
-                            geom->positions[geom->indices[i]*3],
-                            geom->positions[geom->indices[i]*3+1],
-                            geom->positions[geom->indices[i]*3+2]
+                            geom->vertices[geom->indices[i]*3],
+                            geom->vertices[geom->indices[i]*3+1],
+                            geom->vertices[geom->indices[i]*3+2]
                         };
 
                         asg::Vec3f v1 = v - geom->radii[geom->indices[i]];
@@ -2168,15 +2484,123 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                     }
                 } else {
                     // No indices, so just insert the verts directly
-                    for (unsigned i=0; i<geom->numSpheres; ++i) {
+                    for (unsigned i=0; i<geom->numVertices; ++i) {
                         asg::Vec3f v = {
-                            geom->positions[i*3],
-                            geom->positions[i*3+1],
-                            geom->positions[i*3+2]
+                            geom->vertices[i*3],
+                            geom->vertices[i*3+1],
+                            geom->vertices[i*3+2]
                         };
 
                         asg::Vec3f v1 = v - geom->radii[i];
                         asg::Vec3f v2 = v + geom->radii[i];
+
+                        for (asg::Mat4x3f trans : bounds.transStack) {
+                            v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                            v2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                        }
+
+                        bounds.minVal = min(bounds.minVal,v1);
+                        bounds.maxVal = max(bounds.maxVal,v1);
+
+                        bounds.minVal = min(bounds.minVal,v2);
+                        bounds.maxVal = max(bounds.maxVal,v2);
+                    }
+                }
+            } else if (surf->geometry->type == ASG_TYPE_CYLINDER_GEOMETRY) {
+
+                CylinderGeom* geom = (CylinderGeom*)surf->geometry->impl;
+
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    for (unsigned i=0; i<geom->numIndices; ++i) {
+
+                        asg::Vec3f v1 = {
+                            geom->vertices[geom->indices[i*2]*3],
+                            geom->vertices[geom->indices[i*2]*3+1],
+                            geom->vertices[geom->indices[i*2]*3+2]
+                        };
+
+                        asg::Vec3f v2 = {
+                            geom->vertices[geom->indices[i*2+1]*3],
+                            geom->vertices[geom->indices[i*2+1]*3+1],
+                            geom->vertices[geom->indices[i*2+1]*3+2]
+                        };
+
+                        float radius = geom->radii[i];
+
+                        asg::Vec3f a = v2 - v1;
+                        float aa = dot(a,a);
+                        asg::Vec3f e = {
+                            radius * sqrtf(1.f - a.x * a.x / aa),
+                            radius * sqrtf(1.f - a.y * a.y / aa),
+                            radius * sqrtf(1.f - a.z * a.z / aa)
+                        };
+
+                        asg::Vec3f pa = {
+                            fminf(v1.x-e.x,v2.x-e.x),
+                            fminf(v1.y-e.y,v2.y-e.y),
+                            fminf(v1.z-e.z,v2.z-e.z)
+                        };
+
+                        asg::Vec3f pb = {
+                            fmaxf(v1.x+e.x,v2.x+e.x),
+                            fmaxf(v1.y+e.y,v2.y+e.y),
+                            fmaxf(v1.z+e.z,v2.z+e.z)
+                        };
+
+                        v1 = pa;
+                        v2 = pb;
+
+                        for (asg::Mat4x3f trans : bounds.transStack) {
+                            v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
+                            v2 = trans * asg::Vec4f{v2.x,v2.y,v2.z,1.f};
+                        }
+
+                        bounds.minVal = min(bounds.minVal,v1);
+                        bounds.maxVal = max(bounds.maxVal,v1);
+
+                        bounds.minVal = min(bounds.minVal,v2);
+                        bounds.maxVal = max(bounds.maxVal,v2);
+                    }
+                } else {
+                    // No indices, so just insert the verts directly
+                    for (unsigned i=0; i<geom->numVertices; ++i) {
+
+                        asg::Vec3f v1 = {
+                            geom->vertices[i*6],
+                            geom->vertices[i*6+1],
+                            geom->vertices[i*6+2]
+                        };
+
+                        asg::Vec3f v2 = {
+                            geom->vertices[i*6+3],
+                            geom->vertices[i*6+4],
+                            geom->vertices[i*6+5]
+                        };
+
+                        float radius = geom->radii[i];
+
+                        asg::Vec3f a = v2 - v1;
+                        float aa = dot(a,a);
+                        asg::Vec3f e = {
+                            radius * sqrtf(1.f - a.x * a.x / aa),
+                            radius * sqrtf(1.f - a.y * a.y / aa),
+                            radius * sqrtf(1.f - a.z * a.z / aa)
+                        };
+
+                        asg::Vec3f pa = {
+                            fminf(v1.x-e.x,v2.x-e.x),
+                            fminf(v1.y-e.y,v2.y-e.y),
+                            fminf(v1.z-e.z,v2.z-e.z)
+                        };
+
+                        asg::Vec3f pb = {
+                            fmaxf(v1.x+e.x,v2.x+e.x),
+                            fmaxf(v1.y+e.y,v2.y+e.y),
+                            fmaxf(v1.z+e.z,v2.z+e.z)
+                        };
+
+                        v1 = pa;
+                        v2 = pb;
 
                         for (asg::Mat4x3f trans : bounds.transStack) {
                             v1 = trans * asg::Vec4f{v1.x,v1.y,v1.z,1.f};
@@ -2482,13 +2906,14 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 geomHandle = geom->anariGeometry;
 
                 ANARIArray1D vertexPosition = anariNewArray1D(anari->device,
-                                                              geom->positions,
+                                                              geom->vertices,
                                                               0,0,ANARI_FLOAT32_VEC3,
-                                                              geom->numSpheres,0);
+                                                              geom->numVertices,0);
 
-                ANARIArray1D vertexRadius = anariNewArray1D(anari->device,geom->radii,
+                ANARIArray1D vertexRadius = anariNewArray1D(anari->device,
+                                                            geom->radii,
                                                             0,0,ANARI_FLOAT32,
-                                                            geom->numSpheres,0);
+                                                            geom->numVertices,0);
 
                 anariSetParameter(anari->device,geom->anariGeometry,"vertex.position",
                                   ANARI_ARRAY1D,&vertexPosition);
@@ -2499,11 +2924,70 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anariRelease(anari->device,vertexPosition);
                 anariRelease(anari->device,vertexRadius);
 
-                if (geom->colors) {
+                if (geom->vertexColors) {
                     // TODO: support all color types
-                    ANARIArray1D vertexColor = anariNewArray1D(anari->device,geom->colors,
+                    ANARIArray1D vertexColor = anariNewArray1D(anari->device,
+                                                               geom->vertexColors,
                                                                0,0,ANARI_FLOAT32_VEC4,
-                                                               geom->numSpheres,0);
+                                                               geom->numVertices,0);
+
+                    anariSetParameter(anari->device,geom->anariGeometry,"vertex.color",
+                                      ANARI_ARRAY1D,&vertexColor);
+
+                    anariRelease(anari->device,vertexColor);
+                }
+
+                if (geom->indices != nullptr && geom->numIndices > 0) {
+                    ANARIArray1D primitiveIndex = anariNewArray1D(anari->device,
+                                                                  geom->indices,
+                                                                  0,0,
+                                                                  ANARI_UINT32_VEC3,
+                                                                  geom->numIndices,
+                                                                  0);
+                    anariSetParameter(anari->device,geom->anariGeometry,
+                                      "primitive.index",
+                                      ANARI_ARRAY1D,&primitiveIndex);
+
+                    anariRelease(anari->device,primitiveIndex);
+                }
+
+                anariCommit(anari->device,geom->anariGeometry);
+            } else if ((anari->flags & ASG_BUILD_WORLD_FLAG_GEOMETRIES) &&
+                surf->geometry->type == ASG_TYPE_CYLINDER_GEOMETRY) {
+
+                CylinderGeom* geom = (CylinderGeom*)surf->geometry->impl;
+
+                if (geom->anariGeometry == nullptr)
+                    geom->anariGeometry
+                        = anariNewGeometry(anari->device,"cylinder");
+
+                geomHandle = geom->anariGeometry;
+
+                ANARIArray1D vertexPosition = anariNewArray1D(anari->device,
+                                                              geom->vertices,
+                                                              0,0,ANARI_FLOAT32_VEC3,
+                                                              geom->numVertices,0);
+
+                ANARIArray1D primitiveRadius = anariNewArray1D(anari->device,
+                                                               geom->radii,
+                                                               0,0,ANARI_FLOAT32,
+                                                               geom->numVertices,0);
+
+                anariSetParameter(anari->device,geom->anariGeometry,"vertex.position",
+                                  ANARI_ARRAY1D,&vertexPosition);
+
+                anariSetParameter(anari->device,geom->anariGeometry,"primitive.radius",
+                                  ANARI_ARRAY1D,&primitiveRadius);
+
+                anariRelease(anari->device,vertexPosition);
+                anariRelease(anari->device,primitiveRadius);
+
+                if (geom->vertexColors) {
+                    // TODO: support all color types
+                    ANARIArray1D vertexColor = anariNewArray1D(anari->device,
+                                                               geom->vertexColors,
+                                                               0,0,ANARI_FLOAT32_VEC4,
+                                                               geom->numVertices,0);
 
                     anariSetParameter(anari->device,geom->anariGeometry,"vertex.color",
                                       ANARI_ARRAY1D,&vertexColor);
@@ -2567,6 +3051,12 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                     case ASG_TYPE_SPHERE_GEOMETRY: {
                         SphereGeom* geom = (SphereGeom*)surf->geometry->impl;
+                        geomHandle = geom->anariGeometry;
+                        break;
+                    }
+
+                    case ASG_TYPE_CYLINDER_GEOMETRY: {
+                        CylinderGeom* geom = (CylinderGeom*)surf->geometry->impl;
                         geomHandle = geom->anariGeometry;
                         break;
                     }

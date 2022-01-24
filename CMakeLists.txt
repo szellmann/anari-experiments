@@ -12,7 +12,7 @@ find_package(GLEW REQUIRED)
 
 set(VOLKIT_DIR ${PROJECT_SOURCE_DIR}/volkit)
 set(VSNRAY_DIR ${VOLKIT_DIR}/src/3rdparty/visionaray)
-set(IMGUI_DIR ${PROJECT_SOURCE_DIR}/imgui)
+set(IMGUI_DIR ${VSNRAY_DIR}//src/3rdparty/imgui)
 # Just reuse the Cmdline version that comes with the submodules
 set(CMD_LINE_DIR ${VSNRAY_DIR}/src/3rdparty/CmdLine)
 

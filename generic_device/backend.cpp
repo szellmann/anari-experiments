@@ -277,11 +277,15 @@ namespace generic {
         typedef index_bvh<basic_sphere<float>> SphereBVH;
         typedef index_bvh<typename SphereBVH::bvh_inst> SphereTLAS;
 
+        typedef index_bvh<basic_cylinder<float>> CylinderBVH;
+        typedef index_bvh<typename CylinderBVH::bvh_inst> CylinderTLAS;
+
         // Primitive type that wraps BVH instances
         struct TLASes
         {
             TriangleTLAS::bvh_ref triangleTLAS;
             SphereTLAS::bvh_ref sphereTLAS;
+            CylinderTLAS::bvh_ref cylinderTLAS;
             SphereTLAS::bvh_ref sphericalLightTLAS;
         };
 
@@ -304,7 +308,7 @@ namespace generic {
 
         typedef hit_record_bvh<ray,hit_record_bvh_inst<ray,hit_record<ray,primitive<unsigned>>>> BaseHitRecord;
 
-        enum class BVHType { Triangles, Spheres, SphericalLights, };
+        enum class BVHType { Triangles, Spheres, Cylinders, SphericalLights, };
         struct HitRecord : BaseHitRecord
         {
             BVHType bvhType;
@@ -317,6 +321,16 @@ namespace generic {
             return update_if((BaseHitRecord&)dst,(const BaseHitRecord&)src,cond);
         }
 
+        inline vec3f randomColor(size_t idx)
+        {
+            unsigned int r = (unsigned int)(idx*13*17 + 0x234235);
+            unsigned int g = (unsigned int)(idx*7*3*5 + 0x773477);
+            unsigned int b = (unsigned int)(idx*11*19 + 0x223766);
+            return vec3f((r&255)/255.f,
+                    (g&255)/255.f,
+                    (b&255)/255.f);
+        }
+
         inline auto get_surface(const HitRecord& hr, const KernelParams& params)
         {
             const TLASes& tlases = params.prims.begin[0];
@@ -326,12 +340,23 @@ namespace generic {
             BaseHitRecord baseHR = (BaseHitRecord)hr;
             auto primHR = (hit_record_bvh_inst<ray,hit_record<ray,primitive<unsigned>>>)baseHR;
 
-            vec3f n = get_normal(baseHR,tlases.triangleTLAS);
+            vec3f n;
+
+            vec3f texColor(1.f);
+
+            if (hr.bvhType == BVHType::Triangles)
+                n = get_normal(baseHR,tlases.triangleTLAS);
+            else if (hr.bvhType == BVHType::Spheres)
+                n = get_normal(baseHR,tlases.sphereTLAS);
+            else if (hr.bvhType == BVHType::Cylinders) {
+                const auto& inst = tlases.cylinderTLAS.primitive(hr.primitive_list_index);
+                n = get_normal(baseHR,tlases.cylinderTLAS);
+                n = transpose(inst.affine_inv()) * n;
+                texColor = n;//randomColor(hr.primitive_list_index);
+            }
 
             int mat_id = hr.inst_id < 0 ? hr.geom_id : hr.inst_id;
             const auto& material = params.materials[mat_id];
-
-            vec3f texColor(1.f);
 
             return surface<vec3f,vec3f,GenericMaterial>{n,n,texColor,material};
         }
@@ -344,7 +369,21 @@ namespace generic {
                 HitRecord triangleHR;
                 *((BaseHitRecord*)&triangleHR) = closest_hit(r,&tlases.triangleTLAS,&tlases.triangleTLAS+1);
                 triangleHR.bvhType = BVHType::Triangles;
-                hr = triangleHR;
+                update_if(hr,triangleHR,is_closer(triangleHR,hr));
+            }
+
+            if (tlases.sphereTLAS.num_primitives() > 0) {
+                HitRecord sphereHR;
+                *((BaseHitRecord*)&sphereHR) = closest_hit(r,&tlases.sphereTLAS,&tlases.sphereTLAS+1);
+                sphereHR.bvhType = BVHType::Spheres;
+                update_if(hr,sphereHR,is_closer(sphereHR,hr));
+            }
+
+            if (tlases.cylinderTLAS.num_primitives() > 0) {
+                HitRecord cylinderHR;
+                *((BaseHitRecord*)&cylinderHR) = closest_hit(r,&tlases.cylinderTLAS,&tlases.cylinderTLAS+1);
+                cylinderHR.bvhType = BVHType::Cylinders;
+                update_if(hr,cylinderHR,is_closer(cylinderHR,hr));
             }
 
             if (tlases.sphericalLightTLAS.num_primitives() > 0) {
@@ -380,6 +419,20 @@ namespace generic {
             TriangleBVH bvh;
         };
 
+        struct SphereGeom : Geometry
+        {
+            using SP = std::shared_ptr<SphereGeom>;
+
+            SphereBVH bvh;
+        };
+
+        struct CylinderGeom : Geometry
+        {
+            using SP = std::shared_ptr<CylinderGeom>;
+
+            CylinderBVH bvh;
+        };
+
         struct Material
         {
             using SP = std::shared_ptr<Material>;
@@ -394,7 +447,9 @@ namespace generic {
 
             Geometry::SP geom;
             Material::SP material = nullptr;
-            TriangleBVH::bvh_inst bvhInst;
+            TriangleBVH::bvh_inst triangleBVHInst;
+            SphereBVH::bvh_inst sphereBVHInst;
+            CylinderBVH::bvh_inst cylinderBVHInst;
 
             ANARISurface handle = nullptr;
         };
@@ -419,6 +474,8 @@ namespace generic {
                 aligned_vector<TriangleBVH::bvh_inst> triangleBVHInsts;
                 SphereTLAS sphereTLAS;
                 aligned_vector<SphereBVH::bvh_inst> sphereBVHInsts;
+                CylinderTLAS cylinderTLAS;
+                aligned_vector<CylinderBVH::bvh_inst> cylinderBVHInsts;
                 aligned_vector<GenericMaterial> materials;
             } surfaceImpl;
 
@@ -526,6 +583,7 @@ namespace generic {
                         TLASes tlases;
                         tlases.triangleTLAS = world.surfaceImpl.triangleTLAS.ref();
                         tlases.sphereTLAS = world.surfaceImpl.sphereTLAS.ref();
+                        tlases.cylinderTLAS = world.surfaceImpl.cylinderTLAS.ref();
                         tlases.sphericalLightTLAS = world.lightImpl.sphereTLAS.ref();
 
                         aligned_vector<GenericMaterial> materials(
@@ -539,8 +597,17 @@ namespace generic {
                                   world.lightImpl.areaLightMaterials.data()+world.lightImpl.areaLightMaterials.size(),
                                   materials.data()+world.surfaceImpl.materials.size());
 
-                        aabb bounds = tlases.triangleTLAS.node(0).get_bounds();
-                        // TODO: combine with sphere bounds
+                        aabb bounds;
+                        bounds.invalidate();
+
+                        if (tlases.triangleTLAS.num_nodes() > 0)
+                            bounds.insert(tlases.triangleTLAS.node(0).get_bounds());
+
+                        if (tlases.sphereTLAS.num_nodes() > 0)
+                            bounds.insert(tlases.sphereTLAS.node(0).get_bounds());
+
+                        if (tlases.cylinderTLAS.num_nodes() > 0)
+                            bounds.insert(tlases.cylinderTLAS.node(0).get_bounds());
 
                         vec3f diagonal = bounds.max-bounds.min;
                         float epsilon = std::max(1e-3f, length(diagonal)*1e-5f);
@@ -810,6 +877,14 @@ namespace generic {
                                 TriangleBVH::bvh_inst inst = tg->bvh.inst(mat4x3(trans));
                                 inst.set_inst_id(instID);
                                 (*it)->surfaceImpl.triangleBVHInsts.push_back(inst);
+                            } else if (auto sg = std::dynamic_pointer_cast<SphereGeom>((*iit)->surfaces[i]->geom)) {
+                                SphereBVH::bvh_inst inst = sg->bvh.inst(mat4x3(trans));
+                                inst.set_inst_id(instID);
+                                (*it)->surfaceImpl.sphereBVHInsts.push_back(inst);
+                            } else if (auto cg = std::dynamic_pointer_cast<CylinderGeom>((*iit)->surfaces[i]->geom)) {
+                                CylinderBVH::bvh_inst inst = cg->bvh.inst(mat4x3(trans));
+                                inst.set_inst_id(instID);
+                                (*it)->surfaceImpl.cylinderBVHInsts.push_back(inst);
                             }
                         }
 
@@ -836,6 +911,13 @@ namespace generic {
 
                         assert(sit != backend::surfaces.end());
 
+                        auto tg = std::dynamic_pointer_cast<TriangleGeom>((*sit)->geom);
+                        auto sg = std::dynamic_pointer_cast<SphereGeom>((*sit)->geom);
+                        auto cg = std::dynamic_pointer_cast<CylinderGeom>((*sit)->geom);
+
+                        if (tg == nullptr && sg == nullptr && cg == nullptr)
+                            continue;
+
                         if ((*sit)->material != nullptr) {
                             ANARIMaterial m = (*sit)->material->handle;
 
@@ -852,9 +934,19 @@ namespace generic {
                             }
                         }
 
-                        TriangleBVH::bvh_inst inst = (*sit)->bvhInst;
-                        inst.set_inst_id(instID);
-                        (*it)->surfaceImpl.triangleBVHInsts.push_back(inst);
+                        if (tg != nullptr) {
+                            TriangleBVH::bvh_inst inst = (*sit)->triangleBVHInst;
+                            inst.set_inst_id(instID);
+                            (*it)->surfaceImpl.triangleBVHInsts.push_back(inst);
+                        } else if (sg != nullptr) {
+                            SphereBVH::bvh_inst inst = (*sit)->sphereBVHInst;
+                            inst.set_inst_id(instID);
+                            (*it)->surfaceImpl.sphereBVHInsts.push_back(inst);
+                        } else if (cg != nullptr) {
+                            CylinderBVH::bvh_inst inst = (*sit)->cylinderBVHInst;
+                            inst.set_inst_id(instID);
+                            (*it)->surfaceImpl.cylinderBVHInsts.push_back(inst);
+                        }
                     }
                 }
 
@@ -872,6 +964,14 @@ namespace generic {
                     (*it)->surfaceImpl.sphereTLAS = builder.build(SphereTLAS{},
                                                                   (*it)->surfaceImpl.sphereBVHInsts.data(),
                                                                   (*it)->surfaceImpl.sphereBVHInsts.size());
+                }
+
+                if (!(*it)->surfaceImpl.cylinderBVHInsts.empty()) {
+                    lbvh_builder builder;
+
+                    (*it)->surfaceImpl.cylinderTLAS = builder.build(CylinderTLAS{},
+                                                                    (*it)->surfaceImpl.cylinderBVHInsts.data(),
+                                                                    (*it)->surfaceImpl.cylinderBVHInsts.size());
                 }
 
                 // Volumes
@@ -1172,6 +1272,91 @@ namespace generic {
             }, ExecutionOrder::Geometry);
         }
 
+        void commit(generic::CylinderGeom& geom)
+        {
+            enqueueCommit([&geom]() {
+                auto it = std::find_if(backend::geoms.begin(),backend::geoms.end(),
+                                       [&geom](const Geometry::SP& tg) {
+                                           return tg->handle != nullptr
+                                               && tg->handle == geom.getResourceHandle();
+                                       });
+
+                unsigned geomID(-1);
+
+                if (it == backend::geoms.end()) {
+                    backend::geoms.push_back(std::make_shared<CylinderGeom>());
+                    it = backend::geoms.end()-1;
+                    geomID = backend::geoms.size()-1;
+                } else {
+                    geomID = std::distance(it,backend::geoms.begin());
+                }
+
+                auto cg = std::dynamic_pointer_cast<CylinderGeom>(*it);
+                assert(cg != nullptr);
+
+                cg->handle = (ANARIGeometry)geom.getResourceHandle();
+                cg->geomID = geomID;
+
+                aligned_vector<basic_cylinder<float>> cylinders;
+
+                if (geom.primitive_index != nullptr) {
+                    Array1D* vertex = (Array1D*)GetResource(geom.vertex_position);
+                    Array1D* index = (Array1D*)GetResource(geom.primitive_index);
+                    Array1D* radius = (Array1D*)GetResource(geom.primitive_radius);
+
+                    vec3f* vertices = (vec3f*)vertex->data;
+                    vec2ui* indices = (vec2ui*)index->data;
+                    float* radii = (float*)radius->data;
+
+                    cylinders.resize(index->numItems[0]);
+
+                    for (uint32_t i=0; i<index->numItems[0]; ++i) {
+                        vec3f v1 = vertices[indices[i].x];
+                        vec3f v2 = vertices[indices[i].y];
+                        float r = radii[i];
+
+                        cylinders[i].prim_id = i;
+                        cylinders[i].geom_id = geomID;
+                        cylinders[i].v1 = v1;
+                        cylinders[i].v2 = v2;
+                        cylinders[i].radius = r;
+                    }
+
+                    binned_sah_builder builder;
+                    builder.enable_spatial_splits(false);
+
+                    cg->bvh = builder.build(CylinderBVH{},cylinders.data(),cylinders.size());
+                } else {
+                    Array1D* vertex = (Array1D*)GetResource(geom.vertex_position);
+                    Array1D* radius = (Array1D*)GetResource(geom.primitive_radius);
+
+                    vec3f* vertices = (vec3f*)vertex->data;
+                    float* radii = (float*)radius->data;
+
+                    cylinders.resize(vertex->numItems[0]/2);
+
+                    for (uint32_t i=0; i<vertex->numItems[0]; i+=2) {
+                        vec3f v1 = vertices[i];
+                        vec3f v2 = vertices[i+1];
+                        float r = radii[i/2];
+
+                        cylinders[i].prim_id = i/2;
+                        cylinders[i].geom_id = geomID;
+                        cylinders[i].v1 = v1;
+                        cylinders[i].v2 = v2;
+                        cylinders[i].radius = r;
+
+                        // std::cout << v1 << v2 << ' ' << r << '\n';
+                    }
+
+                    binned_sah_builder builder;
+                    builder.enable_spatial_splits(false);
+
+                    cg->bvh = builder.build(CylinderBVH{},cylinders.data(),cylinders.size());
+                }
+            }, ExecutionOrder::Geometry);
+        }
+
         void commit(generic::Matte& mat)
         {
             enqueueCommit([&mat]() {
@@ -1222,7 +1407,13 @@ namespace generic {
                 if (git != backend::geoms.end()) {
                     if (auto tg = std::dynamic_pointer_cast<TriangleGeom>(*git)) {
                         (*it)->geom = *git;
-                        (*it)->bvhInst = tg->bvh.inst({mat3x3::identity(),vec3f(0.f)});
+                        (*it)->triangleBVHInst = tg->bvh.inst({mat3x3::identity(),vec3f(0.f)});
+                    } else if (auto sg = std::dynamic_pointer_cast<SphereGeom>(*git)) {
+                        (*it)->geom = *git;
+                        (*it)->sphereBVHInst = sg->bvh.inst({mat3x3::identity(),vec3f(0.f)});
+                    } else if (auto cg = std::dynamic_pointer_cast<CylinderGeom>(*git)) {
+                        (*it)->geom = *git;
+                        (*it)->cylinderBVHInst = cg->bvh.inst({mat3x3::identity(),vec3f(0.f)});
                     }
                 }
 

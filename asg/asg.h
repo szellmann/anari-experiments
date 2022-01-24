@@ -33,6 +33,7 @@ typedef int ASGType_t;
 #define ASG_TYPE_OBJECT                     0
 #define ASG_TYPE_TRIANGLE_GEOMETRY          1000
 #define ASG_TYPE_SPHERE_GEOMETRY            1001
+#define ASG_TYPE_CYLINDER_GEOMETRY          1004
 #define ASG_TYPE_MATERIAL                   1010
 #define ASG_TYPE_LIGHT                      1020
 #define ASG_TYPE_SURFACE                    1030
@@ -154,8 +155,9 @@ typedef struct {
  * ========================================================*/
 
 typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry,
-    *ASGSphereGeometry, *ASGMaterial, *ASGLight, *ASGSurface, *ASGSampler2D,
-    *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform, *ASGSelect, *ASGCamera;
+    *ASGSphereGeometry, *ASGCylinderGeometry, *ASGMaterial, *ASGLight, *ASGSurface,
+    *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform, *ASGSelect,
+    *ASGCamera;
 
 
 /* ========================================================
@@ -295,7 +297,13 @@ ASGAPI ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertex
                                                   float* vertexColors,
                                                   uint32_t numVertices, uint32_t* indices,
                                                   uint32_t numIncidices,
-                                                  ASGFreeFunc freeFunc
+                                                  ASGFreeFunc freeVertices
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeNormals
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeColors
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeIndices
                                                   ASG_DFLT_PARAM(NULL));
 // TODO: special handling for 64-bit triangle indices (asgNewTriangleGeometry64?)
 ASGAPI ASGError_t asgTriangleGeometryGetVertices(ASGTriangleGeometry geom,
@@ -311,11 +319,33 @@ ASGAPI ASGError_t asgTriangleGeometryGetIndices(ASGTriangleGeometry geom,
 ASGAPI ASGError_t asgTriangleGeometryGetNumIndices(ASGTriangleGeometry geom,
                                                    uint32_t* numIndices);
 
-ASGAPI ASGSphereGeometry asgNewSphereGeometry(float* positions, float* radii,
-                                              float* colors, uint32_t numSpheres,
+ASGAPI ASGSphereGeometry asgNewSphereGeometry(float* vertices, float* radii,
+                                              float* vertexColors, uint32_t numVertices,
                                               uint32_t* indices, uint32_t numIndices,
                                               float defaultRadius ASG_DFLT_PARAM(1.f),
-                                              ASGFreeFunc freeFunc ASG_DFLT_PARAM(NULL));
+                                              ASGFreeFunc freeVertices
+                                              ASG_DFLT_PARAM(NULL),
+                                              ASGFreeFunc freeRadii ASG_DFLT_PARAM(NULL),
+                                              ASGFreeFunc freeColors
+                                              ASG_DFLT_PARAM(NULL),
+                                              ASGFreeFunc freeIndices
+                                              ASG_DFLT_PARAM(NULL));
+
+ASGAPI ASGCylinderGeometry asgNewCylinderGeometry(float* vertices, float* radii,
+                                                  float* vertexColors, uint8_t* caps,
+                                                  uint32_t numVertices,
+                                                  uint32_t* indices, uint32_t numIndices,
+                                                  float defaultRadius ASG_DFLT_PARAM(1.f),
+                                                  ASGFreeFunc freeVertices
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeRadii
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeColors
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeCaps
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeIndices
+                                                  ASG_DFLT_PARAM(NULL));
 
 ASGAPI ASGError_t asgGeometryComputeBounds(ASGGeometry geom,
                                            float* minX, float* minY, float* minZ,
@@ -337,7 +367,8 @@ ASGAPI ASGError_t asgTransformTranslate(ASGTransform trans, float xyz[3]);
 
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
-                                            ASGFreeFunc freeFunc ASG_DFLT_PARAM(NULL));
+                                            ASGFreeFunc freeRGB ASG_DFLT_PARAM(NULL),
+                                            ASGFreeFunc freeAlpha ASG_DFLT_PARAM(NULL));
 ASGAPI ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float** rgb);
 ASGAPI ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float** alpha);
 ASGAPI ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut,
@@ -347,7 +378,7 @@ ASGAPI ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut,
 ASGAPI ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width,
                                                   int32_t height, int32_t depth,
                                                   ASGDataType_t type,
-                                                  ASGFreeFunc freeFunc
+                                                  ASGFreeFunc freeData
                                                   ASG_DFLT_PARAM(NULL));
 ASGAPI ASGError_t asgStructuredVolumeGetData(ASGStructuredVolume vol, void** data);
 ASGAPI ASGError_t asgStructuredVolumeGetDims(ASGStructuredVolume vol, int32_t* width,
