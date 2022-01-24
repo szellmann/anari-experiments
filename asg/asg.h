@@ -153,9 +153,6 @@ typedef struct {
  * ASGObject
  * ========================================================*/
 
-typedef void _ASGImpl;
-typedef _ASGImpl *ASGImpl;
-
 typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry,
     *ASGSphereGeometry, *ASGMaterial, *ASGLight, *ASGSurface, *ASGSampler2D,
     *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform, *ASGSelect, *ASGCamera;
@@ -340,7 +337,7 @@ ASGAPI ASGError_t asgTransformTranslate(ASGTransform trans, float xyz[3]);
 
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
-                                            ASGFreeFunc freeFunc);
+                                            ASGFreeFunc freeFunc ASG_DFLT_PARAM(NULL));
 ASGAPI ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float** rgb);
 ASGAPI ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float** alpha);
 ASGAPI ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut,
@@ -350,8 +347,9 @@ ASGAPI ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut,
 ASGAPI ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width,
                                                   int32_t height, int32_t depth,
                                                   ASGDataType_t type,
-                                                  ASGFreeFunc freeFunc);
-ASGAPI ASGError_t asgStructuredVolumeGetData(ASGStructuredVolume vol, void* data);
+                                                  ASGFreeFunc freeFunc
+                                                  ASG_DFLT_PARAM(NULL));
+ASGAPI ASGError_t asgStructuredVolumeGetData(ASGStructuredVolume vol, void** data);
 ASGAPI ASGError_t asgStructuredVolumeGetDims(ASGStructuredVolume vol, int32_t* width,
                                              int32_t* height, int32_t* depth);
 ASGAPI ASGError_t asgStructuredVolumeGetDatatype(ASGStructuredVolume vol,

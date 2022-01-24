@@ -271,6 +271,9 @@ struct Params {
 // Ref-counted objects
 // ========================================================
 
+typedef void _ASGImpl;
+typedef _ASGImpl *ASGImpl;
+
 struct _ASGObject {
     // Node interface
     ASGType_t type;
