@@ -350,9 +350,12 @@ namespace generic {
                 n = get_normal(baseHR,tlases.sphereTLAS);
             else if (hr.bvhType == BVHType::Cylinders) {
                 const auto& inst = tlases.cylinderTLAS.primitive(hr.primitive_list_index);
+                baseHR.isect_pos += inst.trans_inv();
                 n = get_normal(baseHR,tlases.cylinderTLAS);
                 n = transpose(inst.affine_inv()) * n;
-                texColor = n;//randomColor(hr.primitive_list_index);
+                //texColor = n;
+                //randomColor(hr.primitive_list_index);
+                randomColor(hr.inst_id);
             }
 
             int mat_id = hr.inst_id < 0 ? hr.geom_id : hr.inst_id;
