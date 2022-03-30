@@ -354,8 +354,8 @@ namespace generic {
                 n = get_normal(baseHR,tlases.cylinderTLAS);
                 n = transpose(inst.affine_inv()) * n;
                 //texColor = n;
-                //randomColor(hr.primitive_list_index);
-                randomColor(hr.inst_id);
+                //texColor = randomColor(hr.inst_id);
+                //texColor = randomColor(hr.primitive_list_index);
             }
 
             int mat_id = hr.inst_id < 0 ? hr.geom_id : hr.inst_id;
