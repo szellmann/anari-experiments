@@ -2717,20 +2717,11 @@ struct ANARI {
 template <typename GroupNode>
 void setANARIEntities(GroupNode groupNode, ANARI& anari)
 {
-    anariUnsetParameter(anari.device,groupNode,"instance");
     anariUnsetParameter(anari.device,groupNode,"surface");
     anariUnsetParameter(anari.device,groupNode,"volume");
 
     if (anari.flags & ASG_BUILD_WORLD_FLAG_LIGHTS)
         anariUnsetParameter(anari.device,groupNode,"light");
-
-    if (anari.instances.size() > 0) {
-        ANARIArray1D instances = anariNewArray1D(anari.device,anari.instances.data(),0,0,
-                                                 ANARI_INSTANCE,
-                                                 anari.instances.size(),0);
-        anariSetParameter(anari.device,groupNode,"instance",ANARI_ARRAY1D,&instances);
-        anariRelease(anari.device,instances);
-    }
 
     if (anari.surfaces.size() > 0) {
         ANARIArray1D surfaces = anariNewArray1D(anari.device,anari.surfaces.data(),0,0,
@@ -2751,6 +2742,18 @@ void setANARIEntities(GroupNode groupNode, ANARI& anari)
                                               ANARI_LIGHT,anari.lights.size(),0);
         anariSetParameter(anari.device,groupNode,"light",ANARI_ARRAY1D,&lights);
         anariRelease(anari.device,lights);
+    }
+
+    if (std::is_same<GroupNode,ANARIWorld>::value) {
+        anariUnsetParameter(anari.device,groupNode,"instance");
+
+        if (anari.instances.size() > 0) {
+            ANARIArray1D instances = anariNewArray1D(anari.device,anari.instances.data(),
+                                                     0,0,ANARI_INSTANCE,
+                                                     anari.instances.size(),0);
+            anariSetParameter(anari.device,groupNode,"instance",ANARI_ARRAY1D,&instances);
+            anariRelease(anari.device,instances);
+        }
     }
 }
 
