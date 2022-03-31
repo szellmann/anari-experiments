@@ -162,7 +162,7 @@ struct Grabber
         // m_azimuth->axis = SoRotationXYZ::Y;
         // m_azimuth->angle = m_startAzimuth;
         // from_elbow->addChild(m_azimuth);
-        from_upper_arm->addChild(from_elbow);
+        from_upper_arm->getChild(0)->addChild(from_elbow);
 
         // the part of the grabber starting with its under arm to its finger
         asg::Object from_under_arm = asg::newObject();

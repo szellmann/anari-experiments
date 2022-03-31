@@ -107,6 +107,8 @@ static void printSceneGraph(ASGObject rootObj, bool verbose = false)
                         std::cout << ", addresses (V,VN,VC,I): ";
                         std::cout << vertices << ' ' << vertexNormals << ' '
                                   << vertexColors << ' ' << indices;
+                    } else if (type==ASG_TYPE_CYLINDER_GEOMETRY) {
+                        std::cout << ", cylinder-geom";
                     }
 
                     ASGMaterial mat;

@@ -2712,6 +2712,7 @@ struct ANARI {
     std::vector<ANARISurface> surfaces;
     std::vector<ANARIVolume> volumes;
     std::vector<ANARILight> lights;
+    asg::Mat4x3f trans;
 };
 
 template <typename GroupNode>
@@ -2775,21 +2776,31 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
             if (anari->flags & ASG_BUILD_WORLD_FLAG_TRANSFORMS) {
 
-                // TODO: check if we already found the surface being instances;
+                // TODO: check if we already found the surface being instanced;
                 // this isn't supported by the current implementation yet
-                std::vector<ANARIInstance> instances(anari->instances);
+                std::vector<ANARIInstance> instances; // append, will be added in the end
                 std::vector<ANARISurface> surfaces(anari->surfaces);
                 std::vector<ANARIVolume> volumes(anari->volumes);
                 std::vector<ANARILight> lights(anari->lights);
 
-                anari->instances.clear();
                 anari->surfaces.clear();
                 anari->volumes.clear();
                 anari->lights.clear();
 
-                asgVisitorApply(self,obj);
+                asg::Mat4x3f prevTrans = anari->trans;
+                asg::Mat3f A = *(asg::Mat3f*)&anari->trans;
+                asg::Mat3f B{{trans->matrix[0],trans->matrix[1],trans->matrix[2]},
+                             {trans->matrix[3],trans->matrix[4],trans->matrix[5]},
+                             {trans->matrix[6],trans->matrix[7],trans->matrix[8]}};
+                asg::Mat3f C = A * B;
+                anari->trans.col0 = C.col0;
+                anari->trans.col1 = C.col1;
+                anari->trans.col2 = C.col2;
+                anari->trans.col3 += asg::Vec3f{trans->matrix[ 9],
+                                                trans->matrix[10],
+                                                trans->matrix[11]};
 
-                assert(anari->instances.empty());
+                asgVisitorApply(self,obj);
 
                 bool notEmpty = anari->surfaces.size() || anari->volumes.size()
                                     || anari->lights.size();
@@ -2798,10 +2809,12 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 setANARIEntities(anariGroup,*anari);
                 anariCommit(anari->device,anariGroup);
 
-                anari->instances = std::move(instances);
                 anari->surfaces = std::move(surfaces);
                 anari->volumes = std::move(volumes);
                 anari->lights = std::move(lights);
+                // instances are special b/c they're added to the world
+                anari->instances.insert(anari->instances.end(),instances.begin(),
+                                        instances.end());
 
                 if (trans->anariInstance == nullptr)
                     trans->anariInstance = anariNewInstance(anari->device);
@@ -2809,7 +2822,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anariSetParameter(anari->device,trans->anariInstance,"group",
                                   ANARI_GROUP,&anariGroup);
                 anariSetParameter(anari->device,trans->anariInstance,"transform",
-                                  ANARI_FLOAT32_MAT3x4,trans->matrix);
+                                  ANARI_FLOAT32_MAT3x4,(float*)&anari->trans);
 
                 anariCommit(anari->device,trans->anariInstance);
 
@@ -2817,6 +2830,8 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                 if (self->visible && notEmpty)
                     anari->instances.push_back(trans->anariInstance);
+
+                anari->trans = prevTrans;
             }
 
             break;
@@ -3174,6 +3189,7 @@ ASGError_t asgBuildANARIWorld(ASGObject obj, ANARIDevice device, ANARIWorld worl
     ANARI anari;
     anari.device = device;
     anari.flags = flags;
+    anari.trans = asg::makeIdentity<asg::Mat4x3f>();
     ASGVisitor visitor = asgCreateVisitor(visitANARIWorld,&anari,
                                           ASG_VISITOR_TRAVERSAL_TYPE_CHILDREN);
     asgObjectAccept(obj,visitor);
