@@ -362,6 +362,7 @@ namespace generic {
             else if (hr.bvhType == BVHType::Cylinders) {
                 const auto& inst = tlases.cylinderTLAS.primitive(hr.primitive_list_index);
                 baseHR.isect_pos += inst.trans_inv();
+                baseHR.isect_pos = inst.affine_inv() * baseHR.isect_pos;
                 n = get_normal(baseHR,tlases.cylinderTLAS);
                 n = transpose(inst.affine_inv()) * n;
                 //texColor = n;
