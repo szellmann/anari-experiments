@@ -830,6 +830,8 @@ namespace generic {
                 }
 
                 (*it)->surfaceImpl.triangleBVHInsts.clear();
+                (*it)->surfaceImpl.sphereBVHInsts.clear();
+                (*it)->surfaceImpl.cylinderBVHInsts.clear();
                 (*it)->surfaceImpl.materials.clear();
                 (*it)->lightImpl.lights.clear();
 
