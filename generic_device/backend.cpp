@@ -1,3 +1,9 @@
+// #define DEBUGGING 1
+
+#ifdef DEBUGGING
+#define VSNRAY_TILED_SCHED_CUDA_STYLE_THREAD_INTROSPECTION 1
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <functional>
@@ -59,16 +65,21 @@ namespace generic {
                             for (int x=r.rows().begin(); x!=r.rows().end(); ++x) {
                                  vec4f src = accumBuffer.color()[y*width()+x];
 
-                                 if (1) {
-                                     src.xyz() = linear_to_srgb(src.xyz());
-                                     int32_t r = clamp(int32_t(src.x*256.f),0,255);
-                                     int32_t g = clamp(int32_t(src.y*256.f),0,255);
-                                     int32_t b = clamp(int32_t(src.z*256.f),0,255);
-                                     int32_t a = clamp(int32_t(src.w*256.f),0,255);
-                                     uint32_t &dst = ((uint32_t*)colorPtr)[y*width()+x];
+                                if (1) {
+#if DEBUGGING
+                                    if (x==width()/2 || y==height()/2)
+                                        src.xyz() = vec3f(1.f)-src.xyz();
+#endif
 
-                                     dst = (r<<0) + (g<<8) + (b<<16) + (a<<24);
-                                 }
+                                    src.xyz() = linear_to_srgb(src.xyz());
+                                    int32_t r = clamp(int32_t(src.x*256.f),0,255);
+                                    int32_t g = clamp(int32_t(src.y*256.f),0,255);
+                                    int32_t b = clamp(int32_t(src.z*256.f),0,255);
+                                    int32_t a = clamp(int32_t(src.w*256.f),0,255);
+                                    uint32_t &dst = ((uint32_t*)colorPtr)[y*width()+x];
+
+                                    dst = (r<<0) + (g<<8) + (b<<16) + (a<<24);
+                                }
                             }
                         }
                     });
@@ -356,6 +367,22 @@ namespace generic {
                 //texColor = n;
                 //texColor = randomColor(hr.inst_id);
                 //texColor = randomColor(hr.primitive_list_index);
+#if DEBUGGING
+                if (launchIdx.x == launchDim.x/2 && launchIdx.y == launchDim.y/2)
+                    printf("A: (%f,%f,%f),(%f,%f,%f),(%f,%f,%f), T: (%f,%f,%f)\n",
+                           inst.affine_inv().col0.x,
+                           inst.affine_inv().col0.y,
+                           inst.affine_inv().col0.z,
+                           inst.affine_inv().col1.x,
+                           inst.affine_inv().col1.y,
+                           inst.affine_inv().col1.z,
+                           inst.affine_inv().col2.x,
+                           inst.affine_inv().col2.y,
+                           inst.affine_inv().col2.z,
+                           inst.trans_inv().x,
+                           inst.trans_inv().y,
+                           inst.trans_inv().z);
+#endif
             }
 
             int mat_id = hr.inst_id < 0 ? hr.geom_id : hr.inst_id;
