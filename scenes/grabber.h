@@ -10,18 +10,18 @@ namespace grabber
         float w2 = width*.5f;
         float h2 = height*.5f;
         float d2 = depth*.5f;
-        float* cubeVertex = new float[] {-w2,-h2,-d2,
-                                          w2,-h2,-d2,
-                                          w2, h2,-d2,
-                                         -w2, h2,-d2,
-                                          w2,-h2, d2,
-                                         -w2,-h2, d2,
-                                         -w2, h2, d2,
-                                          w2, h2, d2};
+        float* cubeVertex = new float[24] {-w2,-h2,-d2,
+                                            w2,-h2,-d2,
+                                            w2, h2,-d2,
+                                           -w2, h2,-d2,
+                                            w2,-h2, d2,
+                                           -w2,-h2, d2,
+                                           -w2, h2, d2,
+                                            w2, h2, d2};
 
-        uint32_t* cubeIndex = new uint32_t[] {0,1,2, 0,2,3, 4,5,6, 4,6,7,
-                                              1,4,7, 1,7,2, 5,0,3, 5,3,6,
-                                              5,4,1, 5,1,0, 3,2,7, 3,7,6};
+        uint32_t* cubeIndex = new uint32_t[36] {0,1,2, 0,2,3, 4,5,6, 4,6,7,
+                                                1,4,7, 1,7,2, 5,0,3, 5,3,6,
+                                                5,4,1, 5,1,0, 3,2,7, 3,7,6};
         asg::TriangleGeometry cube = asg::newTriangleGeometry(
                 cubeVertex,NULL,NULL,8,cubeIndex,12,NULL,NULL,NULL,NULL);
 
@@ -30,10 +30,10 @@ namespace grabber
 
     asg::CylinderGeometry makeCylinder(float height, float radius)
     {
-        float* cylVertex = new float[] { 0.f,-height/2.f,0.f,
-                                         0.f,height/2.f,0.f };
-        float* cylRadius = new float[] { radius };
-        uint8_t* cylCap = new uint8_t[] { 1 };
+        float* cylVertex = new float[6] { 0.f,-height/2.f,0.f,
+                                          0.f,height/2.f,0.f };
+        float* cylRadius = new float[1] { radius };
+        uint8_t* cylCap = new uint8_t[1] { 1 };
         asg::CylinderGeometry cyl = asg::newCylinderGeometry(
                 cylVertex,cylRadius,nullptr,cylCap,2,nullptr,0);
 
