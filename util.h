@@ -107,6 +107,8 @@ static void printSceneGraph(ASGObject rootObj, bool verbose = false)
                         std::cout << ", addresses (V,VN,VC,I): ";
                         std::cout << vertices << ' ' << vertexNormals << ' '
                                   << vertexColors << ' ' << indices;
+                    } else if (type==ASG_TYPE_CYLINDER_GEOMETRY) {
+                        std::cout << ", cylinder-geom";
                     }
 
                     ASGMaterial mat;
@@ -132,8 +134,16 @@ static void printSceneGraph(ASGObject rootObj, bool verbose = false)
                 break;
             }
 
+            case ASG_TYPE_OBJECT: {
+                std::cout << indent << "Object" << nameOut;
+                std::cout << '\n';
+                break;
+            }
+
             default: {
-                std::cout << indent << "Object" << nameOut << '\n';
+                std::cout << indent << "Unknown" << nameOut;
+                std::cout << ", type: " << t;
+                std::cout << '\n';
                 break;
             }
         }

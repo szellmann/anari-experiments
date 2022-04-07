@@ -18,6 +18,7 @@ add_library(${PROJECT_NAME}
     array.cpp
     backend.cpp
     camera.cpp
+    cylindergeom.cpp
     device.cpp
     frame.cpp
     geometry.cpp

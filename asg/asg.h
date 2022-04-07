@@ -33,6 +33,7 @@ typedef int ASGType_t;
 #define ASG_TYPE_OBJECT                     0
 #define ASG_TYPE_TRIANGLE_GEOMETRY          1000
 #define ASG_TYPE_SPHERE_GEOMETRY            1001
+#define ASG_TYPE_CYLINDER_GEOMETRY          1004
 #define ASG_TYPE_MATERIAL                   1010
 #define ASG_TYPE_LIGHT                      1020
 #define ASG_TYPE_SURFACE                    1030
@@ -153,12 +154,10 @@ typedef struct {
  * ASGObject
  * ========================================================*/
 
-typedef void _ASGImpl;
-typedef _ASGImpl *ASGImpl;
-
 typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry,
-    *ASGSphereGeometry, *ASGMaterial, *ASGLight, *ASGSurface, *ASGSampler2D,
-    *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform, *ASGSelect, *ASGCamera;
+    *ASGSphereGeometry, *ASGCylinderGeometry, *ASGMaterial, *ASGLight, *ASGSurface,
+    *ASGSampler2D, *ASGLookupTable1D, *ASGStructuredVolume, *ASGTransform, *ASGSelect,
+    *ASGCamera;
 
 
 /* ========================================================
@@ -168,6 +167,17 @@ typedef struct _ASGObject *ASGObject, *ASGGeometry, *ASGTriangleGeometry,
 //Helpers
 ASGAPI size_t asgSizeOfDataType(ASGDataType_t type);
 
+/*! @defgroup ASGParam Parametric objects
+  ASG follows the principle that different rendering APIs expect different
+  parameters for defining objects such as lights, cameras, materials, etc. As
+  an example, a classic, fixed-function oriented rasterization-centric ANARI
+  device might support material and lighting models that align with the
+  traditional Blinn-Phong model and delta light sources, while a ray tracing
+  engine will support physically based materials and lights. ASG acknowledges
+  this and allows the user to specify named parameters of different scalar,
+  vector, or sampler types to allow for highest flexibility. ASGParam serves as
+  a base type for such specialized parametric object types */
+/*! @{*/
 ASGAPI ASGParam asgParam1i(const char* name, int v1);
 ASGAPI ASGParam asgParam2i(const char* name, int v1, int v2);
 ASGAPI ASGParam asgParam3i(const char* name, int v1, int v2, int v3);
@@ -187,13 +197,15 @@ ASGAPI ASGParam asgParam4fv(const char* name, float* v);
 ASGAPI ASGParam asgParamSampler2D(const char* name, ASGSampler2D samp);
 
 ASGAPI ASGError_t asgParamGetValue(ASGParam param, void* mem);
+/*! @}*/
 
-/*! Construct ref-counted objects
+/*! #defgroup ASGObject Ref-counted objects
   These are the base type that scene graphs are composed of; objects follow the
   same ref counting semantics as ANARI. Every object in the scene graph derives
   from this common object type. Constructor functions are denoted asgNewXXX(),
   where XXX is the name of the type; this naming scheme indicates that the type
   is derived from ASGObject */
+/*! @{*/
 ASGAPI ASGObject asgNewObject();
 ASGAPI ASGError_t asgRelease(ASGObject obj);
 ASGAPI ASGError_t asgRetain(ASGObject obj);
@@ -217,19 +229,25 @@ ASGAPI ASGError_t asgObjectGetParentPaths(ASGObject obj, ASGObject target,
                                           ASGObject** paths, int** pathLengths,
                                           int* numPaths);
 ASGAPI ASGError_t asgObjectAccept(ASGObject obj, ASGVisitor visitor);
+/*! @}*/
 
-// Visitor
+/*! @defgroup ASGVisitor Visitor */
+/*! @{*/
 ASGAPI ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGVisitor, ASGObject, void*),
                                    void* userData,
                                    ASGVisitorTraversalType_t traversalType);
 ASGAPI ASGError_t asgDestroyVisitor(ASGVisitor visitor);
 ASGAPI ASGError_t asgVisitorApply(ASGVisitor visitor, ASGObject obj);
+/*! @}*/
 
-/*! Construct select node
-  Select nodes are group nodes that store a visibility flag for each child node.
-  When a child node is added, its visibility is set to @param defaultVisibility.
-  Subtrees that are set to invisible are culled by the visitors that generate
+/*! @defgroup ASGSelect Select nodes
+  Select nodes are group nodes that store a visibility flag for each child node
   ANARI groups/worlds */
+/*! @{*/
+
+/*! Construct select node. Subtrees that are set to invisible are later culled
+  by visitors.@param defaultVisibility Visibility assigned to newly added
+  children */
 ASGAPI ASGSelect asgNewSelect(ASGBool_t defaultVisibility ASG_DFLT_PARAM(ASG_TRUE));
 ASGAPI ASGError_t asgSelectSetDefaultVisibility(ASGSelect select,
                                                 ASGBool_t defaultVisibility);
@@ -239,41 +257,53 @@ ASGAPI ASGError_t asgSelectSetChildVisible(ASGSelect select, int childID,
                                            ASGBool_t visible);
 ASGAPI ASGError_t asgSelectGetChildVisible(ASGSelect select, int childID,
                                            ASGBool_t*visible);
+/*! @}*/
 
-// Camera
+/*! @defgroup ASGCamera Cameras */
+/*! @{*/
 ASGAPI ASGCamera asgNewCamera(const char* cameraType);
 ASGAPI ASGError_t asgCameraGetType(ASGCamera camera, const char** cameraType);
 ASGAPI ASGError_t asgCameraSetParam(ASGCamera camera, ASGParam param);
 ASGAPI ASGError_t asgCameraGetParam(ASGCamera camera, const char* paramName,
                                     ASGParam* param);
+/*! @}*/
 
-/*! Construct materials
-  Materials intentionally are simple collections of @see ASGParam's; the
+/*! @defgroup ASGMaterial Materials
+  Materials intentionally are simple collections of ASGParam's; the
   application, and also the ANARI implementation, are relatively free to
   interpret these in any way imaginable. Materials are directly placed in the
   scene graph where they affect all the surfaces etc. underneath */
+/*! @{*/
 ASGAPI ASGMaterial asgNewMaterial(const char* materialType);
 ASGAPI ASGError_t asgMaterialGetType(ASGMaterial material, const char** materialType);
 ASGAPI ASGError_t asgMaterialSetParam(ASGMaterial material, ASGParam param);
 ASGAPI ASGError_t asgMaterialGetParam(ASGMaterial material, const char* paramName,
                                       ASGParam* param);
+/*! @}*/
 
-/*! Construct lights
-  Similar to materials, lights are just collecionts of @see ASGParam's. This
-  allows the user to define more complicated lights such as area lights, HDRI,
-  etc. */
+/*! @defgroup ASGLight Lights
+  Similar to materials, lights are just collecionts of ASGParam's. This allows
+  the user to define more complicated lights such as area lights, HDRI, etc. */
+/*! @{*/
 ASGAPI ASGLight asgNewLight(const char* lightType);
 ASGAPI ASGError_t asgLightGetType(ASGLight light, const char** lightType);
 ASGAPI ASGError_t asgLightSetParam(ASGLight light, ASGParam param);
 ASGAPI ASGError_t asgLightGetParam(ASGLight light, const char* paramName,
                                    ASGParam* param);
+/*! @}*/
 
 // Geometries
 ASGAPI ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals,
                                                   float* vertexColors,
                                                   uint32_t numVertices, uint32_t* indices,
                                                   uint32_t numIncidices,
-                                                  ASGFreeFunc freeFunc
+                                                  ASGFreeFunc freeVertices
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeNormals
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeColors
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeIndices
                                                   ASG_DFLT_PARAM(NULL));
 // TODO: special handling for 64-bit triangle indices (asgNewTriangleGeometry64?)
 ASGAPI ASGError_t asgTriangleGeometryGetVertices(ASGTriangleGeometry geom,
@@ -289,11 +319,33 @@ ASGAPI ASGError_t asgTriangleGeometryGetIndices(ASGTriangleGeometry geom,
 ASGAPI ASGError_t asgTriangleGeometryGetNumIndices(ASGTriangleGeometry geom,
                                                    uint32_t* numIndices);
 
-ASGAPI ASGSphereGeometry asgNewSphereGeometry(float* positions, float* radii,
-                                              float* colors, uint32_t numSpheres,
+ASGAPI ASGSphereGeometry asgNewSphereGeometry(float* vertices, float* radii,
+                                              float* vertexColors, uint32_t numVertices,
                                               uint32_t* indices, uint32_t numIndices,
                                               float defaultRadius ASG_DFLT_PARAM(1.f),
-                                              ASGFreeFunc freeFunc ASG_DFLT_PARAM(NULL));
+                                              ASGFreeFunc freeVertices
+                                              ASG_DFLT_PARAM(NULL),
+                                              ASGFreeFunc freeRadii ASG_DFLT_PARAM(NULL),
+                                              ASGFreeFunc freeColors
+                                              ASG_DFLT_PARAM(NULL),
+                                              ASGFreeFunc freeIndices
+                                              ASG_DFLT_PARAM(NULL));
+
+ASGAPI ASGCylinderGeometry asgNewCylinderGeometry(float* vertices, float* radii,
+                                                  float* vertexColors, uint8_t* caps,
+                                                  uint32_t numVertices,
+                                                  uint32_t* indices, uint32_t numIndices,
+                                                  float defaultRadius ASG_DFLT_PARAM(1.f),
+                                                  ASGFreeFunc freeVertices
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeRadii
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeColors
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeCaps
+                                                  ASG_DFLT_PARAM(NULL),
+                                                  ASGFreeFunc freeIndices
+                                                  ASG_DFLT_PARAM(NULL));
 
 ASGAPI ASGError_t asgGeometryComputeBounds(ASGGeometry geom,
                                            float* minX, float* minY, float* minZ,
@@ -315,7 +367,8 @@ ASGAPI ASGError_t asgTransformTranslate(ASGTransform trans, float xyz[3]);
 
 // RGBA luts
 ASGAPI ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntries,
-                                            ASGFreeFunc freeFunc);
+                                            ASGFreeFunc freeRGB ASG_DFLT_PARAM(NULL),
+                                            ASGFreeFunc freeAlpha ASG_DFLT_PARAM(NULL));
 ASGAPI ASGError_t asgLookupTable1DGetRGB(ASGLookupTable1D lut, float** rgb);
 ASGAPI ASGError_t asgLookupTable1DGetAlpha(ASGLookupTable1D lut, float** alpha);
 ASGAPI ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut,
@@ -325,8 +378,9 @@ ASGAPI ASGError_t asgLookupTable1DGetNumEntries(ASGLookupTable1D lut,
 ASGAPI ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width,
                                                   int32_t height, int32_t depth,
                                                   ASGDataType_t type,
-                                                  ASGFreeFunc freeFunc);
-ASGAPI ASGError_t asgStructuredVolumeGetData(ASGStructuredVolume vol, void* data);
+                                                  ASGFreeFunc freeData
+                                                  ASG_DFLT_PARAM(NULL));
+ASGAPI ASGError_t asgStructuredVolumeGetData(ASGStructuredVolume vol, void** data);
 ASGAPI ASGError_t asgStructuredVolumeGetDims(ASGStructuredVolume vol, int32_t* width,
                                              int32_t* height, int32_t* depth);
 ASGAPI ASGError_t asgStructuredVolumeGetDatatype(ASGStructuredVolume vol,
@@ -344,11 +398,13 @@ ASGAPI ASGError_t asgStructuredVolumeSetLookupTable1D(ASGStructuredVolume vol,
 ASGAPI ASGError_t asgStructuredVolumeGetLookupTable1D(ASGStructuredVolume vol,
                                                       ASGLookupTable1D* lut);
 
-// I/O
+/*! @defgroup IO I/O */
+/*! @{*/
 ASGAPI ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags);
 ASGAPI ASGError_t asgLoadPBRT(ASGObject obj, const char* fileName, uint64_t flags);
 ASGAPI ASGError_t asgLoadVOLKIT(ASGStructuredVolume vol, const char* fileName,
                                 uint64_t flags);
+/*! @}*/
 
 // Procedural volumes, builtin materials, delta lights, RGBA LUTs, etc.
 ASGAPI ASGError_t asgMakeMarschnerLobb(ASGStructuredVolume vol);

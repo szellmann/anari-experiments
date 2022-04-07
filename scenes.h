@@ -112,7 +112,8 @@ struct SelectTest : Scene
                                    5,4,1, 5,1,0, 3,2,7, 3,7,6};
 
         ASGTriangleGeometry boxGeom = asgNewTriangleGeometry(vertex,NULL,NULL,8,
-                                                             index,12,NULL);
+                                                             index,12,NULL,NULL,NULL,
+                                                             NULL);
 
         // 1st
         ASGMaterial mat1 = asgNewMaterial("");
@@ -531,6 +532,7 @@ struct Model : Scene
 
     virtual bool handleMouseMove(visionaray::mouse_event const& event)
     {
+        // modelMatrix = modelMatrix * visionaray::mat4::translation(picked.center);
         visionaray::mat4x3 m4x3;
         m4x3.col0 = modelMatrix.col0.xyz();
         m4x3.col1 = modelMatrix.col1.xyz();
@@ -715,29 +717,15 @@ struct Model : Scene
             }
         }
 
-        // Rotation
-        // if (rotManip == nullptr) {
-        //     rotManip = std::make_shared<visionaray::rotate_manipulator>(
-        //         cam,
-        //         modelMatrix,
-        //         visionaray::vec3f(bbox.size().z*.5f),
-        //         visionaray::mouse::Left,
-        //         3
-        //     );
-        // }
+        if (doRotate) {
+            rotManip->set_active(true);
 
-        // if (doRotate && !rotManip->active()) {
-
-        // }
-
-        // rotManip->set_active(doRotate);
-
-        // if (rotManip->active())
-        //      rotManip->render();
-
+            if (rotManip->active())
+                rotManip->render();
+        }
 
         if (doMove) {
-            transManip->set_active(doMove);
+            transManip->set_active(true);
 
             if (transManip->active())
                 transManip->render();
@@ -811,58 +799,74 @@ struct Model : Scene
 
                 picked.transform = trans;
 
-                if (manip==2) {
-                    doRotate = true;
-                } else {
-                    // Translation
-                    {
-                        visionaray::aabb bounds;
-                        ASGTriangleGeometry geom = picked.geomHandle;
-                        ASG_SAFE_CALL(asgGeometryComputeBounds(
-                                (ASGGeometry)geom,
-                                &bounds.min.x,&bounds.min.y,&bounds.min.z,
-                                &bounds.max.x,&bounds.max.y,&bounds.max.z));
+                if (manip==2 || manip==3) {
+                    visionaray::aabb bounds;
 
-                        auto verts = visionaray::compute_vertices(bounds);
+                    ASGTriangleGeometry geom = picked.geomHandle;
+                    ASG_SAFE_CALL(asgGeometryComputeBounds(
+                            (ASGGeometry)geom,
+                            &bounds.min.x,&bounds.min.y,&bounds.min.z,
+                            &bounds.max.x,&bounds.max.y,&bounds.max.z));
 
-                        for (auto it = picked.parentPath.rbegin(); it != picked.parentPath.rend(); ++it) {
-                            ASGType_t type;
-                            ASG_SAFE_CALL(asgGetType(*it,&type));
+                    auto verts = visionaray::compute_vertices(bounds);
 
-                            if (type==ASG_TYPE_TRANSFORM) {
-                                float m[12];
-                                ASG_SAFE_CALL(asgTransformGetMatrix((ASGTransform)*it,m));
-                                visionaray::mat4x3 m4x3(m);
+                    for (auto it = picked.parentPath.rbegin(); it != picked.parentPath.rend(); ++it) {
+                        ASGType_t type;
+                        ASG_SAFE_CALL(asgGetType(*it,&type));
 
-                                for (int i=0; i<8; ++i) {
-                                    //verts[i] = (verts[i]*m4x3).xyz();
-                                    verts[i] = m4x3*visionaray::vec4f(verts[i],1.f);
-                                }
+                        if (type==ASG_TYPE_TRANSFORM) {
+                            float m[12];
+                            ASG_SAFE_CALL(asgTransformGetMatrix((ASGTransform)*it,m));
+                            visionaray::mat4x3 m4x3(m);
+
+                            for (int i=0; i<8; ++i) {
+                                //verts[i] = (verts[i]*m4x3).xyz();
+                                verts[i] = m4x3*visionaray::vec4f(verts[i],1.f);
                             }
                         }
-
-                        bounds.invalidate();
-                        for (int i=0; i<8; ++i) {
-                            bounds.insert(verts[i]);
-                        }
-
-                        //std::cout << modelMatrix << '\n';
-                        //std::cout << bounds.size() << '\n';
-                        //printSceneGraph(root,true);
-
-                        transManip = std::make_shared<visionaray::translate_manipulator>(
-                            cam,
-                            modelMatrix,
-                            visionaray::vec3f(bounds.size()*.0006f), // TODO: largest
-                            visionaray::mouse::Left,
-                            3
-                        );
-
-                        std::cout << bounds.center() << '\n';
-                        transManip->set_position(bounds.center());
                     }
-                    doMove = true;
+
+                    bounds.invalidate();
+                    for (int i=0; i<8; ++i) {
+                        bounds.insert(verts[i]);
+                    }
+
+                    picked.center = bounds.center();
+
+                    // modelMatrix = visionaray::mat4::translation(-picked.center) * modelMatrix;
                 }
+
+                if (manip==2) {
+                    // Rotation
+
+                    rotManip = std::make_shared<visionaray::rotate_manipulator>(
+                        cam,
+                        modelMatrix,
+                        visionaray::vec3f(bbox.size().z*.5f),
+                        visionaray::mouse::Left,
+                        3
+                    );
+
+                    rotManip->set_position(picked.center);
+                } else {
+                    // Translation
+                    //std::cout << modelMatrix << '\n';
+                    //std::cout << bounds.size() << '\n';
+                    //printSceneGraph(root,true);
+
+                    transManip = std::make_shared<visionaray::translate_manipulator>(
+                        cam,
+                        modelMatrix,
+                        visionaray::vec3f(bbox.size()*.0006f), // TODO: largest
+                        visionaray::mouse::Left,
+                        3
+                    );
+
+                    transManip->set_position(picked.center);
+                }
+
+                doRotate = manip==2;
+                doMove   = manip==3;
 
             } else if (manip==1 && doDelete) {
                 ASGSurface surf = picked.handle;
@@ -909,7 +913,10 @@ struct Model : Scene
         ASGTriangleGeometry geomHandle = nullptr;
         TriangleGeomPipelineGL glPipeline;
         visionaray::mouse::pos downPos;
-        ASGTransform transform = nullptr; // the parent transform
+        // the parent transform
+        ASGTransform transform = nullptr;
+        // center of rotation, which is the object's bbox center
+        visionaray::vec3 center {0.f,0.f,0.f};
         std::vector<ASGObject> parentPath;
     } picked;
 
@@ -955,7 +962,8 @@ struct FilmStudio : Scene
         ASGTriangleGeometry groundPlaneGeom = asgNewTriangleGeometry(groundPlaneVertex,
                                                                      NULL,NULL,4,
                                                                      groundPlaneIndex,
-                                                                     2,NULL);
+                                                                     2,NULL,NULL,NULL,
+                                                                     NULL);
 
         ASGSurface groundPlane = asgNewSurface(groundPlaneGeom,NULL);
 
@@ -987,7 +995,8 @@ struct FilmStudio : Scene
                                    5,4,1, 5,1,0, 3,2,7, 3,7,6};
 
         ASGTriangleGeometry boxGeom = asgNewTriangleGeometry(vertex,NULL,NULL,8,
-                                                             index,12,NULL);
+                                                             index,12,NULL,NULL,NULL,
+                                                             NULL);
         // ASGSurface boxSurf = asgNewSurface(boxGeom,NULL);
         // ASG_SAFE_CALL(asgObjectAddChild(camTransform1,boxSurf));
 

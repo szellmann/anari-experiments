@@ -2,6 +2,7 @@
 
 #include "ao.hpp"
 #include "camera.hpp"
+#include "cylindergeom.hpp"
 #include "frame.hpp"
 #include "group.hpp"
 #include "instance.hpp"
@@ -38,6 +39,8 @@ namespace generic {
         void commit(generic::Frame& frame);
 
         void commit(generic::TriangleGeom& geom);
+
+        void commit(generic::CylinderGeom& geom);
 
         void commit(generic::Matte& mat);
 

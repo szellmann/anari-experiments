@@ -639,7 +639,26 @@ namespace asg
     }
 
 
+    //--- MatN --------------------------------------------
+
+    template <typename MatN>
+    ASG_FUNC inline MatN makeIdentity()
+    {
+        return MatN{};
+    }
+
+
     //--- Mat3f -------------------------------------------
+
+    template <>
+    ASG_FUNC inline Mat3f makeIdentity()
+    {
+        return Mat3f{
+            { 1.f, 0.f, 0.f },
+            { 0.f, 1.f, 0.f },
+            { 0.f, 0.f, 1.f }
+        };
+    }
 
     ASG_FUNC inline Mat3f makeRotation(Vec3f const& axis, float angle)
     {
@@ -684,7 +703,19 @@ namespace asg
         return out;
     }
 
+
     //--- Mat4x3f -----------------------------------------
+
+    template <>
+    ASG_FUNC inline Mat4x3f makeIdentity()
+    {
+        return Mat4x3f{
+            { 1.f, 0.f, 0.f },
+            { 0.f, 1.f, 0.f },
+            { 0.f, 0.f, 1.f },
+            { 0.f, 0.f, 0.f }
+        };
+    }
 
     ASG_FUNC inline Vec3f operator*(Mat4x3f const& a, Vec4f const& b)
     {
@@ -703,6 +734,12 @@ namespace asg
             a.x * b.col2.x + a.y * b.col2.y + a.z * b.col2.z,
             a.x * b.col3.x + a.y * b.col3.y + a.z * b.col3.z
             };
+    }
+
+    inline std::ostream& operator<<(std::ostream& out, Mat4x3f const& m)
+    {
+        out << '(' << m.col0 << ',' << m.col1 << ',' << m.col2 << ',' << m.col3 << ')';
+        return out;
     }
 
 } // asg

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <type_traits>
+#include "cylindergeom.hpp"
 #include "geometry.hpp"
 #include "logging.hpp"
 #include "trianglegeom.hpp"
@@ -53,6 +54,8 @@ namespace generic {
     {
         if (strncmp(subtype,"triangle",8)==0)
             return std::make_unique<TriangleGeom>();
+        else if (strncmp(subtype,"cylinder",8)==0)
+            return std::make_unique<CylinderGeom>();
         else {
             LOG(logging::Level::Error) << "Geometry subtype unavailable: " << subtype;
             return std::make_unique<Geometry>();

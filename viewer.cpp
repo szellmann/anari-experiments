@@ -15,6 +15,7 @@
 #include <asg/asg.h>
 #include <anari/anari_cpp.hpp>
 #include <imgui.h>
+#include "scenes/grabber.h"
 #include "scenes.h"
 #include "util.h"
 
@@ -278,6 +279,8 @@ struct Viewer : visionaray::viewer_glut
                 scene = new SphereTest(device,world);
             else if (fileName=="select-test")
                 scene = new SelectTest(device,world);
+            else if (fileName=="grabber")
+                scene = new GrabberGame(device,world);
             else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
                 scene = new VolumeScene(device,world,fileName.c_str());
             else
