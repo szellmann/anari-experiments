@@ -10,7 +10,7 @@
 #if ASG_HAVE_ASSIMP
 #include <assimp/DefaultLogger.hpp>
 #include <assimp/Importer.hpp>
-#include <assimp/Matrix4x4.h>
+//#include <assimp/Matrix4x4.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 #endif
@@ -361,7 +361,7 @@ void _asgApplyVisible(ASGVisitor _visitor, struct _ASGObject* _obj, ASGBool_t* v
 
 ASGObject asgNewObject()
 {
-    ASGObject obj = (ASGObject)calloc(1,sizeof(struct _ASGObject));
+    ASGObject obj = new _ASGObject;
     obj->type = ASG_TYPE_OBJECT;
     obj->accept = _asgAccept;
     obj->addChild = [](ASGObject obj, ASGObject child) {
@@ -653,7 +653,7 @@ ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGVisitor, ASGObject, void*),
                             void* userData,
                             ASGVisitorTraversalType_t traversalType)
 {
-    ASGVisitor visitor = (ASGVisitor)calloc(1,sizeof(_ASGVisitor));
+    ASGVisitor visitor = new _ASGVisitor;
     visitor->visit = (ASGVisitFunc)visitFunc;
     visitor->userData = userData;
     visitor->traversalType = traversalType;
@@ -664,7 +664,7 @@ ASGVisitor asgCreateVisitor(void (*visitFunc)(ASGVisitor, ASGObject, void*),
 
 ASGError_t asgDestroyVisitor(ASGVisitor visitor)
 {
-    free(visitor);
+    delete visitor;
     return ASG_ERROR_NO_ERROR;
 }
 
@@ -687,7 +687,7 @@ ASGSelect asgNewSelect(ASGBool_t defaultVisibility)
 {
     ASGSelect select = (ASGSelect)asgNewObject();
     select->type = ASG_TYPE_SELECT;
-    select->impl = (Select*)calloc(1,sizeof(Select));
+    select->impl = new Select;
     ((Select*)select->impl)->defaultVisibility = defaultVisibility;
 
     // Overwrite to add the child node, and to set the
@@ -739,7 +739,7 @@ ASGCamera asgNewCamera(const char* cameraType)
 {
     ASGCamera camera = (ASGCamera)asgNewObject();
     camera->type = ASG_TYPE_CAMERA;
-    camera->impl = (Camera*)calloc(1,sizeof(Camera));
+    camera->impl = new Camera;
     ((Camera*)camera->impl)->type = cameraType;
     return camera;
 }
@@ -781,7 +781,7 @@ ASGMaterial asgNewMaterial(const char* materialType)
 {
     ASGMaterial material = (ASGMaterial)asgNewObject();
     material->type = ASG_TYPE_MATERIAL;
-    material->impl = (Material*)calloc(1,sizeof(Material));
+    material->impl = new Material;
     ((Material*)material->impl)->type = materialType;
     return material;
 }
@@ -824,7 +824,7 @@ ASGLight asgNewLight(const char* lightType)
 {
     ASGLight light = (ASGLight)asgNewObject();
     light->type = ASG_TYPE_LIGHT;
-    light->impl = (Light*)calloc(1,sizeof(Light));
+    light->impl = new Light;
     ((Light*)light->impl)->type = lightType;
     return light;
 }
@@ -893,7 +893,7 @@ ASGTriangleGeometry asgNewTriangleGeometry(float* vertices, float* vertexNormals
     ASGTriangleGeometry geom = (ASGTriangleGeometry)asgNewObject();
     geom->type = ASG_TYPE_TRIANGLE_GEOMETRY;
     geom->release = _asgReleaseTriangleGeometry;
-    geom->impl = (TriangleGeom*)calloc(1,sizeof(TriangleGeom));
+    geom->impl = new TriangleGeom;
     ((TriangleGeom*)geom->impl)->vertices = vertices;
     ((TriangleGeom*)geom->impl)->vertexNormals = vertexNormals;
     ((TriangleGeom*)geom->impl)->vertexColors = vertexColors;
@@ -980,7 +980,7 @@ ASGSphereGeometry asgNewSphereGeometry(float* vertices, float* radii,
 {
     ASGSphereGeometry geom = (ASGSphereGeometry)asgNewObject();
     geom->type = ASG_TYPE_SPHERE_GEOMETRY;
-    geom->impl = (SphereGeom*)calloc(1,sizeof(SphereGeom));
+    geom->impl = new SphereGeom;
     ((SphereGeom*)geom->impl)->vertices = vertices;
     ((SphereGeom*)geom->impl)->radii = radii;
     ((SphereGeom*)geom->impl)->vertexColors = vertexColors;
@@ -1035,7 +1035,7 @@ ASGAPI ASGCylinderGeometry asgNewCylinderGeometry(float* vertices, float* radii,
 {
     ASGCylinderGeometry geom = (ASGCylinderGeometry)asgNewObject();
     geom->type = ASG_TYPE_CYLINDER_GEOMETRY;
-    geom->impl = (CylinderGeom*)calloc(1,sizeof(CylinderGeom));
+    geom->impl = new CylinderGeom;
     ((CylinderGeom*)geom->impl)->vertices = vertices;
     ((CylinderGeom*)geom->impl)->radii = radii;
     ((CylinderGeom*)geom->impl)->vertexColors = vertexColors;
@@ -1303,7 +1303,7 @@ ASGSurface asgNewSurface(ASGGeometry geom, ASGMaterial mat)
 {
     ASGSurface surf = (ASGSurface)asgNewObject();
     surf->type = ASG_TYPE_SURFACE;
-    surf->impl = (Surface*)calloc(1,sizeof(Surface));
+    surf->impl = new Surface;
     ((Surface*)surf->impl)->geometry = geom;
     ((Surface*)surf->impl)->material = mat;
     return surf;
@@ -1335,7 +1335,7 @@ ASGTransform asgNewTransform(float initialMatrix[12], ASGMatrixFormat_t format)
 {
     ASGTransform trans = (ASGTransform)asgNewObject();
     trans->type = ASG_TYPE_TRANSFORM;
-    trans->impl = (Transform*)calloc(1,sizeof(Transform));
+    trans->impl = new Transform;
     std::memcpy(((Transform*)trans->impl)->matrix,initialMatrix,12*sizeof(float));
     return trans;
 }
@@ -1390,7 +1390,7 @@ ASGLookupTable1D asgNewLookupTable1D(float* rgb, float* alpha, int32_t numEntrie
 {
     ASGLookupTable1D lut = (ASGLookupTable1D)asgNewObject();
     lut->type = ASG_TYPE_LOOKUP_TABLE1D;
-    lut->impl = (LUT1D*)calloc(1,sizeof(LUT1D));
+    lut->impl = new LUT1D;
     ((LUT1D*)lut->impl)->rgb = rgb;
     ((LUT1D*)lut->impl)->alpha = alpha;
     ((LUT1D*)lut->impl)->numEntries = numEntries;
@@ -1443,7 +1443,7 @@ ASGStructuredVolume asgNewStructuredVolume(void* data, int32_t width, int32_t he
 {
     ASGStructuredVolume vol = (ASGStructuredVolume)asgNewObject();
     vol->type = ASG_TYPE_STRUCTURED_VOLUME;
-    vol->impl = (StructuredVolume*)calloc(1,sizeof(StructuredVolume));
+    vol->impl = new StructuredVolume;
     ((StructuredVolume*)vol->impl)->data = data;
     ((StructuredVolume*)vol->impl)->width = width;
     ((StructuredVolume*)vol->impl)->height = height;
