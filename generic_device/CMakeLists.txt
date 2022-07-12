@@ -31,6 +31,7 @@ add_library(${PROJECT_NAME}
     pathtracer.cpp
     perspectivecamera.cpp
     pointlight.cpp
+    quadlight.cpp
     renderer.cpp
     resource.cpp
     spatialfield.cpp

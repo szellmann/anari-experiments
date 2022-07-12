@@ -12,6 +12,7 @@
 #include "pathtracer.hpp"
 #include "perspectivecamera.hpp"
 #include "pointlight.hpp"
+#include "quadlight.hpp"
 #include "structuredregular.hpp"
 #include "surface.hpp"
 #include "trianglegeom.hpp"
@@ -35,6 +36,8 @@ namespace generic {
         void commit(generic::Light& light);
 
         void commit(generic::PointLight& light);
+
+        void commit(generic::QuadLight& light);
 
         void commit(generic::Frame& frame);
 

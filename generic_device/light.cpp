@@ -4,6 +4,7 @@
 #include "light.hpp"
 #include "logging.hpp"
 #include "pointlight.hpp"
+#include "quadlight.hpp"
 
 namespace generic {
 
@@ -63,6 +64,8 @@ namespace generic {
     {
         if (strncmp(subtype,"point",5)==0)
             return std::make_unique<PointLight>();
+        else if (strncmp(subtype,"quad",4)==0)
+            return std::make_unique<QuadLight>();
         else {
             LOG(logging::Level::Error) << "Light subtype unavailable: " << subtype;
             return std::make_unique<Light>();

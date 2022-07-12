@@ -136,6 +136,12 @@ namespace generic {
         {
             using SP = std::shared_ptr<Light>;
 
+            enum class Type { Point, Quad, };
+
+            enum class Side { Front, Back, Both, };
+
+            Type type;
+
             vec3f color{1.f,1.f,1.f};
 
             struct {
@@ -147,6 +153,18 @@ namespace generic {
                 bool intensityWasSet = false;
                 bool powerWasSet = false;
             } asPointLight;
+
+            struct {
+                vec3f position{0.f,0.f,0.f};
+                vec3f edge1{1.f,0.f,0.f};
+                vec3f edge2{0.f,1.f,0.f};
+                float intensity = 1.f;
+                float power = 1.f;
+                float radiance = 1.f;
+                Side side = Side::Front;
+                bool intensityWasSet = false;
+                bool powerWasSet = false;
+            } asQuadLight;
 
             ANARILight handle = nullptr;
         };
@@ -298,11 +316,13 @@ namespace generic {
             SphereTLAS::bvh_ref sphereTLAS;
             CylinderTLAS::bvh_ref cylinderTLAS;
             SphereTLAS::bvh_ref sphericalLightTLAS;
+            TriangleTLAS::bvh_ref triangleLightTLAS;
         };
 
         typedef generic_material<emissive<float>,matte<float>> GenericMaterial;
         typedef area_light<float,basic_sphere<float>> SphericalLight;
-        typedef generic_light<point_light<float>,spot_light<float>,SphericalLight> GenericLight;
+        typedef area_light<float,basic_triangle<3,float>> TriangleLight;
+        typedef generic_light<point_light<float>,spot_light<float>,SphericalLight,TriangleLight> GenericLight;
 
         typedef kernel_params<
             unspecified_binding,
@@ -319,7 +339,7 @@ namespace generic {
 
         typedef hit_record_bvh<ray,hit_record_bvh_inst<ray,hit_record<ray,primitive<unsigned>>>> BaseHitRecord;
 
-        enum class BVHType { Triangles, Spheres, Cylinders, SphericalLights, };
+        enum class BVHType { Triangles, Spheres, Cylinders, SphericalLights, TriangleLights, };
         struct HitRecord : BaseHitRecord
         {
             BVHType bvhType;
@@ -425,6 +445,13 @@ namespace generic {
                 //update_if(hr,sphericalLightHR,is_closer(sphericalLightHR,hr));
             }
 
+            if (tlases.triangleLightTLAS.num_primitives() > 0) {
+                HitRecord triangleLightHR;
+                *((BaseHitRecord*)&triangleLightHR) = closest_hit(r,&tlases.triangleLightTLAS,&tlases.triangleLightTLAS+1);
+                triangleLightHR.bvhType = BVHType::TriangleLights;
+                update_if(hr,triangleLightHR,is_closer(triangleLightHR,hr));
+            }
+
             return hr;
         }
 
@@ -518,6 +545,8 @@ namespace generic {
                 aligned_vector<GenericLight> lights;
                 SphereTLAS sphereTLAS;
                 SphereBVH sphereBVH;
+                TriangleTLAS triangleTLAS;
+                TriangleBVH triangleBVH;
                 aligned_vector<GenericMaterial> areaLightMaterials; // only emissive
             } lightImpl;
 
@@ -616,6 +645,7 @@ namespace generic {
                         tlases.sphereTLAS = world.surfaceImpl.sphereTLAS.ref();
                         tlases.cylinderTLAS = world.surfaceImpl.cylinderTLAS.ref();
                         tlases.sphericalLightTLAS = world.lightImpl.sphereTLAS.ref();
+                        tlases.triangleLightTLAS = world.lightImpl.triangleTLAS.ref();
 
                         aligned_vector<GenericMaterial> materials(
                             world.surfaceImpl.materials.size()+world.lightImpl.areaLightMaterials.size());
@@ -789,6 +819,7 @@ namespace generic {
             Surface = 6,
             Light = 6,
             PointLight = 6,
+            QuadLight = 6,
             Instance = 5,
             World = 4,
             Camera = 3,
@@ -1041,39 +1072,68 @@ namespace generic {
 
                         assert(lit != backend::lights.end());
 
-                        // TODO: check if this _is_ a point light!
-                        if ((*lit)->asPointLight.radius > 0.f) {
-                            float intensityScale = (*lit)->asPointLight.radiance;
-                            if ((*lit)->asPointLight.powerWasSet)
-                                intensityScale = (*lit)->asPointLight.power;
-                            if ((*lit)->asPointLight.intensityWasSet)
-                                intensityScale = (*lit)->asPointLight.intensity;
-                            basic_sphere<float> sphere;
-                            sphere.center = (*lit)->asPointLight.position;
-                            sphere.radius = (*lit)->asPointLight.radius;
-                            sphere.prim_id = (unsigned)(*it)->lightImpl.lights.size();
-                            sphere.geom_id = (unsigned)(*it)->surfaceImpl.materials.size()+(unsigned)(*it)->lightImpl.lights.size();
-                            SphericalLight sl(sphere);
-                            sl.set_cl((*lit)->color);
-                            sl.set_kl(intensityScale);
-                            (*it)->lightImpl.lights.push_back(sl);
+                        if ((*lit)->type == Light::Type::Point) {
+                            if ((*lit)->asPointLight.radius > 0.f) {
+                                float intensityScale = (*lit)->asPointLight.radiance;
+                                if ((*lit)->asPointLight.powerWasSet)
+                                    intensityScale = (*lit)->asPointLight.power;
+                                if ((*lit)->asPointLight.intensityWasSet)
+                                    intensityScale = (*lit)->asPointLight.intensity;
+                                basic_sphere<float> sphere;
+                                sphere.center = (*lit)->asPointLight.position;
+                                sphere.radius = (*lit)->asPointLight.radius;
+                                sphere.prim_id = (unsigned)(*it)->lightImpl.lights.size();
+                                sphere.geom_id = (unsigned)(*it)->surfaceImpl.materials.size()+(unsigned)(*it)->lightImpl.lights.size();
+                                SphericalLight sl(sphere);
+                                sl.set_cl((*lit)->color);
+                                sl.set_kl(intensityScale);
+                                (*it)->lightImpl.lights.push_back(sl);
 
-                            emissive<float> mat;
-                            mat.ce() = from_rgb((*lit)->color);
-                            mat.ls() = intensityScale;
-                            (*it)->lightImpl.areaLightMaterials.push_back(mat);
-                        } else {
-                            float intensityScale = (*lit)->asPointLight.power;
-                            if ((*lit)->asPointLight.intensityWasSet)
-                                intensityScale = (*lit)->asPointLight.intensity;
-                            point_light<float> pl;
-                            pl.set_position((*lit)->asPointLight.position);
-                            pl.set_cl((*lit)->color);
-                            pl.set_kl(intensityScale);
-                            pl.set_constant_attenuation(1.f);
-                            pl.set_linear_attenuation(0.f);
-                            pl.set_quadratic_attenuation(0.f);
-                            (*it)->lightImpl.lights.push_back(pl);
+                                emissive<float> mat;
+                                mat.ce() = from_rgb((*lit)->color);
+                                mat.ls() = intensityScale;
+                                (*it)->lightImpl.areaLightMaterials.push_back(mat);
+                            } else {
+                                float intensityScale = (*lit)->asPointLight.power;
+                                if ((*lit)->asPointLight.intensityWasSet)
+                                    intensityScale = (*lit)->asPointLight.intensity;
+                                point_light<float> pl;
+                                pl.set_position((*lit)->asPointLight.position);
+                                pl.set_cl((*lit)->color);
+                                pl.set_kl(intensityScale);
+                                pl.set_constant_attenuation(1.f);
+                                pl.set_linear_attenuation(0.f);
+                                pl.set_quadratic_attenuation(0.f);
+                                (*it)->lightImpl.lights.push_back(pl);
+                            }
+                        } else if ((*lit)->type == Light::Type::Quad) {
+                            float intensityScale = (*lit)->asQuadLight.radiance; // TODO: consolidate with sperical light
+                            if ((*lit)->asQuadLight.powerWasSet)
+                                intensityScale = (*lit)->asQuadLight.power;
+                            if ((*lit)->asQuadLight.intensityWasSet)
+                                intensityScale = (*lit)->asQuadLight.intensity;
+                            for (int i=0; i<2; ++i) { // Add as two triangles (TODO!)
+                                basic_triangle<3,float> tri;
+                                tri.v1 = (*lit)->asQuadLight.position;
+                                if (i==0) {
+                                    tri.e1 = (*lit)->asQuadLight.edge1;
+                                    tri.e2 = (*lit)->asQuadLight.edge1 + (*lit)->asQuadLight.edge2;
+                                } else {
+                                    tri.e1 = (*lit)->asQuadLight.edge1 + (*lit)->asQuadLight.edge2;
+                                    tri.e2 = (*lit)->asQuadLight.edge2;
+                                }
+                                tri.prim_id = (unsigned)(*it)->lightImpl.lights.size();
+                                tri.geom_id = (unsigned)(*it)->surfaceImpl.materials.size()+(unsigned)(*it)->lightImpl.lights.size();
+                                TriangleLight tl(tri);
+                                tl.set_cl((*lit)->color);
+                                tl.set_kl(intensityScale);
+                                (*it)->lightImpl.lights.push_back(tl);
+
+                                emissive<float> mat;
+                                mat.ce() = from_rgb((*lit)->color);
+                                mat.ls() = intensityScale;
+                                (*it)->lightImpl.areaLightMaterials.push_back(mat);
+                            }
                         }
                     }
                 }
@@ -1093,15 +1153,25 @@ namespace generic {
                 if (!(*it)->lightImpl.lights.empty()) {
                     lbvh_builder builder;
                     aligned_vector<basic_sphere<float>> spheres;
+                    aligned_vector<basic_triangle<3,float>> triangles;
+
                     for (size_t i=0; i<(*it)->lightImpl.lights.size(); ++i) {
                         if ((*it)->lightImpl.lights[i].as<SphericalLight>())
                             spheres.push_back((*it)->lightImpl.lights[i].as<SphericalLight>()->geometry());
+                        else if ((*it)->lightImpl.lights[i].as<TriangleLight>())
+                            triangles.push_back((*it)->lightImpl.lights[i].as<TriangleLight>()->geometry());
                     }
 
                     if (!spheres.empty()) {
                         (*it)->lightImpl.sphereBVH = builder.build(SphereBVH{},spheres.data(),spheres.size());
                         auto inst = (*it)->lightImpl.sphereBVH.inst({mat3x3::identity(),vec3f(0.f)});
                         (*it)->lightImpl.sphereTLAS = builder.build(SphereTLAS{},&inst,1);
+                    }
+
+                    if (!triangles.empty()) {
+                        (*it)->lightImpl.triangleBVH = builder.build(TriangleBVH{},triangles.data(),triangles.size());
+                        auto inst = (*it)->lightImpl.triangleBVH.inst({mat3x3::identity(),vec3f(0.f)});
+                        (*it)->lightImpl.triangleTLAS = builder.build(TriangleTLAS{},&inst,1);
                     }
                 }
 
@@ -1196,6 +1266,7 @@ namespace generic {
                     it = backend::lights.end()-1;
                 }
 
+                (*it)->type = Light::Type::Point;
                 (*it)->asPointLight.position = vec3f(light.position);
                 (*it)->asPointLight.intensity = light.intensity;
                 (*it)->asPointLight.power = light.power;
@@ -1204,6 +1275,41 @@ namespace generic {
                 (*it)->asPointLight.intensityWasSet = light.intensityWasSet;
                 (*it)->asPointLight.powerWasSet = light.powerWasSet;
             }, ExecutionOrder::PointLight);
+        }
+
+        void commit(generic::QuadLight& light)
+        {
+            enqueueCommit([&light]() {
+                auto it = std::find_if(backend::lights.begin(),backend::lights.end(),
+                                       [&light](const Light::SP& l) {
+                                           return l->handle == light.getResourceHandle();
+                                       });
+
+                if (it == backend::lights.end()) {
+                    Light::SP l = std::make_shared<Light>();
+                    l->handle = (ANARILight)light.getResourceHandle();
+                    backend::lights.push_back(l);
+                    it = backend::lights.end()-1;
+                }
+
+                Light::Side side = Light::Side::Front;
+                if (strncmp(light.side,"back",4)==0) {
+                    side = Light::Side::Back;
+                } else if (strncmp(light.side,"both",4)==0) {
+                    side = Light::Side::Both;
+                }
+
+                (*it)->type = Light::Type::Quad;
+                (*it)->asQuadLight.position = vec3f(light.position);
+                (*it)->asQuadLight.edge1 = vec3f(light.edge1);
+                (*it)->asQuadLight.edge2 = vec3f(light.edge2);
+                (*it)->asQuadLight.intensity = light.intensity;
+                (*it)->asQuadLight.power = light.power;
+                (*it)->asQuadLight.radiance = light.radiance;
+                (*it)->asQuadLight.side = side;
+                (*it)->asQuadLight.intensityWasSet = light.intensityWasSet;
+                (*it)->asQuadLight.powerWasSet = light.powerWasSet;
+            }, ExecutionOrder::QuadLight);
         }
 
         void commit(generic::Frame& frame)
