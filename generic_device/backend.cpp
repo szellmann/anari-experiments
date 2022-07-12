@@ -1057,6 +1057,19 @@ namespace generic {
                     }
                 }
 
+                // Materials
+                for (size_t i=0; i<mats.size(); ++i) {
+                    Material::SP m = mats[i];
+
+                    matte<float> mat;
+                    mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
+                    mat.cd() = from_rgb(m->color);
+                    mat.ka() = 1.f;
+                    mat.kd() = 1.f;
+
+                    (*it)->surfaceImpl.materials.push_back(mat);
+                }
+
                 // Lights
                 if (world.light != nullptr) { // TODO: should check if there were any changes at all
                     Array1D* lights = (Array1D*)GetResource(world.light);
@@ -1136,18 +1149,6 @@ namespace generic {
                             }
                         }
                     }
-                }
-
-                for (size_t i=0; i<mats.size(); ++i) {
-                    Material::SP m = mats[i];
-
-                    matte<float> mat;
-                    mat.ca() = from_rgb(vec3f{1.f,1.f,1.f});
-                    mat.cd() = from_rgb(m->color);
-                    mat.ka() = 1.f;
-                    mat.kd() = 1.f;
-
-                    (*it)->surfaceImpl.materials.push_back(mat);
                 }
 
                 if (!(*it)->lightImpl.lights.empty()) {
