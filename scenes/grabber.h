@@ -294,7 +294,7 @@ struct Gameboard
 
     // the edge length of one gameboard square
     constexpr static float s_squareWidth = 1.f;
-    // the height of one gameboard square 
+    // the height of one gameboard square
     constexpr static float s_squareHeight = .1f;
     // the radius of one piece
     constexpr static float s_pieceRadius = .35f;
@@ -368,6 +368,7 @@ struct Grabber
                      0.f, 1.f, 0.f, 0.f,
                      0.f, 0.f, 1.f, 0.f,
                      0.f, 0.f, 0.f, 1.f};
+
         asg::TriangleGeometry faceset = asg::newTriangleGeometry(
             (float *)vals, NULL, NULL, 12, ind, sizeof(ind) / sizeof(ind[0]) / 3, NULL);
         asg::Material dfltColor = asg::newMaterial("matte");
@@ -427,7 +428,7 @@ struct Grabber
         trans = grabber::makeTransform(0, 0, 0.f, s_underArmLength / 2 + s_wristRadius, 0.0f);
 
         asg::SphereGeometry wrist = grabber::makeSphere(s_wristRadius * 1.5f);
-        // asg::CylinderGeometry wrist = grabber::makeCylinder(1.f,s_wristRadius * 1.5f);
+
         rot->addChild(asg::newSurface(wrist, dfltColor));
         trans->addChild(rot);
         from_wrist->addChild(trans);
@@ -437,7 +438,7 @@ struct Grabber
 
         // the part of the grabber starting with its hand to its finger
         asg::Object from_hand = asg::newObject();
-        // rotation and translation are different to Soluition
+
         rot = grabber::makeRotation(2, M_PI / 2);
         trans = grabber::makeTransform(0, 0, 0.0, s_wristRadius + hand_length / 2.f, 0);
         // TODO: Cone Geometry
@@ -455,11 +456,11 @@ struct Grabber
         asg::CylinderGeometry finger = grabber::makeCylinder(s_fingerLength, s_fingerRadius);
 
         trans = grabber::makeTransform(0, 0, 0.0, hand_length / 2 + s_fingerLength / 2, 0.0);
-        trans->addChild(asg::newSurface(finger, dfltColor));
-        from_finger->addChild(trans);
-        trans = grabber::makeTransform(0, 0, 0.0, s_fingerLength / 2 + Gameboard::s_pieceHeight / 2, 0.0);
 
-        from_finger->getChild(0)->addChild(trans);
+        trans->addChild(asg::newSurface(finger, dfltColor));
+
+
+        from_finger->addChild(trans);
         from_hand->getChild(0)->getChild(0)->addChild(from_finger);
         m_finger = from_finger;
 
