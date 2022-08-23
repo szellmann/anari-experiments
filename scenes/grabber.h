@@ -40,6 +40,17 @@ namespace grabber
         return cyl;
     }
 
+    asg::SphereGeometry makeSphere(float radius)
+    {
+        float* sphVertex = new float[3] { 0,0,0};
+        float* sphRadius = new float[1] { radius };
+
+        asg::SphereGeometry sph = asg::newSphereGeometry(
+                sphVertex,sphRadius,nullptr,1,nullptr,0);
+
+        return sph;
+    }
+
     asg::Transform makeRotation(int axis, float angle)
     {
         float cosa = cosf(angle);
