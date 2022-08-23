@@ -279,6 +279,8 @@ struct Viewer : visionaray::viewer_glut
                 scene = new SphereTest(device,world);
             else if (fileName=="select-test")
                 scene = new SelectTest(device,world);
+            else if (fileName=="transform-test")
+                scene = new TransformTest(device,world);
             else if (fileName=="grabber")
                 scene = new GrabberGame(device,world);
             else if (getExt(fileName)==".raw" || getExt(fileName)==".xvf" || getExt(fileName)==".rvf")
