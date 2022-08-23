@@ -55,6 +55,12 @@ namespace asg {
             void addChild(const std::shared_ptr<T>& child);
 
             std::shared_ptr<Object> getChild(int childID);
+
+           inline int getChildren();
+            inline const char* getName();
+            inline void setName(const char* name);
+            template <typename T>
+            void removeChild(const std::shared_ptr<T>& child);
         };
 
         class Geometry : public Object
@@ -84,7 +90,23 @@ namespace asg {
             operator ASGTriangleGeometry();
         };
 
-        class SphereGeometry;
+        class SphereGeometry : public Geometry
+        {
+            SphereGeometry(ASGGeometry obj);
+        public:
+            static std::shared_ptr<SphereGeometry> create(float* vertices, float* radii,
+                                                            float* vertexColors,
+                                                            uint32_t numVertices,
+                                                            uint32_t* indices,
+                                                            uint32_t numIndices,
+                                                            float defaultRadius,
+                                                            FreeFunc freeVertices,
+                                                            FreeFunc freeRadii,
+                                                            FreeFunc freeColors,
+                                                            FreeFunc freeIndices);
+
+            operator ASGSphereGeometry();
+        };
 
         class CylinderGeometry : public Geometry
         {
@@ -140,10 +162,20 @@ namespace asg {
             void translate(float x, float y, float z);
 
             void translate(float xyz[3]);
+            void rotate( float axis[3], float angleInRadians);
+            float* getMatrix(float matrix[12]);
 
         };
 
-        class Select;
+        class Select : public Object
+        {
+            Select(ASGSelect obj);
+        public:
+            static std::shared_ptr<Select> create(ASGBool_t defaultVisibility);
+            operator ASGSelect();
+            void getChildVisible(int childID, ASGBool_t visible);
+            void setChildVisible(int childID, ASGBool_t visible);
+        };;
         class Camera;
     } // detail
 
@@ -201,6 +233,22 @@ namespace asg {
                                                 freeColors,freeCaps,freeIndices);
     }
 
+    inline SphereGeometry newSphereGeometry(float* vertices, float* radii,
+                                                float* vertexColors,
+                                                uint32_t numVertices, uint32_t* indices,
+                                                uint32_t numIndices,
+                                                float defaultRadius = 1.f,
+                                                FreeFunc freeVertices = nullptr,
+                                                FreeFunc freeRadii = nullptr,
+                                                FreeFunc freeColors = nullptr,
+                                                FreeFunc freeIndices = nullptr)
+    {
+        return detail::SphereGeometry::create(vertices,radii,vertexColors,
+                                                numVertices,indices,numIndices,
+                                                defaultRadius,freeVertices,freeRadii,
+                                                freeColors,freeIndices);
+    }
+
     inline Material newMaterial(const char* materialType)
     {
         return detail::Material::create(materialType);
@@ -220,6 +268,10 @@ namespace asg {
                                   MatrixFormat format = ASG_MATRIX_FORMAT_COL_MAJOR)
     {
         return detail::Transform::create(initialMatrix,format);
+    }
+    inline Select newSelect(ASGBool_t defaultVisibility)
+    {
+        return detail::Select::create(defaultVisibility);
     }
 
 } // ::asg
