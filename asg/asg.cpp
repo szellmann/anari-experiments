@@ -437,13 +437,14 @@ ASGError_t asgObjectGetChild(ASGObject obj, int childID, ASGObject* child)
     return ASG_ERROR_NO_ERROR;
 }
 
-ASGError_t asgObjectGetChildren(ASGObject obj, ASGObject* children, int* numChildren)
+ASGError_t asgObjectGetChildren(ASGObject obj, ASGObject** children, int* numChildren)
 {
     *numChildren = (int)obj->children.size();
     if (children == NULL) {
         return ASG_ERROR_NO_ERROR;
     } else {
-        std::memcpy(children,obj->children.data(),obj->children.size()*sizeof(ASGObject));
+
+        std::memcpy(*children,obj->children.data(),obj->children.size()*sizeof(ASGObject));
         return ASG_ERROR_NO_ERROR;
     }
 }

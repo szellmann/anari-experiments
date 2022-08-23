@@ -67,6 +67,33 @@ namespace asg {
             detail::errorFunc(asgObjectGetChild(handle,childID,&child));
             return std::shared_ptr<Object>(new Object(child));
         }
+        inline int Object::getChildren()
+        {
+
+            int numChildren;
+            detail::errorFunc(asgObjectGetChildren(handle,nullptr, &numChildren));
+           //  ASGObject* children = (ASGObject*)malloc(sizeof(ASGObject) * numChildren);
+
+            //detail::errorFunc(asgObjectGetChildren(handle,&children, &numChildren));
+
+
+            //return std::shared_ptr<Object*>(new Object*(reinterpret_cast<Object*>(children)));
+            return numChildren;
+        }
+        template <typename T>
+        inline void Object::removeChild(const std::shared_ptr<T>& child)
+        {
+            detail::errorFunc(asgObjectRemoveChild(handle,child.get()->handle));
+        }
+        inline void Object::setName(const char* name)
+        {
+            detail::errorFunc(asgObjectSetName(handle,name));
+        }
+        inline const char* Object::getName(){
+             const char* name;
+             detail::errorFunc(asgObjectGetName(handle,&name));
+             return name;
+        }
 
 
 
@@ -146,6 +173,33 @@ namespace asg {
                                        freeRadii,freeColors,freeCaps,freeIndices)));
         }
 
+        // ==========================================================
+        // SphereGeometry
+        // ==========================================================
+
+        SphereGeometry::SphereGeometry(ASGGeometry obj)
+            : Geometry(obj)
+        {
+        }
+
+        std::shared_ptr<SphereGeometry> SphereGeometry::create(float* vertices,
+                                                                   float* radii,
+                                                                   float* vertexColors,
+                                                                   uint32_t numVertices,
+                                                                   uint32_t* indices,
+                                                                   uint32_t numIndices,
+                                                                   float defaultRadius,
+                                                                   FreeFunc freeVertices,
+                                                                   FreeFunc freeRadii,
+                                                                   FreeFunc freeColors,
+                                                                   FreeFunc freeIndices)
+        {
+            return std::shared_ptr<SphereGeometry>(new SphereGeometry(
+                asgNewSphereGeometry(vertices,radii,vertexColors,numVertices,
+                                       indices,numIndices,defaultRadius,freeVertices,
+                                       freeRadii,freeColors,freeIndices)));
+        }
+
 
         // ==========================================================
         // Material
@@ -220,6 +274,38 @@ namespace asg {
         void Transform::translate(float xyz[3])
         {
             detail::errorFunc(asgTransformTranslate(handle,xyz));
+        }
+
+        void Transform::rotate( float axis[3],
+                                     float angleInRadians)
+        {
+
+            detail::errorFunc(asgTransformRotate(handle,axis,angleInRadians));
+        }
+        float* Transform::getMatrix(float matrix[12]){
+            detail::errorFunc(asgTransformGetMatrix(handle, matrix));
+            return matrix;
+        }
+        // ==========================================================
+        // Select
+        // ==========================================================
+        Select::Select(ASGSelect obj)
+            : Object(obj)
+        {
+        }
+        Select::operator ASGSelect()
+        {
+            return (ASGSelect)handle;
+        }
+        std::shared_ptr<Select> Select::create(ASGBool_t defaultVisibility)
+        {
+            return std::shared_ptr<Select>(new Select(asgNewSelect(defaultVisibility)));
+        }
+        void Select::getChildVisible( int childID, ASGBool_t visible){
+            detail::errorFunc(asgSelectGetChildVisible(handle,childID,&visible));
+        }
+        void Select::setChildVisible( int childID, ASGBool_t visible){
+            detail::errorFunc(asgSelectSetChildVisible(handle,childID,visible));
         }
     } // detail
 } // ::asg
