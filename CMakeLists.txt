@@ -7,7 +7,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
     ${PROJECT_SOURCE_DIR}/cmake
 )
 
-find_package(anari REQUIRED)
+find_package(anari 0.3.0 REQUIRED)
 find_package(GLEW REQUIRED)
 
 set(VOLKIT_DIR ${PROJECT_SOURCE_DIR}/volkit)

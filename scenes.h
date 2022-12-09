@@ -161,7 +161,7 @@ struct SelectTest : Scene
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                          ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
-        anariCommit(device,world);
+        anariCommitParameters(device,world);
     }
 
     visionaray::aabb getBounds()
@@ -179,7 +179,7 @@ struct SelectTest : Scene
             ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                         ASG_BUILD_WORLD_FLAG_FULL_REBUILD & ~ASG_BUILD_WORLD_FLAG_LIGHTS,0));
 
-            anariCommit(device,world);
+            anariCommitParameters(device,world);
         }
 
         rebuildANARIWorld = false;
@@ -280,7 +280,7 @@ struct SphereTest : Scene
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                          ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
-        anariCommit(device,world);
+        anariCommitParameters(device,world);
     }
 
     visionaray::aabb getBounds()
@@ -331,7 +331,7 @@ struct VolumeScene : Scene
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                          ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
-        anariCommit(device,world);
+        anariCommitParameters(device,world);
 
         // Set up the volkit TFE
         float* rgb;
@@ -417,7 +417,7 @@ struct VolumeScene : Scene
 
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,ASG_BUILD_WORLD_FLAG_LUTS,0));
 
-        anariCommit(device,world);
+        anariCommitParameters(device,world);
     }
 
     bool resetFrame = false;
@@ -476,7 +476,7 @@ struct Model : Scene
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                          ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
-        anariCommit(device,world);
+        anariCommitParameters(device,world);
     }
 
     virtual visionaray::aabb getBounds()
@@ -566,7 +566,7 @@ struct Model : Scene
             ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                         ASG_BUILD_WORLD_FLAG_FULL_REBUILD & ~ASG_BUILD_WORLD_FLAG_LIGHTS,0));
 
-            anariCommit(device,world);
+            anariCommitParameters(device,world);
         }
 
         rebuildANARIWorld = false;
@@ -1014,7 +1014,7 @@ struct FilmStudio : Scene
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                          ASG_BUILD_WORLD_FLAG_FULL_REBUILD,0));
 
-        anariCommit(device,world);
+        anariCommitParameters(device,world);
 
         // Init cam matrix
         float m[12];
@@ -1030,7 +1030,7 @@ struct FilmStudio : Scene
         ASG_SAFE_CALL(asgBuildANARIWorld(root,device,world,
                                          ASG_BUILD_WORLD_FLAG_TRANSFORMS,0));
 
-        anariCommit(device,world);
+        anariCommitParameters(device,world);
 
         resetFrame = true;
     }
@@ -1094,7 +1094,7 @@ struct FilmStudio : Scene
                     anariSetParameter(data->device, data->anariCamera, "position", ANARI_FLOAT32_VEC3, position);
                     anariSetParameter(data->device, data->anariCamera, "direction", ANARI_FLOAT32_VEC3, direction);
                     anariSetParameter(data->device, data->anariCamera, "up", ANARI_FLOAT32_VEC3, up);
-                    anariCommit(data->device,data->anariCamera);
+                    anariCommitParameters(data->device,data->anariCamera);
 
                 } else if (t==ASG_TYPE_TRANSFORM) {
                     visionaray::mat4x3 m4x3;
@@ -1115,7 +1115,7 @@ struct FilmStudio : Scene
 
         if (renderer == nullptr) {
             renderer = anariNewRenderer(device,"default");
-            anariCommit(device,renderer);
+            anariCommitParameters(device,renderer);
         }
 
         if (frame == nullptr) {
@@ -1124,16 +1124,21 @@ struct FilmStudio : Scene
             unsigned imgSize[2] = { width, height };
             anariSetParameter(device,frame,"size",ANARI_UINT32_VEC2,imgSize);
             anariSetParameter(device,frame,"renderer",ANARI_RENDERER,&renderer);
-            anariCommit(device,frame);
+            anariCommitParameters(device,frame);
         }
 
         if (cameraChanged) {
             anariSetParameter(device,frame,"camera",ANARI_CAMERA,&data.anariCamera);
-            anariCommit(device,frame);
+            anariCommitParameters(device,frame);
         }
         anariRenderFrame(device,frame);
         anariFrameReady(device,frame,ANARI_WAIT);
-        const uint32_t *fbPointer = (uint32_t *)anariMapFrame(device, frame, "color");
+        uint32_t widthOUT;
+        uint32_t heightOUT;
+        ANARIDataType typeOUT;
+        const uint32_t *fbPointer = (uint32_t *)anariMapFrame(device, frame, "channel.color",
+                                                              &widthOUT, &heightOUT,
+                                                              &typeOUT);
         ImGui::Begin("Cam1");
 
         if (texture == GLuint(-1))
@@ -1154,7 +1159,7 @@ struct FilmStudio : Scene
             ImVec2(1, 0),
             0 // frame size = 0
             );
-        anariUnmapFrame(device, frame, "color");
+        anariUnmapFrame(device, frame, "channel.color");
         ImGui::End();
         if (rotManip == nullptr) {
             rotManip = std::make_shared<visionaray::rotate_manipulator>(

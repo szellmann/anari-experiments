@@ -2807,7 +2807,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                 ANARIGroup anariGroup = anariNewGroup(anari->device);
                 setANARIEntities(anariGroup,*anari);
-                anariCommit(anari->device,anariGroup);
+                anariCommitParameters(anari->device,anariGroup);
 
                 anari->surfaces = std::move(surfaces);
                 anari->volumes = std::move(volumes);
@@ -2824,7 +2824,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anariSetParameter(anari->device,trans->anariInstance,"transform",
                                   ANARI_FLOAT32_MAT3x4,(float*)&anari->trans);
 
-                anariCommit(anari->device,trans->anariInstance);
+                anariCommitParameters(anari->device,trans->anariInstance);
 
                 anariRelease(anari->device,anariGroup);
 
@@ -2859,7 +2859,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                     anariSetParameter(anari->device,light->anariLight,"position",
                                       ANARI_FLOAT32_VEC3,position);
 
-                    anariCommit(anari->device,light->anariLight);
+                    anariCommitParameters(anari->device,light->anariLight);
                 }
 
                 if (self->visible)
@@ -2911,7 +2911,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                     anariRelease(anari->device,primitiveIndex);
                 }
 
-                anariCommit(anari->device,geom->anariGeometry);
+                anariCommitParameters(anari->device,geom->anariGeometry);
             } else if ((anari->flags & ASG_BUILD_WORLD_FLAG_GEOMETRIES) &&
                 surf->geometry->type == ASG_TYPE_SPHERE_GEOMETRY) {
 
@@ -2969,7 +2969,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                     anariRelease(anari->device,primitiveIndex);
                 }
 
-                anariCommit(anari->device,geom->anariGeometry);
+                anariCommitParameters(anari->device,geom->anariGeometry);
             } else if ((anari->flags & ASG_BUILD_WORLD_FLAG_GEOMETRIES) &&
                 surf->geometry->type == ASG_TYPE_CYLINDER_GEOMETRY) {
 
@@ -3027,7 +3027,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                     anariRelease(anari->device,primitiveIndex);
                 }
 
-                anariCommit(anari->device,geom->anariGeometry);
+                anariCommitParameters(anari->device,geom->anariGeometry);
             }
 
             if ((anari->flags & ASG_BUILD_WORLD_FLAG_MATERIALS)
@@ -3048,7 +3048,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                         anariSetParameter(anari->device,mat->anariMaterial,"color",
                                           ANARI_FLOAT32_VEC3,kd);
-                        anariCommit(anari->device,mat->anariMaterial);
+                        anariCommitParameters(anari->device,mat->anariMaterial);
                     }
                 }
             }
@@ -3089,7 +3089,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anariSetParameter(anari->device,surf->anariSurface,"material",
                                   ANARI_MATERIAL,&mat->anariMaterial);
             }
-            anariCommit(anari->device,surf->anariSurface);
+            anariCommitParameters(anari->device,surf->anariSurface);
 
             if (self->visible)
                 anari->surfaces.push_back(surf->anariSurface);
@@ -3127,7 +3127,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 const char* filter = "linear";
                 anariSetParameter(anari->device,vol->anariSpatialField,"filter",
                                   ANARI_STRING,filter);
-                anariCommit(anari->device, vol->anariSpatialField);
+                anariCommitParameters(anari->device, vol->anariSpatialField);
 
                 float valueRange[2] = {0.f,1.f};
                 //anariSetParameter(anari->device,vol->anariVolume,"valueRange",ANARI_FLOAT32_BOX1,&valueRange);
@@ -3135,7 +3135,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anariSetParameter(anari->device,vol->anariVolume,"field",
                                   ANARI_SPATIAL_FIELD, &vol->anariSpatialField);
 
-                anariCommit(anari->device, vol->anariVolume);
+                anariCommitParameters(anari->device, vol->anariVolume);
 
                 anariRelease(anari->device, scalar);
             }
@@ -3163,7 +3163,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
                 anariSetParameter(anari->device, vol->anariVolume, "color", ANARI_ARRAY1D, &anariColor);
                 anariSetParameter(anari->device, vol->anariVolume, "opacity", ANARI_ARRAY1D, &anariOpacity);
 
-                anariCommit(anari->device, vol->anariVolume);
+                anariCommitParameters(anari->device, vol->anariVolume);
 
                 anariRelease(anari->device, anariColor);
                 anariRelease(anari->device, anariOpacity);
