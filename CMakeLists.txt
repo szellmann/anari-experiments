@@ -32,11 +32,6 @@ add_subdirectory(generic_device)
 SET(CMAKE_EXE_LINKER_FLAGS
     "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,${CMAKE_CURRENT_BINARY_DIR}/generic_device")
 
-# ospray device
-add_subdirectory(generic_device)
-SET(CMAKE_EXE_LINKER_FLAGS
-    "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,/Users/stefan/libs/anari-ospray/lib")
-
 add_executable(viewer
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
