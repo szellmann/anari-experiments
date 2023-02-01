@@ -1,13 +1,13 @@
 #include <string.h>
-#include <anari/detail/Helpers.h>
+#include <anari/type_utility.h>
 #include "array.hpp"
 #include <iostream>
 
 namespace generic {
 
     //--- ArrayStorage ------------------------------------
-    ArrayStorage::ArrayStorage(void* userPtr, ANARIMemoryDeleter deleter,
-                               void* userdata, ANARIDataType elementType)
+    ArrayStorage::ArrayStorage(const void* userPtr, ANARIMemoryDeleter deleter,
+                               const void* userdata, ANARIDataType elementType)
         : userPtr(userPtr)
         , data((uint8_t*)userPtr)
         , deleter(deleter)
@@ -53,8 +53,9 @@ namespace generic {
     }
 
     //--- Array1D -----------------------------------------
-    Array1D::Array1D(void* userPtr, ANARIMemoryDeleter deleter, void* userdata,
-          ANARIDataType elementType, uint64_t numItems1, uint64_t byteStride1)
+    Array1D::Array1D(const void* userPtr, ANARIMemoryDeleter deleter,
+          const void* userdata, ANARIDataType elementType, uint64_t numItems1,
+          uint64_t byteStride1)
         : ArrayStorage(userPtr,deleter,userdata,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray1D>)
     {
@@ -75,13 +76,13 @@ namespace generic {
 
     size_t Array1D::getSizeInBytes() const
     {
-        return numItems[0]*anari::sizeOfDataType(elementType);
+        return numItems[0]*anari::sizeOf(elementType);
     }
 
     //--- Array2D -----------------------------------------
-    Array2D::Array2D(void* userPtr, ANARIMemoryDeleter deleter, void* userdata,
-          ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
-          uint64_t byteStride1, uint64_t byteStride2)
+    Array2D::Array2D(const void* userPtr, ANARIMemoryDeleter deleter,
+          const void* userdata, ANARIDataType elementType,uint64_t numItems1,
+          uint64_t numItems2, uint64_t byteStride1, uint64_t byteStride2)
         : ArrayStorage(userPtr,deleter,userdata,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray2D>)
     {
@@ -104,14 +105,14 @@ namespace generic {
 
     size_t Array2D::getSizeInBytes() const
     {
-        return numItems[0]*numItems[1]*anari::sizeOfDataType(elementType);
+        return numItems[0]*numItems[1]*anari::sizeOf(elementType);
     }
 
     //--- Array3D -----------------------------------------
-    Array3D::Array3D(void* userPtr, ANARIMemoryDeleter deleter, void* userdata,
-          ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
-          uint64_t numItems3, uint64_t byteStride1, uint64_t byteStride2,
-          uint64_t byteStride3)
+    Array3D::Array3D(const void* userPtr, ANARIMemoryDeleter deleter,
+          const void* userdata, ANARIDataType elementType, uint64_t numItems1,
+          uint64_t numItems2, uint64_t numItems3, uint64_t byteStride1,
+          uint64_t byteStride2, uint64_t byteStride3)
         : ArrayStorage(userPtr,deleter,userdata,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray3D>)
     {
@@ -136,7 +137,7 @@ namespace generic {
 
     size_t Array3D::getSizeInBytes() const
     {
-        return numItems[0]*numItems[1]*numItems[2]*anari::sizeOfDataType(elementType);
+        return numItems[0]*numItems[1]*numItems[2]*anari::sizeOf(elementType);
     }
 
 } // generic

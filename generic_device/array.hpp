@@ -10,8 +10,8 @@ namespace generic {
     class ArrayStorage : public Resource
     {
     public:
-        ArrayStorage(void* userPtr, ANARIMemoryDeleter deleter, void* userdata,
-                     ANARIDataType elementType);
+        ArrayStorage(const void* userPtr, ANARIMemoryDeleter deleter,
+                     const void* userdata, ANARIDataType elementType);
        ~ArrayStorage();
 
         virtual ResourceHandle getResourceHandle() = 0;
@@ -28,17 +28,17 @@ namespace generic {
 
         void free();
 
-        void* userPtr = nullptr;
+        const void* userPtr = nullptr;
         uint8_t* data = nullptr; // initially set to userPtr, managed on app release
         ANARIMemoryDeleter deleter = nullptr;
-        void* userdata = nullptr; // for deleter
+        const void* userdata = nullptr; // for deleter
         ANARIDataType elementType;
     };
 
     class Array1D : public ArrayStorage
     {
     public:
-        Array1D(void* data, ANARIMemoryDeleter deleter, void* userdata,
+        Array1D(const void* data, ANARIMemoryDeleter deleter, const void* userdata,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t buyteStride1);
        ~Array1D();
 
@@ -57,7 +57,7 @@ namespace generic {
     class Array2D : public ArrayStorage
     {
     public:
-        Array2D(void* data, ANARIMemoryDeleter deleter, void* userdata,
+        Array2D(const void* data, ANARIMemoryDeleter deleter, const void* userdata,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
                 uint64_t byteStride1, uint64_t byteStride2);
        ~Array2D();
@@ -77,7 +77,7 @@ namespace generic {
     class Array3D : public ArrayStorage
     {
     public:
-        Array3D(void* data, ANARIMemoryDeleter deleter, void* userdata,
+        Array3D(const void* data, ANARIMemoryDeleter deleter, const void* userdata,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
                 uint64_t numItems3, uint64_t byteStride1, uint64_t byteStride2,
                 uint64_t byteStride3);

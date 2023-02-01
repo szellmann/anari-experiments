@@ -1,4 +1,4 @@
-#include <anari/detail/Library.h>
+#include <anari/backend/LibraryImpl.h>
 
 #include "array.hpp"
 #include "camera.hpp"
@@ -18,51 +18,22 @@
 
 namespace generic {
 
-    //--- Device API --------------------------------------
-
-    int Device::deviceImplements(const char* extensions)
-    {
-        return 0;
-    }
-
-    void Device::deviceSetParameter(const char* id,
-                                    ANARIDataType type,
-                                    const void* mem)
-    {
-    }
-
-    void Device::deviceUnsetParameter(const char* id)
-    {
-    }
-
-    void Device::deviceCommit()
-    {
-    }
-
-    void Device::deviceRetain()
-    {
-    }
-
-    void Device::deviceRelease()
-    {
-    }
-
     //--- Data Arrays -------------------------------------
 
-    ANARIArray1D Device::newArray1D(void* appMemory,
+    ANARIArray1D Device::newArray1D(const void* appMemory,
                                     ANARIMemoryDeleter deleter,
-                                    void* userdata,
-                                    ANARIDataType elementType,
+                                    const void* userdata,
+                                    const ANARIDataType elementType,
                                     uint64_t numItems1,
                                     uint64_t byteStride1)
     {
         return (ANARIArray1D)RegisterResource(std::make_unique<Array1D>(
-            (uint8_t*)appMemory,deleter,userdata,elementType,numItems1,byteStride1));
+            (const uint8_t*)appMemory,deleter,userdata,elementType,numItems1,byteStride1));
     }
 
-    ANARIArray2D Device::newArray2D(void* appMemory,
+    ANARIArray2D Device::newArray2D(const void* appMemory,
                                     ANARIMemoryDeleter deleter,
-                                    void* userdata,
+                                    const void* userdata,
                                     ANARIDataType elementType,
                                     uint64_t numItems1,
                                     uint64_t numItems2,
@@ -70,13 +41,13 @@ namespace generic {
                                     uint64_t byteStride2)
     {
         return (ANARIArray2D)RegisterResource(std::make_unique<Array2D>(
-            (uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2,
+            (const uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2,
             byteStride1,byteStride2));
     }
 
-    ANARIArray3D Device::newArray3D(void* appMemory,
+    ANARIArray3D Device::newArray3D(const void* appMemory,
                                     ANARIMemoryDeleter deleter,
-                                    void* userdata,
+                                    const void* userdata,
                                     ANARIDataType elementType,
                                     uint64_t numItems1,
                                     uint64_t numItems2,
@@ -86,7 +57,7 @@ namespace generic {
                                     uint64_t byteStride3)
     {
         return (ANARIArray3D)RegisterResource(std::make_unique<Array3D>(
-            (uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2,
+            (const uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2,
             numItems3,byteStride1,byteStride2,byteStride3));
     }
 
@@ -186,7 +157,7 @@ namespace generic {
             obj->unsetParameter(name);
     }
 
-    void Device::commit(ANARIObject object)
+    void Device::commitParameters(ANARIObject object)
     {
         Object* obj = (Object*)GetResource(object);
         if (obj == nullptr)
@@ -239,7 +210,10 @@ namespace generic {
     }
 
     const void* Device::frameBufferMap(ANARIFrame fb,
-                                       const char* channel)
+                                       const char* channel,
+                                       uint32_t* width,
+                                       uint32_t* height,
+                                       ANARIDataType* pixelType)
     {
         Frame* frame = (Frame*)GetResource(fb);
         return frame->map(channel);
@@ -299,7 +273,7 @@ namespace generic {
 static char deviceName[] = "generic";
 
 extern "C" ANARI_DEFINE_LIBRARY_NEW_DEVICE(
-    generic, subtype)
+    generic, library, subtype)
 {
   if (subtype == std::string("default") || subtype == std::string("generic"))
     return (ANARIDevice) new generic::Device;
@@ -337,10 +311,15 @@ extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
   return nullptr;
 }
 
-extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_PARAMETERS(
-    generic, libdata, deviceSubtype, objectSubtype, objectType)
+extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_PROPERTY(generic,
+    library,
+    deviceSubtype,
+    objectSubtype,
+    objectType,
+    propertyName,
+    propertyType)
 {
-  if (objectType == ANARI_RENDERER) {
+  if (propertyType == ANARI_RENDERER) {
     return generic::Renderer::Parameters;
   }
   return nullptr;

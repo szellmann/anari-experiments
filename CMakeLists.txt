@@ -21,7 +21,6 @@ add_subdirectory(${VOLKIT_DIR})
 # ANARI scene graph
 add_subdirectory(asg)
 
-add_subdirectory(stub_device)
 # that's a _bit_ hacky, but the easiest way to set the
 # rpath so that dlopen will search for libanari_library_XXX
 # in the device lib's binary dir
