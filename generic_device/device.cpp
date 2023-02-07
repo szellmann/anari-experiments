@@ -216,6 +216,13 @@ namespace generic {
                                        ANARIDataType* pixelType)
     {
         Frame* frame = (Frame*)GetResource(fb);
+        *width = frame->size[0];
+        *height = frame->size[1];
+        if (strncmp(channel,"color",5)==0) {
+            *pixelType = frame->color;
+        } else if (strncmp(channel,"depth",5)==0) {
+            *pixelType = frame->depth;
+        }
         return frame->map(channel);
     }
 
