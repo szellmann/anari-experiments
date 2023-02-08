@@ -56,9 +56,9 @@ namespace generic {
             renderer = *(ANARIRenderer*)mem; // TODO: reference count
         } else if (strncmp(name,"size",4)==0 && type==ANARI_UINT32_VEC2) {
             memcpy(size,mem,sizeof(size));
-        } else if (strncmp(name,"color",5)==0 && type==ANARI_DATA_TYPE) {
+        } else if (strncmp(name,"channel.color",13)==0 && type==ANARI_DATA_TYPE) {
             memcpy(&color,mem,sizeof(color));
-        } else if (strncmp(name,"depth",5)==0 && type==ANARI_DATA_TYPE) {
+        } else if (strncmp(name,"channel.depth",13)==0 && type==ANARI_DATA_TYPE) {
             memcpy(&depth,mem,sizeof(depth));
         } else {
             LOG(logging::Level::Warning) << "Frame: Unsupported parameter "
