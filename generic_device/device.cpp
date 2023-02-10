@@ -218,9 +218,9 @@ namespace generic {
         Frame* frame = (Frame*)GetResource(fb);
         *width = frame->size[0];
         *height = frame->size[1];
-        if (strncmp(channel,"channel.color",5)==0) {
+        if (strncmp(channel,"channel.color",13)==0) {
             *pixelType = frame->color;
-        } else if (strncmp(channel,"channel.depth",5)==0) {
+        } else if (strncmp(channel,"channel.depth",13)==0) {
             *pixelType = frame->depth;
         }
         return frame->map(channel);
