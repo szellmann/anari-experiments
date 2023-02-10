@@ -40,8 +40,8 @@ namespace generic {
         ANARICamera camera = nullptr;
         ANARIRenderer renderer = nullptr;
         unsigned size[2] = {0,0};
-        ANARIDataType color;
-        ANARIDataType depth;
+        ANARIDataType color = ANARI_UNKNOWN;
+        ANARIDataType depth = ANARI_UNKNOWN;
 
         std::future<void> renderFuture;
 
