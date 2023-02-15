@@ -61,9 +61,10 @@ namespace generic {
             numItems3,byteStride1,byteStride2,byteStride3));
     }
 
-    void* Device::mapArray(ANARIArray)
+    void* Device::mapArray(ANARIArray array)
     {
-        return nullptr;
+        ArrayStorage* as = (ArrayStorage*)GetResource(array);
+        return as->internalData;
     }
 
     void Device::unmapArray(ANARIArray)

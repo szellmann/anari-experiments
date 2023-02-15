@@ -6,19 +6,25 @@
 namespace generic {
 
     //--- ArrayStorage ------------------------------------
-    ArrayStorage::ArrayStorage(const void* userPtr, ANARIMemoryDeleter deleter,
-                               const void* userdata, ANARIDataType elementType)
-        : userPtr(userPtr)
-        , data((uint8_t*)userPtr)
+    ArrayStorage::ArrayStorage(const void* appMemory, ANARIMemoryDeleter deleter,
+                               const void* userPtr, ANARIDataType elementType)
+        : appMemory(appMemory)
         , deleter(deleter)
-        , userdata(userdata)
+        , userPtr(userPtr)
         , elementType(elementType)
     {
+        // if this is NULL, we'll later allocate storage from
+        // within the implementation classes and make the array
+        // managed
+        internalData = (uint8_t*)appMemory;
     }
 
     ArrayStorage::~ArrayStorage()
     {
-        free();
+        if (appMemory == nullptr) {
+            // that means the array is managed, so we delete the data
+            delete[] internalData;
+        }
     }
 
     void ArrayStorage::commit()
@@ -28,45 +34,36 @@ namespace generic {
     void ArrayStorage::release()
     {
         // Transfer ownership after user releases the object
-        // TODO: make sure there are no user references anymore
-        data = new uint8_t[getSizeInBytes()];
-        memcpy(data,userPtr,getSizeInBytes());
-        if (deleter != nullptr)
-            deleter(userPtr,userdata);
+        if (appMemory != nullptr) {
+            internalData = new uint8_t[getSizeInBytes()];
+            memcpy(internalData,appMemory,getSizeInBytes());
+
+            if (deleter != nullptr)
+                deleter(userPtr,appMemory);
+        }
     }
 
     void ArrayStorage::retain()
     {
     }
 
-    void ArrayStorage::alloc()
-    {
-    }
-
-    void ArrayStorage::free()
-    {
-        if (userPtr != data)
-            delete[] data;
-        else if (data != nullptr && deleter != nullptr)
-            deleter(data,userdata);
-        data = nullptr;
-    }
-
     //--- Array1D -----------------------------------------
-    Array1D::Array1D(const void* userPtr, ANARIMemoryDeleter deleter,
-          const void* userdata, ANARIDataType elementType, uint64_t numItems1,
+    Array1D::Array1D(const void* appMemory, ANARIMemoryDeleter deleter,
+          const void* userPtr, ANARIDataType elementType, uint64_t numItems1,
           uint64_t byteStride1)
-        : ArrayStorage(userPtr,deleter,userdata,elementType)
+        : ArrayStorage(appMemory,deleter,userPtr,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray1D>)
     {
         numItems[0] = numItems1;
 
         byteStride[0] = byteStride1;
+
+        if (internalData == nullptr)
+            internalData = new uint8_t[getSizeInBytes()];
     }
 
     Array1D::~Array1D()
     {
-        ArrayStorage::free();
     }
 
     ResourceHandle Array1D::getResourceHandle()
@@ -80,10 +77,10 @@ namespace generic {
     }
 
     //--- Array2D -----------------------------------------
-    Array2D::Array2D(const void* userPtr, ANARIMemoryDeleter deleter,
-          const void* userdata, ANARIDataType elementType,uint64_t numItems1,
+    Array2D::Array2D(const void* appMemory, ANARIMemoryDeleter deleter,
+          const void* userPtr, ANARIDataType elementType,uint64_t numItems1,
           uint64_t numItems2, uint64_t byteStride1, uint64_t byteStride2)
-        : ArrayStorage(userPtr,deleter,userdata,elementType)
+        : ArrayStorage(appMemory,deleter,userPtr,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray2D>)
     {
         numItems[0] = numItems1;
@@ -91,11 +88,13 @@ namespace generic {
 
         byteStride[0] = byteStride1;
         byteStride[1] = byteStride2;
+
+        if (internalData == nullptr)
+            internalData = new uint8_t[getSizeInBytes()];
     }
 
     Array2D::~Array2D()
     {
-        ArrayStorage::free();
     }
 
     ResourceHandle Array2D::getResourceHandle()
@@ -109,11 +108,11 @@ namespace generic {
     }
 
     //--- Array3D -----------------------------------------
-    Array3D::Array3D(const void* userPtr, ANARIMemoryDeleter deleter,
-          const void* userdata, ANARIDataType elementType, uint64_t numItems1,
+    Array3D::Array3D(const void* appMemory, ANARIMemoryDeleter deleter,
+          const void* userPtr, ANARIDataType elementType, uint64_t numItems1,
           uint64_t numItems2, uint64_t numItems3, uint64_t byteStride1,
           uint64_t byteStride2, uint64_t byteStride3)
-        : ArrayStorage(userPtr,deleter,userdata,elementType)
+        : ArrayStorage(appMemory,deleter,userPtr,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray3D>)
     {
         numItems[0] = numItems1;
@@ -123,11 +122,13 @@ namespace generic {
         byteStride[0] = byteStride1;
         byteStride[1] = byteStride2;
         byteStride[2] = byteStride3;
+
+        if (internalData == nullptr)
+            internalData = new uint8_t[getSizeInBytes()];
     }
 
     Array3D::~Array3D()
     {
-        ArrayStorage::free();
     }
 
     ResourceHandle Array3D::getResourceHandle()

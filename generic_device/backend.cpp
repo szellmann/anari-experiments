@@ -253,7 +253,7 @@ namespace generic {
                     storage3f = texture<float, 3>((unsigned)data->numItems[0],
                                                   (unsigned)data->numItems[1],
                                                   (unsigned)data->numItems[2]);
-                    storage3f.reset((const float*)data->data);
+                    storage3f.reset((const float*)data->internalData);
                     storage3f.set_filter_mode(Linear);
                     storage3f.set_address_mode(Clamp);
 
@@ -273,7 +273,7 @@ namespace generic {
 
                     aligned_vector<vec4f> rgba(rgb->numItems[0]);
                     for (uint64_t i = 0; i < rgb->numItems[0]; ++i) {
-                        vec4f val(((vec3f*)rgb->data)[i],((float*)a->data)[i]);
+                        vec4f val(((vec3f*)rgb->internalData)[i],((float*)a->internalData)[i]);
                         rgba[i] = val;
                     }
 
@@ -905,7 +905,7 @@ namespace generic {
                     Array1D* instances = (Array1D*)GetResource(world.instance);
 
                     for (uint32_t i=0; i<instances->numItems[0]; ++i) {
-                        ANARIInstance inst = ((ANARIInstance*)(instances->data))[i];
+                        ANARIInstance inst = ((ANARIInstance*)(instances->internalData))[i];
                         auto iit = std::find_if(backend::instances.begin(),backend::instances.end(),
                                                 [inst](const Instance::SP& i) {
                                                     return i->handle == inst;
@@ -967,7 +967,7 @@ namespace generic {
                         if (mats.empty())
                             mats.push_back(backend::materials[defaultMatID]);
 
-                        ANARISurface surf = ((ANARISurface*)(surfaces->data))[i];
+                        ANARISurface surf = ((ANARISurface*)(surfaces->internalData))[i];
                         auto sit = std::find_if(backend::surfaces.begin(),backend::surfaces.end(),
                                                 [surf](const Surface::SP& srf) {
                                                     return srf->handle == surf;
@@ -1045,7 +1045,7 @@ namespace generic {
                     (*it)->volumeImpl.structuredVolumes.clear();
 
                     for (uint32_t i=0; i<volumes->numItems[0]; ++i) {
-                        ANARIVolume vol = ((ANARIVolume*)(volumes->data))[i];
+                        ANARIVolume vol = ((ANARIVolume*)(volumes->internalData))[i];
                         auto vit = std::find_if(backend::structuredVolumes.begin(),backend::structuredVolumes.end(),
                                                 [vol](const StructuredVolume::SP& sv) {
                                                     return sv->handle == vol;
@@ -1077,7 +1077,7 @@ namespace generic {
                     (*it)->lightImpl.areaLightMaterials.clear();
 
                     for (uint32_t i=0; i<lights->numItems[0]; ++i) {
-                        ANARILight light = ((ANARILight*)(lights->data))[i];
+                        ANARILight light = ((ANARILight*)(lights->internalData))[i];
                         auto lit = std::find_if(backend::lights.begin(),backend::lights.end(),
                                                 [light](const Light::SP& l) {
                                                     return l->handle == light;
@@ -1385,8 +1385,8 @@ namespace generic {
                     Array1D* vertex = (Array1D*)GetResource(geom.vertex_position);
                     Array1D* index = (Array1D*)GetResource(geom.primitive_index);
 
-                    vec3f* vertices = (vec3f*)vertex->data;
-                    vec3ui* indices = (vec3ui*)index->data;
+                    vec3f* vertices = (vec3f*)vertex->internalData;
+                    vec3ui* indices = (vec3ui*)index->internalData;
 
                     triangles.resize(index->numItems[0]);
 
@@ -1444,9 +1444,9 @@ namespace generic {
                     Array1D* index = (Array1D*)GetResource(geom.primitive_index);
                     Array1D* radius = (Array1D*)GetResource(geom.primitive_radius);
 
-                    vec3f* vertices = (vec3f*)vertex->data;
-                    vec2ui* indices = (vec2ui*)index->data;
-                    float* radii = (float*)radius->data;
+                    vec3f* vertices = (vec3f*)vertex->internalData;
+                    vec2ui* indices = (vec2ui*)index->internalData;
+                    float* radii = (float*)radius->internalData;
 
                     cylinders.resize(index->numItems[0]);
 
@@ -1470,8 +1470,8 @@ namespace generic {
                     Array1D* vertex = (Array1D*)GetResource(geom.vertex_position);
                     Array1D* radius = (Array1D*)GetResource(geom.primitive_radius);
 
-                    vec3f* vertices = (vec3f*)vertex->data;
-                    float* radii = (float*)radius->data;
+                    vec3f* vertices = (vec3f*)vertex->internalData;
+                    float* radii = (float*)radius->internalData;
 
                     cylinders.resize(vertex->numItems[0]/2);
 
@@ -1597,7 +1597,7 @@ namespace generic {
                     Array1D* surfaces = (Array1D*)GetResource(group->surface);
 
                     for (uint32_t i=0; i<surfaces->numItems[0]; ++i) {
-                        ANARISurface surf = ((ANARISurface*)(surfaces->data))[i];
+                        ANARISurface surf = ((ANARISurface*)(surfaces->internalData))[i];
                         auto sit = std::find_if(backend::surfaces.begin(),backend::surfaces.end(),
                                                 [surf](const Surface::SP& srf) {
                                                     return srf->handle == surf;

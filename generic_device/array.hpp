@@ -10,9 +10,9 @@ namespace generic {
     class ArrayStorage : public Resource
     {
     public:
-        ArrayStorage(const void* userPtr, ANARIMemoryDeleter deleter,
-                     const void* userdata, ANARIDataType elementType);
-       ~ArrayStorage();
+        ArrayStorage(const void* appMemory, ANARIMemoryDeleter deleter,
+                     const void* userPtr, ANARIDataType elementType);
+        virtual ~ArrayStorage();
 
         virtual ResourceHandle getResourceHandle() = 0;
 
@@ -24,21 +24,17 @@ namespace generic {
 
         virtual size_t getSizeInBytes() const = 0;
 
-        void alloc();
-
-        void free();
-
-        const void* userPtr = nullptr;
-        uint8_t* data = nullptr; // initially set to userPtr, managed on app release
+        const void* appMemory = nullptr;
         ANARIMemoryDeleter deleter = nullptr;
-        const void* userdata = nullptr; // for deleter
+        const void* userPtr = nullptr; // additional pointer, can be passed to deleter
+        uint8_t* internalData;
         ANARIDataType elementType;
     };
 
     class Array1D : public ArrayStorage
     {
     public:
-        Array1D(const void* data, ANARIMemoryDeleter deleter, const void* userdata,
+        Array1D(const void* appMemory, ANARIMemoryDeleter deleter, const void* userPtr,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t buyteStride1);
        ~Array1D();
 
@@ -57,7 +53,7 @@ namespace generic {
     class Array2D : public ArrayStorage
     {
     public:
-        Array2D(const void* data, ANARIMemoryDeleter deleter, const void* userdata,
+        Array2D(const void* appMemory, ANARIMemoryDeleter deleter, const void* userPtr,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
                 uint64_t byteStride1, uint64_t byteStride2);
        ~Array2D();
@@ -77,7 +73,7 @@ namespace generic {
     class Array3D : public ArrayStorage
     {
     public:
-        Array3D(const void* data, ANARIMemoryDeleter deleter, const void* userdata,
+        Array3D(const void* appMemory, ANARIMemoryDeleter deleter, const void* userPtr,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
                 uint64_t numItems3, uint64_t byteStride1, uint64_t byteStride2,
                 uint64_t byteStride3);
