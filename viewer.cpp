@@ -327,7 +327,7 @@ struct Viewer : visionaray::viewer_glut
             ANARIDataType fbFormat = ANARI_UFIXED8_RGBA_SRGB;
             ANARIDataType dbFormat = ANARI_FLOAT32;
             anariSetParameter(device, frame, "channel.color", ANARI_DATA_TYPE, &fbFormat);
-            //anariSetParameter(device, frame, "depth", ANARI_DATA_TYPE, &dbFormat);
+            //anariSetParameter(device, frame, "channel.depth", ANARI_DATA_TYPE, &dbFormat);
             anariSetParameter(device, frame, "renderer", ANARI_RENDERER, &renderer);
             //renderer = anariNewRenderer(device, "raycast");
             //renderer = anariNewRenderer(device, "ao");
