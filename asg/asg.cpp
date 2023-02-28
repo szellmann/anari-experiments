@@ -27,8 +27,10 @@
 // when the object is first tested for intersection. Removing that
 // (and the whole dependency against that lib) as soon as ANARI supports
 // picking natively
-#define __USE_VISIONARAY_FOR_PICKING 1
-#if __USE_VISIONARAY_FOR_PICKING
+#ifndef ASG_USE_VISIONARAY_FOR_PICKING
+#define ASG_USE_VISIONARAY_FOR_PICKING 1
+#endif
+#if ASG_USE_VISIONARAY_FOR_PICKING
 #include <visionaray/bvh.h>
 #include <visionaray/traverse.h>
 #endif
@@ -873,7 +875,7 @@ struct TriangleGeom {
     ASGFreeFunc freeIndices;
     // Exclusively used by ANARI build visitors
     ANARIGeometry anariGeometry = NULL;
-#if __USE_VISIONARAY_FOR_PICKING
+#if ASG_USE_VISIONARAY_FOR_PICKING
     visionaray::index_bvh<visionaray::basic_triangle<3,float>> bvh;
 #endif
 };
@@ -2368,7 +2370,7 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                 TriangleGeom* geom = (TriangleGeom*)surf->geometry->impl;
 
                 if (geom->indices != nullptr && geom->numIndices > 0) {
-#if __USE_VISIONARAY_FOR_PICKING
+#if ASG_USE_VISIONARAY_FOR_PICKING
                     using namespace visionaray;
                     if (geom->bvh.num_nodes() == 0) {
                         std::vector<basic_triangle<3,float>> tris;
@@ -2616,7 +2618,7 @@ static void pickObject(ASGVisitor self, ASGObject obj, void* userData) {
                 }
             }
 
-#if !__USE_VISIONARAY_FOR_PICKING
+#if !ASG_USE_VISIONARAY_FOR_PICKING
             // TODO: we'll later let ANARI handle this, when picking
             // is specified - and implemented by the devices
 
