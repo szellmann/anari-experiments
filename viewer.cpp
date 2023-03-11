@@ -14,6 +14,7 @@
 #include <Support/CmdLineUtil.h>
 #include <asg/asg.h>
 #include <anari/anari_cpp.hpp>
+#include <anari/type_utility.h>
 #include <imgui.h>
 #include "scenes/grabber.h"
 #include "scenes.h"
@@ -180,7 +181,7 @@ struct Viewer : visionaray::viewer_glut
             uint32_t heightOUT;
             ANARIDataType typeOUT;
             const float *dbPointer = (float *)anariMapFrame(anari.device, anari.frame, "channel.depth", &widthOUT, &heightOUT, &typeOUT);
-            float *cpy = (float *)malloc(width()*height()*sizeof(float));
+            float *cpy = (float *)malloc(width()*height()*anari::sizeOf(typeOUT));
             memcpy(cpy,dbPointer,width()*height()*sizeof(float));
             float max = 0.f;
             for (int i=0; i<width()*height(); ++i) {
@@ -192,6 +193,7 @@ struct Viewer : visionaray::viewer_glut
             }
             glClear(GL_DEPTH_BUFFER_BIT);
             glDrawPixels(width(),height(),GL_LUMINANCE,GL_FLOAT,cpy);
+            free(cpy);
             anariUnmapFrame(anari.device, anari.frame, "channel.depth");
         }
 
