@@ -283,6 +283,8 @@ struct Viewer : visionaray::viewer_glut
             world = anariNewWorld(device);
             if (fileName.empty() || fileName=="volume-test")
                 scene = new VolumeScene(device,world);
+            else if (fileName=="amr-test")
+                scene = new AMRScene(device,world);
             else if (fileName=="sphere-test")
                 scene = new SphereTest(device,world);
             else if (fileName=="select-test")

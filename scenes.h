@@ -4,6 +4,7 @@
 #include <memory>
 #include <random>
 #include <vector>
+#include <GL/glew.h>
 #include <imgui.h>
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui_internal.h>
@@ -431,6 +432,206 @@ struct VolumeScene : Scene
     vkt::TransfuncEditor tfe;
 };
 
+// Load test AMR volume or (TODO!) load AMR volume from file
+struct AMRScene : Scene
+{
+    AMRScene(ANARIDevice dev, ANARIWorld wrld, const char* fileName = NULL)
+        : Scene(dev,wrld)
+    {
+        //root = asgNewObject();
+
+        rgbLUT.resize(15);
+        alphaLUT.resize(5);
+        lut = asgNewLookupTable1D(rgbLUT.data(),alphaLUT.data(),alphaLUT.size(),NULL);
+        ASG_SAFE_CALL(asgMakeDefaultLUT1D(lut,ASG_LUT_ID_DEFAULT_LUT));
+
+        // Set up the volkit TFE
+        float* rgb;
+        float* alpha;
+        int32_t numEntries;
+
+        ASG_SAFE_CALL(asgLookupTable1DGetRGB(lut, &rgb));
+        ASG_SAFE_CALL(asgLookupTable1DGetAlpha(lut, &alpha));
+        ASG_SAFE_CALL(asgLookupTable1DGetNumEntries(lut, &numEntries));
+
+        std::vector<float> rgba(numEntries*4);
+        for (int32_t i=0; i<numEntries; ++i) {
+            rgba[i*4] = rgb[i*3];
+            rgba[i*4+1] = rgb[i*3+1];
+            rgba[i*4+2] = rgb[i*3+2];
+            rgba[i*4+3] = alpha[i];
+        }
+
+        vktLUT = vkt::LookupTable(5,1,1,vkt::ColorFormat::RGBA32F);
+        vktLUT.setData((uint8_t*)rgba.data());
+        tfe.setLookupTableResource(vktLUT.getResourceHandle());
+        //tfe.setInternalLookupTableSize(512);
+
+        // TODO: need an abstraction for the following in ASG:
+        // TODO: AMR volume
+        //
+
+        anariVolume = anariNewVolume(device,"scivis");
+
+        anariSpatialField = anariNewSpatialField(device,"amr");
+
+        std::vector<visionaray::aabbi> blockBoundData(2);
+        // see here: https://github.com/openvkl/openvkl/blob/master/openvkl/devices/cpu/volume/amr/AMRData.h#L28
+        // how these are defined (upper is an integer coordinate and does not include the
+        // extent of the rightmost cells)
+        blockBoundData[0] = {
+            {0,0,0},{1,1,1} // thats a 2^3 box
+        };
+        blockBoundData[1] = {
+            {1,0,0},{1,0,0}
+        };
+        ANARIArray1D blockBounds = anariNewArray1D(device,blockBoundData.data(),0,0,
+                                                   ANARI_INT32_BOX3,blockBoundData.size(),
+                                                   0);
+
+        std::vector<int> levelData(2);
+        levelData[0] = 0;
+        levelData[1] = 1;
+        ANARIArray1D blockLevel = anariNewArray1D(device,levelData.data(),0,0,
+                                                  ANARI_INT32,levelData.size(),0);
+
+        std::vector<ANARIArray3D> blockDataData(2);
+        std::vector<float> block0(8); for (int i=0; i<8; ++i) block0[i] = i/float(8);
+        std::vector<float> block1(1); block1[0] = 1.f;
+        blockDataData[0] = anariNewArray3D(device,block0.data(),0,0,ANARI_FLOAT32,
+                                           2,2,2,0,0,0);
+        blockDataData[1] = anariNewArray3D(device,block1.data(),0,0,ANARI_FLOAT32,
+                                           1,1,1,0,0,0);
+        ANARIArray1D blockData = anariNewArray1D(device,blockDataData.data(),0,0,
+                                                 ANARI_ARRAY3D,blockDataData.size(),0);
+
+        anariSetParameter(device,anariSpatialField,"block.bounds",ANARI_ARRAY1D,
+                          &blockBounds);
+        anariSetParameter(device,anariSpatialField,"block.level",ANARI_ARRAY1D,
+                          &blockLevel);
+        anariSetParameter(device,anariSpatialField,"block.data",ANARI_ARRAY1D,&blockData);
+        anariCommitParameters(device,anariSpatialField);
+
+        anariSetParameter(device,anariVolume,"field",ANARI_SPATIAL_FIELD,
+                          &anariSpatialField);
+
+        rgbLUT.resize(numEntries*3);
+        alphaLUT.resize(numEntries);
+        std::copy(rgb,rgb+numEntries*3,rgbLUT.data());
+        std::copy(alpha,alpha+numEntries,alphaLUT.data());
+
+        ANARIArray1D anariColor = anariNewArray1D(device, rgbLUT.data(), 0, 0,
+                                                  ANARI_FLOAT32_VEC3, rgbLUT.size(), 0);
+        ANARIArray1D anariOpacity = anariNewArray1D(device, alphaLUT.data(), 0, 0,
+                                                    ANARI_FLOAT32, alphaLUT.size(), 0);
+
+        anariSetParameter(device, anariVolume, "color", ANARI_ARRAY1D, &anariColor);
+        anariSetParameter(device, anariVolume, "opacity", ANARI_ARRAY1D, &anariOpacity);
+
+        anariCommitParameters(device,anariVolume);
+
+        anariRelease(device, anariColor);
+        anariRelease(device, anariOpacity);
+        anariCommitParameters(device,anariVolume);
+
+        anariRelease(device,blockBounds);
+        anariRelease(device,blockLevel);
+        anariRelease(device,blockDataData[0]);
+        anariRelease(device,blockDataData[1]);
+        anariRelease(device,blockData);
+
+        std::vector<ANARIVolume> anariVolumes(1);
+        anariVolumes[0] = anariVolume;
+        ANARIArray1D volumes = anariNewArray1D(device,anariVolumes.data(),0,0,
+                                               ANARI_VOLUME,anariVolumes.size(),0);
+        anariSetParameter(device,world,"volume",ANARI_ARRAY1D,&volumes);
+        anariRelease(device,volumes);
+
+        anariCommitParameters(device,world);
+    }
+
+   ~AMRScene()
+    {
+        //ASG_SAFE_CALL(asgRelease(volume));
+    }
+
+    visionaray::aabb getBounds()
+    {
+        return {{0,0,0},{4,2,2}};
+    }
+
+    void afterRenderFrame()
+    {
+        if (tfe.updated()) {
+            vkt::LookupTable* lut = tfe.getUpdatedLookupTable();
+            if (lut != nullptr) {
+                auto dims = lut->getDims();
+                auto lutData = (float*)lut->getData();
+                float* colorVals = new float[dims.x*3];
+                float* alphaVals = new float[dims.x];
+                for (int i=0; i<dims.x; ++i) {
+                    colorVals[i*3] = lutData[i*4];
+                    colorVals[i*3+1] = lutData[i*4+1];
+                    colorVals[i*3+2] = lutData[i*4+2];
+                    alphaVals[i] = lutData[i*4+3];
+                }
+                // Apply transfer function
+                updateLUT(colorVals,alphaVals,dims.x);
+                delete[] alphaVals;
+                delete[] colorVals;
+
+                resetFrame = true;
+            }
+        }
+    }
+
+    void renderUI(visionaray::pinhole_camera const&)
+    {
+        ImGui::Begin("AMR Volume");
+        tfe.drawImmediate();
+        ImGui::End();
+    }
+
+    bool needFrameReset()
+    {
+        bool temp = resetFrame;
+        resetFrame = false;
+        return temp;
+    }
+
+    void updateLUT(float* rgb, float* alpha, int numEntries)
+    {
+        rgbLUT.resize(numEntries*3);
+        alphaLUT.resize(numEntries);
+        std::copy(rgb,rgb+numEntries*3,rgbLUT.data());
+        std::copy(alpha,alpha+numEntries,alphaLUT.data());
+
+        ANARIArray1D anariColor = anariNewArray1D(device, rgbLUT.data(), 0, 0,
+                                                  ANARI_FLOAT32_VEC3, rgbLUT.size(), 0);
+        ANARIArray1D anariOpacity = anariNewArray1D(device, alphaLUT.data(), 0, 0,
+                                                    ANARI_FLOAT32, alphaLUT.size(), 0);
+
+        anariSetParameter(device, anariVolume, "color", ANARI_ARRAY1D, &anariColor);
+        anariSetParameter(device, anariVolume, "opacity", ANARI_ARRAY1D, &anariOpacity);
+
+        anariCommitParameters(device,anariVolume);
+
+        anariRelease(device, anariColor);
+        anariRelease(device, anariOpacity);
+    }
+
+    bool resetFrame = false;
+    //ASGStructuredVolume volume = nullptr;
+    ANARIVolume anariVolume = nullptr;
+    ANARISpatialField anariSpatialField = nullptr;
+    ASGLookupTable1D lut = nullptr;
+    std::vector<float> volData;
+    std::vector<float> rgbLUT;
+    std::vector<float> alphaLUT;
+    vkt::LookupTable vktLUT;
+    vkt::TransfuncEditor tfe;
+};
+
 // Load scene w/ assimp or pbrtParser
 struct Model : Scene
 {
@@ -594,7 +795,7 @@ struct Model : Scene
 
         ASGObject pickedObject = NULL;
         ASG_SAFE_CALL(asgPickObject(root,cam,x,h-y-1,w,h,&pickedObject));
-        ASG_SAFE_CALL(asgRelease(cam));std::cout << pickedObject << '\n';
+        ASG_SAFE_CALL(asgRelease(cam));
 
         if (pickedObject != NULL) {
             ASGType_t type;
