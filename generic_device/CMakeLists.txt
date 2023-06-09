@@ -48,6 +48,12 @@ target_include_directories(${PROJECT_NAME}
     ${VSNRAY_DIR}/src
 )
 
-target_link_libraries(${PROJECT_NAME} PUBLIC GLEW::GLEW visionaray_common anari::anari)
+target_link_libraries(${PROJECT_NAME}
+    PUBLIC
+        GLEW::GLEW
+        visionaray_common
+        anari::anari
+        anari::helium
+)
 
 

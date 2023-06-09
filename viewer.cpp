@@ -14,7 +14,6 @@
 #include <Support/CmdLineUtil.h>
 #include <asg/asg.h>
 #include <anari/anari_cpp.hpp>
-#include <anari/type_utility.h>
 #include <imgui.h>
 #include "scenes/grabber.h"
 #include "scenes.h"

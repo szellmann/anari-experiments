@@ -1,13 +1,13 @@
 
 #pragma once
 
-#include <anari/backend/utilities/ParameterizedObject.h>
+#include <anari/backend/helium/utility/ParameterizedObject.h>
 #include <anari/backend/DeviceImpl.h>
 
 namespace generic {
 
     struct Device : anari::DeviceImpl
-                  , anari::ParameterizedObject
+                  , helium::ParameterizedObject
     {
         //--- Data Arrays ---------------------------------
 
