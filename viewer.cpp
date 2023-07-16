@@ -296,7 +296,7 @@ struct Viewer : visionaray::viewer_glut
                 scene = new Model(device,world,fileName.c_str());
 
             headLight = anariNewLight(device,"point");
-            ANARIArray1D lights = anariNewArray1D(device,&headLight,0,0,ANARI_LIGHT,1,0);
+            ANARIArray1D lights = anariNewArray1D(device,&headLight,0,0,ANARI_LIGHT,1);
             anariSetParameter(device, world, "light", ANARI_ARRAY1D, &lights);
             anariCommitParameters(device, world);
 
@@ -306,14 +306,14 @@ struct Viewer : visionaray::viewer_glut
                 while (const char* dstype = *deviceSubtypes++) {
                     if (deviceSubtype.empty()) deviceSubtype = std::string(dstype);
                     std::cout << "ANARI_RENDERER subtypes supported:\n";
-                    const char** rendererTypes = anariGetObjectSubtypes(library, dstype, ANARI_RENDERER);
+                    const char** rendererTypes = anariGetObjectSubtypes(device, ANARI_RENDERER);
                     while (rendererTypes && *rendererTypes) {
                         const char* rendererType = *rendererTypes++;
                         std::cout << rendererType << '\n';
                     }
 
                     std::cout << "ANARI_VOLUME subtypes supported:\n";
-                    const char** volumeTypes = anariGetObjectSubtypes(library, dstype, ANARI_VOLUME);
+                    const char** volumeTypes = anariGetObjectSubtypes(device, ANARI_VOLUME);
                     while (volumeTypes && *volumeTypes) {
                         const char* volumeType = *volumeTypes++;
                         std::cout << volumeType << '\n';

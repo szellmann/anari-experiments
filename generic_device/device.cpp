@@ -24,11 +24,10 @@ namespace generic {
                                     ANARIMemoryDeleter deleter,
                                     const void* userdata,
                                     const ANARIDataType elementType,
-                                    uint64_t numItems1,
-                                    uint64_t byteStride1)
+                                    uint64_t numItems1)
     {
         return (ANARIArray1D)RegisterResource(std::make_unique<Array1D>(
-            (const uint8_t*)appMemory,deleter,userdata,elementType,numItems1,byteStride1));
+            (const uint8_t*)appMemory,deleter,userdata,elementType,numItems1));
     }
 
     ANARIArray2D Device::newArray2D(const void* appMemory,
@@ -36,13 +35,10 @@ namespace generic {
                                     const void* userdata,
                                     ANARIDataType elementType,
                                     uint64_t numItems1,
-                                    uint64_t numItems2,
-                                    uint64_t byteStride1,
-                                    uint64_t byteStride2)
+                                    uint64_t numItems2)
     {
         return (ANARIArray2D)RegisterResource(std::make_unique<Array2D>(
-            (const uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2,
-            byteStride1,byteStride2));
+            (const uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2));
     }
 
     ANARIArray3D Device::newArray3D(const void* appMemory,
@@ -51,14 +47,11 @@ namespace generic {
                                     ANARIDataType elementType,
                                     uint64_t numItems1,
                                     uint64_t numItems2,
-                                    uint64_t numItems3,
-                                    uint64_t byteStride1,
-                                    uint64_t byteStride2,
-                                    uint64_t byteStride3)
+                                    uint64_t numItems3)
     {
         return (ANARIArray3D)RegisterResource(std::make_unique<Array3D>(
             (const uint8_t*)appMemory,deleter,userdata,elementType,numItems1,numItems2,
-            numItems3,byteStride1,byteStride2,byteStride3));
+            numItems3));
     }
 
     void* Device::mapArray(ANARIArray array)
@@ -158,6 +151,38 @@ namespace generic {
             obj->unsetParameter(name);
     }
 
+    void* Device::mapParameterArray1D(ANARIObject object,
+                              const char* name,
+                              ANARIDataType dataType,
+                              uint64_t numElements1,
+                              uint64_t *elementStride)
+    {
+    }
+
+    void* Device::mapParameterArray2D(ANARIObject object,
+                              const char* name,
+                              ANARIDataType dataType,
+                              uint64_t numElements1,
+                              uint64_t numElements2,
+                              uint64_t *elementStride)
+    {
+    }
+
+    void* Device::mapParameterArray3D(ANARIObject object,
+                                      const char* name,
+                                      ANARIDataType dataType,
+                                      uint64_t numElements1,
+                                      uint64_t numElements2,
+                                      uint64_t numElements3,
+                                      uint64_t *elementStride)
+    {
+    }
+
+    void Device::unmapParameterArray(ANARIObject object,
+                                     const char* name)
+    {
+    }
+
     void Device::commitParameters(ANARIObject object)
     {
         Object* obj = (Object*)GetResource(object);
@@ -201,6 +226,41 @@ namespace generic {
         } else {
             return obj->getProperty(name,type,mem,size,mask);
         }
+    }
+
+    const char ** Device::getObjectSubtypes(ANARIDataType objectType)
+    {
+        if (objectType == ANARI_RENDERER) {
+            static const char* renderers[] = {
+                "pathtracer", // 1st one is chosen by "default"
+                "ao",
+                nullptr,     // last one most be NULL
+            };
+            return renderers;
+        } else if (objectType == ANARI_VOLUME) {
+            static const char* volumes[] = {
+                "scivis",
+                nullptr,
+            };
+            return volumes;
+        }
+        return nullptr;
+    }
+
+    const void* Device::getObjectInfo(ANARIDataType objectType,
+                                      const char* objectSubtype,
+                                      const char* infoName,
+                                      ANARIDataType infoType)
+    {
+    }
+
+    const void* Device::getParameterInfo(ANARIDataType objectType,
+                                         const char* objectSubtype,
+                                         const char* parameterName,
+                                         ANARIDataType parameterType,
+                                         const char* infoName,
+                                         ANARIDataType infoType)
+    {
     }
 
     //--- FrameBuffer Manipulation ------------------------
@@ -297,53 +357,6 @@ extern "C" ANARI_DEFINE_LIBRARY_GET_DEVICE_SUBTYPES(generic, libdata)
 {
   static const char *devices[] = {deviceName, nullptr};
   return devices;
-}
-
-extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_SUBTYPES(
-    generic, libdata, deviceSubtype, objectType)
-{
-  if (objectType == ANARI_RENDERER) {
-    static const char* renderers[] = {
-        "pathtracer", // 1st one is chosen by "default" 
-        "ao",
-        nullptr,     // last one most be NULL
-    };
-    return renderers;
-  } else if (objectType == ANARI_VOLUME) {
-    static const char* volumes[] = {
-        "scivis",
-        nullptr,
-    };
-    return volumes;
-  }
-  return nullptr;
-}
-
-extern "C" ANARI_DEFINE_LIBRARY_GET_OBJECT_PROPERTY(generic,
-    library,
-    deviceSubtype,
-    objectSubtype,
-    objectType,
-    propertyName,
-    propertyType)
-{
-  if (propertyType == ANARI_RENDERER) {
-    return generic::Renderer::Parameters;
-  }
-  return nullptr;
-}
-
-extern "C" ANARI_DEFINE_LIBRARY_GET_PARAMETER_PROPERTY(generic,
-    libdata,
-    deviceSubtype,
-    objectSubtype,
-    objectType,
-    parameterName,
-    parameterType,
-    propertyName,
-    propertyType)
-{
-  return nullptr;
 }
 
 extern "C" ANARIDevice anariNewExampleDevice()

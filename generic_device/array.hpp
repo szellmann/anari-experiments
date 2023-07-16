@@ -35,13 +35,12 @@ namespace generic {
     {
     public:
         Array1D(const void* appMemory, ANARIMemoryDeleter deleter, const void* userPtr,
-                ANARIDataType elementType, uint64_t numItems1, uint64_t buyteStride1);
+                ANARIDataType elementType, uint64_t numItems1);
        ~Array1D();
 
         ResourceHandle getResourceHandle();
 
         uint64_t numItems[1] = {1};
-        uint64_t byteStride[1] = {0};
 
     private:
         size_t getSizeInBytes() const;
@@ -54,14 +53,12 @@ namespace generic {
     {
     public:
         Array2D(const void* appMemory, ANARIMemoryDeleter deleter, const void* userPtr,
-                ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
-                uint64_t byteStride1, uint64_t byteStride2);
+                ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2);
        ~Array2D();
 
         ResourceHandle getResourceHandle();
 
         uint64_t numItems[2] = {1,1};
-        uint64_t byteStride[2] = {0,0};
 
     private:
         size_t getSizeInBytes() const;
@@ -75,14 +72,12 @@ namespace generic {
     public:
         Array3D(const void* appMemory, ANARIMemoryDeleter deleter, const void* userPtr,
                 ANARIDataType elementType, uint64_t numItems1, uint64_t numItems2,
-                uint64_t numItems3, uint64_t byteStride1, uint64_t byteStride2,
-                uint64_t byteStride3);
+                uint64_t numItems3);
        ~Array3D();
 
         ResourceHandle getResourceHandle();
 
         uint64_t numItems[3] = {1,1,1};
-        uint64_t byteStride[3] = {0,0,0};
 
     private:
         size_t getSizeInBytes() const;

@@ -49,14 +49,11 @@ namespace generic {
 
     //--- Array1D -----------------------------------------
     Array1D::Array1D(const void* appMemory, ANARIMemoryDeleter deleter,
-          const void* userPtr, ANARIDataType elementType, uint64_t numItems1,
-          uint64_t byteStride1)
+          const void* userPtr, ANARIDataType elementType, uint64_t numItems1)
         : ArrayStorage(appMemory,deleter,userPtr,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray1D>)
     {
         numItems[0] = numItems1;
-
-        byteStride[0] = byteStride1;
 
         if (internalData == nullptr)
             internalData = new uint8_t[getSizeInBytes()];
@@ -79,15 +76,12 @@ namespace generic {
     //--- Array2D -----------------------------------------
     Array2D::Array2D(const void* appMemory, ANARIMemoryDeleter deleter,
           const void* userPtr, ANARIDataType elementType,uint64_t numItems1,
-          uint64_t numItems2, uint64_t byteStride1, uint64_t byteStride2)
+          uint64_t numItems2)
         : ArrayStorage(appMemory,deleter,userPtr,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray2D>)
     {
         numItems[0] = numItems1;
         numItems[1] = numItems2;
-
-        byteStride[0] = byteStride1;
-        byteStride[1] = byteStride2;
 
         if (internalData == nullptr)
             internalData = new uint8_t[getSizeInBytes()];
@@ -110,18 +104,13 @@ namespace generic {
     //--- Array3D -----------------------------------------
     Array3D::Array3D(const void* appMemory, ANARIMemoryDeleter deleter,
           const void* userPtr, ANARIDataType elementType, uint64_t numItems1,
-          uint64_t numItems2, uint64_t numItems3, uint64_t byteStride1,
-          uint64_t byteStride2, uint64_t byteStride3)
+          uint64_t numItems2, uint64_t numItems3)
         : ArrayStorage(appMemory,deleter,userPtr,elementType)
         , resourceHandle(new std::remove_pointer_t<ANARIArray3D>)
     {
         numItems[0] = numItems1;
         numItems[1] = numItems2;
         numItems[2] = numItems3;
-
-        byteStride[0] = byteStride1;
-        byteStride[1] = byteStride2;
-        byteStride[2] = byteStride3;
 
         if (internalData == nullptr)
             internalData = new uint8_t[getSizeInBytes()];
