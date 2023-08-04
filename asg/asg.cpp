@@ -3100,7 +3100,7 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
             StructuredVolume* vol = (StructuredVolume*)obj->impl;
 
             if (vol->anariVolume == nullptr)
-                vol->anariVolume = anariNewVolume(anari->device,"scivis");
+                vol->anariVolume = anariNewVolume(anari->device,"transferFunction1D");
 
             if (anari->flags & ASG_BUILD_WORLD_FLAG_VOLUMES) {
 

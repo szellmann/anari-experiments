@@ -471,7 +471,7 @@ struct AMRScene : Scene
         // TODO: AMR volume
         //
 
-        anariVolume = anariNewVolume(device,"scivis");
+        anariVolume = anariNewVolume(device,"transferFunction1D");
 
         anariSpatialField = anariNewSpatialField(device,"amr");
 
