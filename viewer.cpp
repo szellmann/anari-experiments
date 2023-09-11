@@ -98,44 +98,12 @@ struct Viewer : visionaray::viewer_glut
     void resetANARIMainLight() {
         float bounds[6];
 
-        static bool reshape = true;
         static visionaray::aabb bbox;
-
-        if (reshape) {
-            if (anari.deviceSubtype != std::string("generic")) {
-                anariGetProperty(anari.device, anari.world, "bounds", ANARI_FLOAT32_BOX3, &bounds, sizeof(bounds), ANARI_WAIT);
-            } else {
-                // get bounds property not implemented yet!
-                asgComputeBounds(anari.scene->root,&bounds[0],&bounds[1],&bounds[2],
-                                 &bounds[3],&bounds[4],&bounds[5]);
-            }
-
-            bbox = visionaray::aabb(visionaray::vec3(bounds),visionaray::vec3(bounds+3));
-
-            float intensity = 60.f;
-            float radius = 0.f;
-            if (anari.deviceSubtype != std::string("generic")) {
-                anariSetParameter(anari.device, anari.headLight, "radiance", ANARI_FLOAT32, &intensity);
-                radius = length(bbox.max-bbox.min)*.1f;
-            } else {
-                anariSetParameter(anari.device, anari.headLight, "intensity", ANARI_FLOAT32, &intensity);
-                radius = length(bbox.max-bbox.min)*.1f;
-            }
-            visionaray::vec3f color{.9f,.85f,.85f};
-            anariSetParameter(anari.device, anari.headLight, "radius", ANARI_FLOAT32, &radius);
-            anariSetParameter(anari.device, anari.headLight, "color", ANARI_FLOAT32_VEC3, color.data());
-            if (radius > 0.f) {
-                bool visible = false;
-                anariSetParameter(anari.device, anari.headLight, "visible", ANARI_BOOL, &visible);
-            }
-
-            // compute this only once
-            reshape = false;
-        }
 
         bool fixed = false;
         visionaray::vec3 pos = fixed ? bbox.max : cam.eye()+cam.up()*.2f*length(bbox.max-bbox.min);
-        anariSetParameter(anari.device, anari.headLight, "position", ANARI_FLOAT32_VEC3, pos.data());
+        auto dir = -normalize(pos);
+        anariSetParameter(anari.device, anari.headLight, "direction", ANARI_FLOAT32_VEC3, dir.data());
 
         anariCommitParameters(anari.device, anari.headLight);
         anariCommitParameters(anari.device, anari.world);
@@ -295,7 +263,7 @@ struct Viewer : visionaray::viewer_glut
             else
                 scene = new Model(device,world,fileName.c_str());
 
-            headLight = anariNewLight(device,"point");
+            headLight = anariNewLight(device,"directional");
             ANARIArray1D lights = anariNewArray1D(device,&headLight,0,0,ANARI_LIGHT,1);
             anariSetParameter(device, world, "light", ANARI_ARRAY1D, &lights);
             anariCommitParameters(device, world);
