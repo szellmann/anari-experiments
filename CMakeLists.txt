@@ -29,10 +29,10 @@ add_subdirectory(asg)
 SET(CMAKE_EXE_LINKER_FLAGS
     "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,${CMAKE_CURRENT_BINARY_DIR}/stub_device")
 
-# visionaray device
-add_subdirectory(generic_device)
-SET(CMAKE_EXE_LINKER_FLAGS
-    "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,${CMAKE_CURRENT_BINARY_DIR}/generic_device")
+# visionaray device (obsolete, use the anari-visionaray device instead: https://github.com/szellmann/anari--visionaray)
+# add_subdirectory(generic_device)
+# SET(CMAKE_EXE_LINKER_FLAGS
+#     "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath -Wl,${CMAKE_CURRENT_BINARY_DIR}/generic_device")
 
 add_executable(viewer
     ${IMGUI_DIR}/imgui.cpp
