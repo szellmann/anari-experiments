@@ -184,7 +184,7 @@ struct Viewer : visionaray::viewer_glut
 
     void on_resize(int w, int h) {
         visionaray::vec4f bgColor(background_color(),1.f);
-        anariSetParameter(anari.device, anari.renderer, "backgroundColor", ANARI_FLOAT32_VEC4, bgColor.data());
+        anariSetParameter(anari.device, anari.renderer, "background", ANARI_FLOAT32_VEC4, bgColor.data());
         anariCommitParameters(anari.device, anari.renderer);
 
         cam.set_viewport(0, 0, w, h);
