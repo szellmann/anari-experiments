@@ -2824,8 +2824,32 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                 anariSetParameter(anari->device,trans->anariInstance,"group",
                                   ANARI_GROUP,&anariGroup);
+                // TODO: ANARI specs have changed this from mat4x3 to mat4
+                // For the moment, it's easiest to translate here, but we
+                // might later change our specs to 4x4 as well:
+                // anariSetParameter(anari->device,trans->anariInstance,"transform",
+                //                   ANARI_FLOAT32_MAT3x4,(float*)&anari->trans);
+                std::vector<float> temp(16, 0.f);
+                temp[0] = temp[5] = temp[10] = temp[15] = 1.f;
+
+                temp[ 0] = anari->trans.col0.x;
+                temp[ 1] = anari->trans.col0.y;
+                temp[ 2] = anari->trans.col0.z;
+
+                temp[ 4] = anari->trans.col1.x;
+                temp[ 5] = anari->trans.col1.y;
+                temp[ 6] = anari->trans.col1.z;
+
+                temp[ 8] = anari->trans.col2.x;
+                temp[ 9] = anari->trans.col2.y;
+                temp[10] = anari->trans.col2.z;
+
+                temp[12] = anari->trans.col3.x;
+                temp[13] = anari->trans.col3.y;
+                temp[14] = anari->trans.col3.z;
+
                 anariSetParameter(anari->device,trans->anariInstance,"transform",
-                                  ANARI_FLOAT32_MAT3x4,(float*)&anari->trans);
+                                  ANARI_FLOAT32_MAT4,temp.data());
 
                 anariCommitParameters(anari->device,trans->anariInstance);
 
