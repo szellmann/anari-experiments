@@ -77,6 +77,14 @@ struct Viewer : visionaray::viewer_glut
             cl::ArgDisallowed,
             cl::init(imageRegion)
             ) );
+
+        add_cmdline_option( cl::makeOption<std::string&>(
+            cl::Parser<>(),
+            "l",
+            cl::Desc("ANARI library"),
+            cl::ArgRequired,
+            cl::init(anari.libType)
+            ) );
     }
 
     void resetANARICamera() {
