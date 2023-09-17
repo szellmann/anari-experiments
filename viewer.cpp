@@ -310,8 +310,8 @@ struct Viewer : visionaray::viewer_glut
 
               envLight = anariNewLight(device,"hdri");
               anariSetParameter(device, envLight, "radiance", ANARI_ARRAY2D, &radiance);
-              bool asBackground = true; // that's a visionaray extension!
-              anariSetParameter(device, envLight, "useAsBackground", ANARI_BOOL, &asBackground);
+              bool visible = true;
+              anariSetParameter(device, envLight, "visible", ANARI_BOOL, &visible);
               anariCommitParameters(device, envLight);
 
               anariRelease(device, radiance);
