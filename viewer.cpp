@@ -18,6 +18,7 @@
 #include "scenes/grabber.h"
 #include "scenes.h"
 #include "util.h"
+#include "hdri.h"
 
 
 void statusFunc(const void *userData,
@@ -85,6 +86,14 @@ struct Viewer : visionaray::viewer_glut
             cl::ArgRequired,
             cl::init(anari.libType)
             ) );
+
+        add_cmdline_option( cl::makeOption<std::string&>(
+            cl::Parser<>(),
+            "hdri",
+            cl::Desc("HDRI file"),
+            cl::ArgRequired,
+            cl::init(anari.hdri)
+            ) );
     }
 
     void resetANARICamera() {
@@ -104,6 +113,9 @@ struct Viewer : visionaray::viewer_glut
     }
 
     void resetANARIMainLight() {
+        if (!anari.headLight)
+            return;
+
         float bounds[6];
 
         static visionaray::aabb bbox;
@@ -238,10 +250,12 @@ struct Viewer : visionaray::viewer_glut
         ANARIRenderer renderer = nullptr;
         ANARIWorld world = nullptr;
         ANARILight headLight = nullptr;
+        ANARILight envLight = nullptr;
         ANARICamera camera = nullptr;
         ANARIFrame frame = nullptr;
         Scene* scene = nullptr;
         std::string deviceSubtype;
+        std::string hdri;
 
 
 
@@ -271,9 +285,40 @@ struct Viewer : visionaray::viewer_glut
             else
                 scene = new Model(device,world,fileName.c_str());
 
-            headLight = anariNewLight(device,"directional");
-            ANARIArray1D lights = anariNewArray1D(device,&headLight,0,0,ANARI_LIGHT,1);
-            anariSetParameter(device, world, "light", ANARI_ARRAY1D, &lights);
+            if (hdri.empty()) {
+              headLight = anariNewLight(device,"directional");
+              ANARIArray1D lights = anariNewArray1D(device,&headLight,0,0,ANARI_LIGHT,1);
+              anariSetParameter(device, world, "light", ANARI_ARRAY1D, &lights);
+            } else {
+              HDRI envMap;
+              envMap.load(hdri);
+              std::vector<float> pixel(envMap.width*envMap.height*3);
+              if (envMap.numComponents == 3) {
+                memcpy(pixel.data(), envMap.pixel.data(),
+                       envMap.width * envMap.height * 3 * sizeof(float));
+              } else if (envMap.numComponents == 4) {
+                for (size_t i=0; i<envMap.pixel.size(); i+=4) {
+                    size_t i3 = i/4*3;
+                    pixel[i3] = envMap.pixel[i];
+                    pixel[i3+1] = envMap.pixel[i+1];
+                    pixel[i3+2] = envMap.pixel[i+2];
+                }
+              }
+              ANARIArray2D radiance = anariNewArray2D(device,pixel.data(),0,0,
+                                                      ANARI_FLOAT32_VEC3,
+                                                      envMap.width,envMap.height);
+
+              envLight = anariNewLight(device,"hdri");
+              anariSetParameter(device, envLight, "radiance", ANARI_ARRAY2D, &radiance);
+              bool asBackground = true; // that's a visionaray extension!
+              anariSetParameter(device, envLight, "useAsBackground", ANARI_BOOL, &asBackground);
+              anariCommitParameters(device, envLight);
+
+              anariRelease(device, radiance);
+
+              ANARIArray1D lights = anariNewArray1D(device,&envLight,0,0,ANARI_LIGHT,1);
+              anariSetParameter(device, world, "light", ANARI_ARRAY1D, &lights);
+            }
             anariCommitParameters(device, world);
 
             // Setup renderer

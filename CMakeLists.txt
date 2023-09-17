@@ -40,6 +40,7 @@ add_executable(viewer
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
     ${VOLKIT_DIR}/src/vkt/TransfuncEditor.cpp
+    hdri.cpp
     viewer.cpp
 )
 
