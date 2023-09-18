@@ -42,6 +42,68 @@ void statusFunc(const void *userData,
         fprintf(stderr, "[INFO] %s\n", message);
 }
 
+// Helper functions ///////////////////////////////////////////////////////////
+
+static uint32_t cvt_uint32(const float &f)
+{
+  return static_cast<uint32_t>(255.f * visionaray::clamp(f, 0.f, 1.f));
+}
+
+static uint32_t cvt_uint32(const visionaray::vec4 &v)
+{
+  return (cvt_uint32(v.x) << 0) | (cvt_uint32(v.y) << 8)
+      | (cvt_uint32(v.z) << 16) | (cvt_uint32(v.w) << 24);
+}
+
+// https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
+static visionaray::vec3 aces_approx(visionaray::vec3 v)
+{
+  v *= 0.6f;
+  float a = 2.51f;
+  float b = 0.03f;
+  float c = 2.43f;
+  float d = 0.59f;
+  float e = 0.14f;
+  return clamp((v*(a*v+b))/(v*(c*v+d)+e), visionaray::vec3(0.0f), visionaray::vec3(1.0f));
+}
+
+static uint32_t cvt_uint32_aces_approx(const visionaray::vec4 &v)
+{
+  return cvt_uint32(visionaray::vec4(aces_approx(v.xyz()), v.w));
+}
+
+// https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl
+static const visionaray::mat3 aces_input_matrix = transpose(visionaray::mat3{
+  {0.59719f, 0.35458f, 0.04823f},
+  {0.07600f, 0.90834f, 0.01566f},
+  {0.02840f, 0.13383f, 0.83777f}
+});
+
+static const visionaray::mat3 aces_output_matrix = transpose(visionaray::mat3{
+  { 1.60475f, -0.53108f, -0.07367f},
+  {-0.10208f,  1.10813f, -0.00605f},
+  {-0.00327f, -0.07276f,  1.07602f}
+});
+
+static visionaray::vec3 rtt_and_odt_fit(visionaray::vec3 v)
+{
+  visionaray::vec3 a = v * (v + 0.0245786f) - 0.000090537f;
+  visionaray::vec3 b = v * (0.983729f * v + 0.4329510f) + 0.238081f;
+  return a / b;
+}
+
+visionaray::vec3 aces_fitted(visionaray::vec3 v)
+{
+  v = aces_input_matrix * v;
+  v = rtt_and_odt_fit(v);
+  return aces_output_matrix * v;
+}
+
+static uint32_t cvt_uint32_aces(const visionaray::vec4 &v)
+{
+  return cvt_uint32(visionaray::vec4(aces_fitted(v.xyz()), v.w));
+}
+
 struct Viewer : visionaray::viewer_glut
 {
     visionaray::pinhole_camera cam;
@@ -49,6 +111,13 @@ struct Viewer : visionaray::viewer_glut
     std::string fileName;
 
     visionaray::vec4f imageRegion{0.f,0.f,1.f,1.f};
+
+    enum Tonemapping {
+        Clamped,
+        sRGB,
+        ACES,
+        ACES_Approx,
+    } tonemapping = ACES;
 
     Viewer() : viewer_glut(512,512,"ANARI experiments") {
 
@@ -93,6 +162,18 @@ struct Viewer : visionaray::viewer_glut
             cl::Desc("HDRI file"),
             cl::ArgRequired,
             cl::init(anari.hdri)
+            ) );
+
+        add_cmdline_option( cl::makeOption<Tonemapping&>({
+                { "clamped",     Clamped,     "description: clamped" },
+                { "sRGB",        sRGB,        "description: sRGB" },
+                { "aces",        ACES,        "description: aces" },
+                { "aces-approx", ACES_Approx, "description: aces-approx" }
+            },
+            "tonemapping",
+            cl::Desc("Tone mapping operator"),
+            cl::ArgRequired,
+            cl::init(tonemapping)
             ) );
     }
 
@@ -155,7 +236,31 @@ struct Viewer : visionaray::viewer_glut
             uint32_t widthOUT;
             uint32_t heightOUT;
             ANARIDataType typeOUT;
-            const uint32_t *fbPointer = (uint32_t *)anariMapFrame(anari.device, anari.frame, "channel.color", &widthOUT, &heightOUT, &typeOUT);
+            const void *fb = anariMapFrame(anari.device, anari.frame, "channel.color", &widthOUT, &heightOUT, &typeOUT);
+            void *fbPointer{nullptr};
+            if (tonemapping == ACES) {
+                fbPointer = new uint32_t[widthOUT*heightOUT];
+                const float *fPtr = (const float *)fb;
+                uint32_t *uPtr = (uint32_t *)fbPointer;
+                for (size_t i=0; i<widthOUT*size_t(heightOUT); ++i) {
+                    visionaray::vec4 color(
+                        fPtr[i*4], fPtr[i*4+1], fPtr[i*4+2], fPtr[i*4+3]
+                    );
+                    uPtr[i] = cvt_uint32_aces(color);
+                }
+            } else if (tonemapping == ACES_Approx) {
+                fbPointer = new uint32_t[widthOUT*heightOUT];
+                const float *fPtr = (const float *)fb;
+                uint32_t *uPtr = (uint32_t *)fbPointer;
+                for (size_t i=0; i<widthOUT*size_t(heightOUT); ++i) {
+                    visionaray::vec4 color(
+                        fPtr[i*4], fPtr[i*4+1], fPtr[i*4+2], fPtr[i*4+3]
+                    );
+                    uPtr[i] = cvt_uint32_aces_approx(color);
+                }
+            } else {
+                fbPointer = (void *)fb;
+            }
             visionaray::vec4f bgColor(background_color(),1.f);
             glClearColor(bgColor[0],bgColor[1],bgColor[2],bgColor[3]);
             glClear(GL_COLOR_BUFFER_BIT);
@@ -163,6 +268,9 @@ struct Viewer : visionaray::viewer_glut
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glDrawPixels(width(),height(),GL_RGBA,GL_UNSIGNED_BYTE,fbPointer);
             anariUnmapFrame(anari.device, anari.frame, "channel.color");
+            if (fbPointer != fb) {
+                delete[] (uint32_t *)fbPointer;
+            }
         } else {
             uint32_t widthOUT;
             uint32_t heightOUT;
@@ -347,8 +455,11 @@ struct Viewer : visionaray::viewer_glut
             frame = anariNewFrame(device);
             anariSetParameter(device, frame, "world", ANARI_WORLD, &world);
             anariCommitParameters(device, frame);
-            //ANARIDataType fbFormat = ANARI_UFIXED8_VEC4;
-            ANARIDataType fbFormat = ANARI_UFIXED8_RGBA_SRGB;
+            ANARIDataType fbFormat{ANARI_UFIXED8_VEC4};
+            if (instance.tonemapping == sRGB)
+                fbFormat = ANARI_UFIXED8_RGBA_SRGB;
+            else if (instance.tonemapping == ACES || instance.tonemapping == ACES_Approx)
+                fbFormat = ANARI_FLOAT32_VEC4;
             ANARIDataType dbFormat = ANARI_FLOAT32;
             anariSetParameter(device, frame, "channel.color", ANARI_DATA_TYPE, &fbFormat);
             //anariSetParameter(device, frame, "channel.depth", ANARI_DATA_TYPE, &dbFormat);
