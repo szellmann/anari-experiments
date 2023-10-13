@@ -215,7 +215,7 @@ ASGAPI ASGError_t asgObjectGetName(ASGObject obj, const char** name);
 ASGAPI ASGError_t asgObjectAddChild(ASGObject obj, ASGObject child);
 ASGAPI ASGError_t asgObjectSetChild(ASGObject obj, int childID, ASGObject child);
 ASGAPI ASGError_t asgObjectGetChild(ASGObject obj, int childID, ASGObject* child);
-ASGAPI ASGError_t asgObjectGetChildren(ASGObject obj, ASGObject* children,
+ASGAPI ASGError_t asgObjectGetChildren(ASGObject obj, ASGObject** children,
                                        int* numChildren);
 ASGAPI ASGError_t asgObjectRemoveChild(ASGObject obj, ASGObject child);
 ASGAPI ASGError_t asgObjectRemoveChildAt(ASGObject obj, int childID);

@@ -109,6 +109,8 @@ static void printSceneGraph(ASGObject rootObj, bool verbose = false)
                                   << vertexColors << ' ' << indices;
                     } else if (type==ASG_TYPE_CYLINDER_GEOMETRY) {
                         std::cout << ", cylinder-geom";
+                    } else if (type==ASG_TYPE_SPHERE_GEOMETRY) {
+                        std::cout << ", sphere-geom";
                     }
 
                     ASGMaterial mat;
