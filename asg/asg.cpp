@@ -1704,17 +1704,36 @@ ASGError_t asgLoadASSIMP(ASGObject obj, const char* fileName, uint64_t flags)
 
     std::vector<ASGMaterial> materials;
     for (unsigned i=0; i<scene->mNumMaterials; ++i) {
-        ASGMaterial mat = asgNewMaterial("");
+        ASGMaterial mat;
 
         aiMaterial* assimpMAT = scene->mMaterials[i];
-        aiColor3D col;
-        assimpMAT->Get(AI_MATKEY_COLOR_DIFFUSE,col);
+
+        ai_int matType;
+        assimpMAT->Get(AI_MATKEY_SHADING_MODEL,matType);
+        if (matType == aiShadingMode_PBR_BRDF) {
+            aiColor3D baseColor;
+            ai_real metallic, roughness;
+            assimpMAT->Get(AI_MATKEY_BASE_COLOR,baseColor);
+            assimpMAT->Get(AI_MATKEY_METALLIC_FACTOR,metallic);
+            assimpMAT->Get(AI_MATKEY_ROUGHNESS_FACTOR,roughness);
+            float bc[3] = {baseColor.r,baseColor.g,baseColor.b};
+
+            mat = asgNewMaterial("physicallyBased");
+            asgMaterialSetParam(mat,asgParam3fv("baseColor",bc));
+            asgMaterialSetParam(mat,asgParam1f("metallic",metallic));
+            asgMaterialSetParam(mat,asgParam1f("roughness",roughness));
+        } else { // Assume matte
+            aiColor3D col;
+            assimpMAT->Get(AI_MATKEY_COLOR_DIFFUSE,col);
+
+            float kd[3] = {col.r,col.g,col.b};
+
+            mat = asgNewMaterial(""); // TODO: should NOT be necessary..
+            asgMakeMatte(&mat,kd,NULL);
+        }
+
         aiString name;
         assimpMAT->Get(AI_MATKEY_NAME,name);
-
-        float kd[3] = {col.r,col.g,col.b};
-
-        asgMakeMatte(&mat,kd,NULL);
         asgObjectSetName(mat,name.C_Str());
         materials.push_back(mat);
     }
@@ -3072,6 +3091,39 @@ static void visitANARIWorld(ASGVisitor self, ASGObject obj, void* userData) {
 
                         anariSetParameter(anari->device,mat->anariMaterial,"color",
                                           ANARI_FLOAT32_VEC3,kd);
+                        anariCommitParameters(anari->device,mat->anariMaterial);
+                    }
+                } else if (strncmp(mat->type.c_str(),"physicallyBased",15)==0) {
+                    ASGParam baseColorParam, metallicParam, roughnessParam;
+                    ASGError_t res1 = asgMaterialGetParam(surf->material,"baseColor",
+                                                          &baseColorParam);
+                    ASGError_t res2 = asgMaterialGetParam(surf->material,"metallic",
+                                                          &metallicParam);
+                    ASGError_t res3 = asgMaterialGetParam(surf->material,"roughness",
+                                                          &roughnessParam);
+
+                    if (res1 != ASG_ERROR_PARAM_NOT_FOUND &&
+                        res2 != ASG_ERROR_PARAM_NOT_FOUND &&
+                        res3 != ASG_ERROR_PARAM_NOT_FOUND) {
+                        if (mat->anariMaterial == nullptr)
+                            mat->anariMaterial = anariNewMaterial(anari->device,
+                                                                  "physicallyBased");
+                        
+                        float bc[3];
+                        asgParamGetValue(baseColorParam,bc);
+                        //std::cout << bc[0] << ' ' << bc[1] << ' ' << bc[2] << '\n';
+
+                        float metallic, roughness;
+                        asgParamGetValue(metallicParam,&metallic);
+                        asgParamGetValue(roughnessParam,&roughness);
+                        //std::cout << metallic << ',' << roughness << '\n';
+
+                        anariSetParameter(anari->device,mat->anariMaterial,"baseColor",
+                                          ANARI_FLOAT32_VEC3,bc);
+                        anariSetParameter(anari->device,mat->anariMaterial,"metallic",
+                                          ANARI_FLOAT32,&metallic);
+                        anariSetParameter(anari->device,mat->anariMaterial,"roughness",
+                                          ANARI_FLOAT32,&roughness);
                         anariCommitParameters(anari->device,mat->anariMaterial);
                     }
                 }
