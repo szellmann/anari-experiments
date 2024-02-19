@@ -1554,7 +1554,9 @@ namespace assimp {
                const std::vector<ASGLight>& lights,
                aiMatrix4x4 accTransform, VisitFlags flags)
     {
-        aiMatrix4x4 transform;
+        if (flags & FLAG_ACCUM_TRANSFORMS) {
+            accTransform *= node->mTransformation;
+        }
 
         if (node->mNumMeshes > 0) {
             if (flags & FLAG_GEOMETRY) {
@@ -1590,7 +1592,9 @@ namespace assimp {
 
                             // TODO: accum. inverse-transpose, too
                             if (flags & FLAG_ACCUM_TRANSFORMS) {
-                                //vn *= accTransform;
+                                aiMatrix4x4 normalTransform(accTransform);
+                                normalTransform.Inverse().Transpose();
+                                vn *= normalTransform;
                             }
 
                             vertexNormals[j*3] = vn.x;
@@ -1641,12 +1645,7 @@ namespace assimp {
 
                     asgObjectAddChild(obj,surf);
                 }
-                transform = aiMatrix4x4(); // identity
             }
-        }
-
-        if (flags & FLAG_ACCUM_TRANSFORMS) {
-            transform = node->mTransformation * accTransform;
         }
 
         // Light sources have an associated node with the same name as the
@@ -1666,7 +1665,7 @@ namespace assimp {
                 asgLightGetParam(*it,"position",&positionParam);
 
                 aiVector3D v = {position[0],position[1],position[2]};
-                v *= transform;
+                v *= accTransform;
                 position[0] = v.x;
                 position[1] = v.y;
                 position[2] = v.z;
@@ -1679,7 +1678,7 @@ namespace assimp {
 
         for (unsigned i=0; i<node->mNumChildren; ++i) {
             if (flags & FLAG_ACCUM_TRANSFORMS) // flatten
-                Visit(node->mChildren[i],scene,obj,materials,lights,transform,flags);
+                Visit(node->mChildren[i],scene,obj,materials,lights,accTransform,flags);
         }
     }
 } // ::assimp
